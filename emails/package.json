@@ -1,0 +1,11 @@
+{
+    "name": "@a3/emails",
+    "version": "1.0.0",
+    "scripts": {
+      "dev": "email dev"
+    },
+    "dependencies": {
+      "@react-email/components": "^0.0.22",
+      "react": "19.2.0"
+    }
+  }

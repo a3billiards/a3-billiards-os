@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "789966085899",
+    "project_id": "a3-billiards-os",
+    "storage_bucket": "a3-billiards-os.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:789966085899:android:87417b2458af5aea160c0e",
+        "android_client_info": {
+          "package_name": "com.a3billiards.adminapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZkwzQr97FTZfsiBPa4BKR6puW7zS4N-0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:789966085899:android:18ce99be29a85719160c0e",
+        "android_client_info": {
+          "package_name": "com.a3billiards.customerapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZkwzQr97FTZfsiBPa4BKR6puW7zS4N-0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:789966085899:android:4620db13b7769b7f160c0e",
+        "android_client_info": {
+          "package_name": "com.a3billiards.ownerapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZkwzQr97FTZfsiBPa4BKR6puW7zS4N-0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,7 +1,10 @@
 {
-    "name": "@billiards/ui",
-    "version": "0.0.1",
-    "private": true,
-    "main": "index.ts"
+  "name": "@a3/ui",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./index.ts",
+    "./theme": "./theme/index.ts",
+    "./components": "./components/index.ts",
+    "./errors": "./errors/index.ts"
   }
-  
+}
