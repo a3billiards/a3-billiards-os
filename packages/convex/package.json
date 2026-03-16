@@ -1,0 +1,8 @@
+{
+    "name": "@billiards/convex",
+    "version": "0.0.1",
+    "private": true,
+    "dependencies": {
+        "convex": "^1.33.1"
+    }
+}
