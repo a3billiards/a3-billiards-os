@@ -16,3 +16,9 @@ google-services.json
 GoogleService-Info.plist
 firebase-service-account.json
 .cursor/mcp.json
+# Firebase google-services files
+admin-google-services.json
+customer-google-services.json
+owner-google-services.json
+google-services.json
+GoogleServiceInfo.plist
