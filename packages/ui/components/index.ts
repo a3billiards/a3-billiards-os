@@ -13,3 +13,4 @@ export { TableTypePicker }   from './TableTypePicker';
 export { DateStrip }         from './DateStrip';
 export { OfflineScreen }     from './OfflineScreen';
 export { NetworkGuard }      from './NetworkGuard';
+export { AuthPasswordGate, type SignInMethod } from './AuthPasswordGate';

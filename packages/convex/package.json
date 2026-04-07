@@ -1,19 +1,32 @@
 {
   "name": "@a3/convex",
   "version": "1.0.0",
+  "exports": {
+    "./_generated/api": {
+      "types": "./_generated/api.d.ts",
+      "default": "./_generated/api.js"
+    },
+    "./_generated/dataModel": {
+      "types": "./_generated/dataModel.d.ts",
+      "default": "./_generated/dataModel.d.ts"
+    },
+    "./*": "./*"
+  },
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "convex": "^1.13.0",
-    "@convex-dev/auth": "0.0.68",
+    "@a3/utils": "workspace:*",
     "@auth/core": "0.18.6",
-    "convex-helpers": "^0.1.60",
-    "google-auth-library": "^9.0.0",
-    "resend": "^4.0.0",
+    "@convex-dev/auth": "0.0.68",
     "@react-email/components": "^0.0.22",
-    "firebase-admin": "^12.0.0"
+    "bcryptjs": "^3.0.3",
+    "convex": "^1.13.0",
+    "convex-helpers": "^0.1.60",
+    "firebase-admin": "^12.0.0",
+    "google-auth-library": "^9.0.0",
+    "resend": "^4.0.0"
   }
 }

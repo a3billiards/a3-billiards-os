@@ -1,0 +1,106 @@
+# Cursor Rules & Workflow Orchestration
+
+## High-Level Instruction
+**Refer to `Context.md` and `currentstate.md` at the start of every single interaction.** You must understand the current project state, architectural decisions, and the "Self-Improvement Loop" before writing a single line of code.
+
+---
+
+## 1. Security & Infrastructure Guardrails
+* **Zero Secrets Policy**: Never hardcode API keys, secrets, or credentials. Use environment variables exclusively.
+* **Input Validation**: Strict validation and sanitization for ALL user inputs to prevent injection attacks.
+* **API Protection**: 
+    * Implement **Rate Limiting** on all endpoints.
+    * Apply strict **CORS policies**; allow only authorized origins.
+* **Auth Security**: Password reset links MUST expire after exactly **30 minutes**.
+* **Data Isolation**: Ensure absolute data multi-tenancy. Users must ONLY be able to access their own data. Verify ownership on every database query to prevent data leaks.
+* **Database Optimization**: Use indexing only for the most common/high-traffic database requests to balance performance and storage.
+
+---
+
+## 2. Error Handling & Monitoring
+* **User Experience**: Provide clean, non-technical fallback UI/messages for all errors.
+* **Observability**: Implement basic logging for all errors.
+* **Admin Alerts**: Configure automated alerts to notify the admin immediately if a critical system break occurs.
+
+---
+
+## 3. Workflow Orchestration (from Context.md)
+
+### Plan & Execute
+* **Plan Node**: Enter plan mode for any task involving 3+ steps. Write specs upfront.
+* **Verification**: Never mark a task complete without proving it works via tests or logs.
+* **Elegance**: Avoid "hacky" fixes. If a solution feels sub-optimal, pause and implement the elegant version.
+
+### Subagent & State Management
+* **Subagents**: Offload research and parallel analysis to subagents to keep the main context clean.
+* **State Persistence (`currentstate.md`)**: Update this file after EVERY prompt. Include:
+    * Current Task
+    * New Decisions/Architectural changes
+    * Commits/Modified files
+    * Active Blockers/Errors
+* **Self-Improvement**: Update `tasks/lessons.md` after any user correction to prevent repeating mistakes.
+
+---
+
+## 4. Task Management Flow
+1. **Plan First**: Update `tasks/todo.md`.
+2. **Verify Plan**: Confirm with the user before coding.
+3. **Track**: Mark items complete in real-time.
+4. **Explain**: Provide high-level summaries of changes.
+5. **Capture**: Update `tasks/lessons.md` and `currentstate.md` before ending the turn.
+
+## 5. Core Principles
+* **Simplicity First**: Minimal code impact.
+* **No Laziness**: Find root causes; no temporary "band-aid" fixes.
+* **Minimal Impact**: Touch only what is necessary to avoid regression bugs.
+
+
+<!-- ---
+description: A3 Billiards OS project-wide coding rules
+alwaysApply: true
+---
+
+# A3 Billiards OS — Cursor Coding Rules
+
+## Non-Negotiable Rules
+- Dark mode ONLY. Never add light mode or theme toggle.
+- New Architecture ONLY. newArchEnabled: true in every app.
+- Use pnpm, never npm or yarn.
+- TypeScript strict mode — no "any" types anywhere.
+- All colors MUST come from packages/ui/theme/colors.ts
+- All crypto operations in Convex ACTIONS, not mutations.
+- Zero-gap bookings: 3:00 PM end does NOT conflict with 3:00 PM start.
+- Touch targets: minimum 44×44pt on all interactive elements.
+- Status indicators: always text + color (never color alone).
+- Sessions are NEVER auto-completed — staff must end them manually.
+- isAuthenticated does NOT exist in @convex-dev/auth@0.0.68 — never use it.
+
+## TypeScript Rules
+- App tsconfig.json must have "lib": ["ES2022"] — NO lib.dom.
+- All tsconfig.json files must have "skipLibCheck": true.
+- Never add : ExpoConfig return type to app.config.ts.
+- newArchEnabled belongs at ROOT of app.config.ts, not inside experiments.
+
+## File Locations
+- Schema (DO NOT MODIFY): packages/convex/schema.ts
+- Backend functions: packages/convex/
+- Shared components: packages/ui/components/
+- Theme colors: packages/ui/theme/colors.ts
+- Error codes: packages/ui/errors/errorCodes.ts
+- Billing formula: packages/utils/billing.ts
+- Timezone helpers: packages/utils/timezone.ts (all times are IST)
+
+## Import Rules
+- Import colors from @a3/ui/theme (not hardcoded hex strings)
+- Import typography from @a3/ui/theme
+- Import spacing from @a3/ui/theme
+- Import shared components from @a3/ui/components
+- Import utilities from @a3/utils
+
+## Convex Rules
+- All queries use RLS via convex-helpers (see packages/convex/rls.ts)
+- Mutation timeout: 10 seconds (Convex Pro)
+- Action timeout: 2 minutes (Convex Pro)
+- WhatsApp OTP is sent from packages/convex/model/otp.ts
+- FCM is sent from packages/convex/notifications.ts
+- Never store card data. Bills are record-only. -->

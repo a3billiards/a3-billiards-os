@@ -24,6 +24,6 @@ export default ({ config }: ConfigContext) => ({
     "@sentry/react-native/expo",
   ],
   experiments: {
-    typedRoutes: true,
+    typedRoutes: false,
   },
 });

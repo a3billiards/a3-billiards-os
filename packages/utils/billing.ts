@@ -1,11 +1,16 @@
 /**
- * Billing formula (TDD §Sessions schema):
- *   actualMinutes   = ceil((endTime − startTime) / 60_000)
- *   billableMinutes = max(actualMinutes, minBillMinutes)
- *   tableSubtotal   = billableMinutes × ratePerMin
- *   discountedTable = tableSubtotal × (1 − discount% / 100)
- *   snackTotal      = Σ(priceAtOrder × qty)  [never discounted]
- *   FINAL_BILL      = discountedTable + snackTotal
+ * Billing (PRD + TDD):
+ *   ratePerMin is LOCKED at session start (sessions.ratePerMin). Never re-read from club.
+ *   minBillAmount = minBillMinutes × ratePerMin
+ *   tablePreDiscount = max(actualMinutes × ratePerMin, minBillAmount)
+ *   discountAmount = tablePreDiscount × (discount% / 100)  [table only; snacks never discounted]
+ *   tableAfterDiscount = tablePreDiscount − discountAmount
+ *   snackTotal = Σ(priceAtOrder × qty)
+ *   subtotalBeforeTax = tableAfterDiscount + snackTotal
+ *   taxAmount = subtotalBeforeTax × (taxPercent / 100)  if taxPercent > 0
+ *   FINAL_BILL = subtotalBeforeTax + taxAmount
+ *
+ * Legacy helper `computeBill` matches TDD schema comment (no tax field on club yet → taxPercent 0).
  */
  
 export interface SnackOrder {
@@ -28,33 +33,84 @@ export interface SnackOrder {
     discountAmount: number;
     discountedTable: number;
     snackTotal: number;
+    taxAmount: number;
     finalBill: number;
   }
-   
-  export function computeBill(input: BillInput): BillBreakdown {
-    const { startTime, endTime, ratePerMin, minBillMinutes, snackOrders, discount = 0 } = input;
-    if (endTime <= startTime) throw new Error("SESSION_006: endTime must be after startTime");
-    if (discount < 0 || discount > 100) throw new Error("DATA_002: discount must be 0–100");
-   
-    const actualMinutes   = Math.ceil((endTime - startTime) / 60_000);
+
+  export interface BillInputExtended extends BillInput {
+    /** If > 0, applied to (discounted table + snacks). */
+    taxPercent?: number;
+  }
+
+  /** Full PRD formula including optional tax (pass taxPercent from club when schema adds it). */
+  export function computeBillExtended(input: BillInputExtended): BillBreakdown {
+    const {
+      startTime,
+      endTime,
+      ratePerMin,
+      minBillMinutes,
+      snackOrders,
+      discount = 0,
+      taxPercent = 0,
+    } = input;
+    if (endTime <= startTime) {
+      throw new Error("SESSION_006: endTime must be after startTime");
+    }
+    if (discount < 0 || discount > 100) {
+      throw new Error("DATA_002: discount must be 0–100");
+    }
+    if (taxPercent < 0 || taxPercent > 100) {
+      throw new Error("DATA_002: taxPercent must be 0–100");
+    }
+
+    const actualMinutes = Math.ceil((endTime - startTime) / 60_000);
     const billableMinutes = Math.max(actualMinutes, minBillMinutes);
-    const tableSubtotal   = billableMinutes * ratePerMin;
-    const discountAmount  = tableSubtotal * (discount / 100);
-    const discountedTable = tableSubtotal - discountAmount;
-    const snackTotal      = snackOrders.reduce((sum, i) => sum + i.priceAtOrder * i.qty, 0);
-    const finalBill       = discountedTable + snackTotal;
-   
+    const minBillAmount = minBillMinutes * ratePerMin;
+    const rawTable = actualMinutes * ratePerMin;
+    const tablePreDiscount = Math.max(rawTable, minBillAmount);
+    const discountAmount = tablePreDiscount * (discount / 100);
+    const discountedTable = tablePreDiscount - discountAmount;
+    const snackTotal = snackOrders.reduce(
+      (sum, i) => sum + i.priceAtOrder * i.qty,
+      0,
+    );
+    const subtotalBeforeTax = discountedTable + snackTotal;
+    const taxAmount =
+      taxPercent > 0 ? subtotalBeforeTax * (taxPercent / 100) : 0;
+    const finalBill = subtotalBeforeTax + taxAmount;
+
     return {
-      actualMinutes, billableMinutes,
-      tableSubtotal:   r2(tableSubtotal),
-      discountAmount:  r2(discountAmount),
+      actualMinutes,
+      billableMinutes,
+      tableSubtotal: r2(tablePreDiscount),
+      discountAmount: r2(discountAmount),
       discountedTable: r2(discountedTable),
-      snackTotal:      r2(snackTotal),
-      finalBill:       r2(finalBill),
+      snackTotal: r2(snackTotal),
+      taxAmount: r2(taxAmount),
+      finalBill: r2(finalBill),
     };
+  }
+
+  export function computeBill(input: BillInput): BillBreakdown {
+    return computeBillExtended({ ...input, taxPercent: 0 });
   }
    
   function r2(n: number): number { return Math.round(n * 100) / 100; }
+
+  /**
+   * Staff discount cap (PRD): owner unrestricted → no cap (null max).
+   * Returns clamped 0–100 percent for checkout mutations.
+   */
+  export function clampDiscountPercent(
+    requestedPercent: number,
+    canApplyDiscount: boolean,
+    maxDiscountPercent: number | null,
+  ): number {
+    if (!canApplyDiscount) return 0;
+    const r = Math.max(0, Math.min(100, requestedPercent));
+    if (maxDiscountPercent === null) return r;
+    return Math.min(maxDiscountPercent, r);
+  }
    
   /** Format currency for display: formatCurrency(150.5, "INR") → "₹150.50" */
   export function formatCurrency(amount: number, currency = "INR"): string {

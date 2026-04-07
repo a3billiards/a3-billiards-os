@@ -10,19 +10,20 @@ export default ({ config }: ConfigContext) => ({
   newArchEnabled: true,
   ios: {
     bundleIdentifier: "com.a3billiards.ownerapp",
-    googleServicesFile: "./GoogleService-Info.plist",
+    // googleServicesFile: "./GoogleService-Info.plist",
   },
   android: {
     package: "com.a3billiards.ownerapp",
-    googleServicesFile: "./google-services.json",
+    // googleServicesFile: "./google-services.json",
   },
   plugins: [
     "expo-router",
     "expo-secure-store",
-    "@react-native-google-signin/google-signin",
+    // "@react-native-google-signin/google-signin",
     "@sentry/react-native/expo",
   ],
   experiments: {
-    typedRoutes: true,
+    typedRoutes: false,
   },
 });
+

@@ -37,6 +37,7 @@
 //   H.  Added by_customer_status index on bookingLogs (global club limit check performance)
 
 import { defineSchema, defineTable } from "convex/server";
+import { authTables } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,8 +178,10 @@ const bookingSettingsObj = v.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default defineSchema({
+  ...authTables,
 
   // ── users ──────────────────────────────────────────────────────────────────
+  // Replaces authTables.users — A3-extended profile + roles (Convex Auth compatible).
   // All roles (admin, owner, customer) share one table.
   // Field relevance varies by role:
   //   - settingsPasscodeHash/Set: owner only
@@ -283,19 +286,32 @@ export default defineSchema({
     createdAt: v.number(),                        // Unix ms.
   })
     // FIX #5: verifyAndConsumeToken looks up by tokenHash — needs index
-    .index("by_tokenHash", ["tokenHash"]),
+    .index("by_tokenHash", ["tokenHash"])
+    // Rate limit: count recent password reset requests per user
+    .index("by_userId", ["userId"]),
+
+  // ── passwordResetContinuations ─────────────────────────────────────────────
+  // Issued when the email link token is verified (single-use). Short TTL before set-password.
+  passwordResetContinuations: defineTable({
+    userId: v.id("users"),
+    tokenHash: v.string(),                        // SHA-256 of completion UUID (raw shown once to client).
+    expiresAt: v.number(),                        // Unix ms — 15 minutes from creation.
+    createdAt: v.number(),
+  }).index("by_tokenHash", ["tokenHash"]),
 
   // ── adminMfaCodes ──────────────────────────────────────────────────────────
   // SHA-256 hashed 6-digit MFA codes for admin login. 10-minute expiry.
   // Requesting a new code invalidates all existing unused codes for that admin.
   adminMfaCodes: defineTable({
     adminId: v.id("users"),                       // Admin user the code was issued to.
-    codeHash: v.string(),                         // SHA-256 hash of the 6-digit code.
+    emailNormalized: v.optional(v.string()),     // Lowercase email — sliding-window rate limit (5/hr per email).
+    codeHash: v.string(),                         // bcrypt hash of the 6-digit code (stored by MFA action).
     expiresAt: v.number(),                        // Unix ms — 10 minutes from creation.
     used: v.boolean(),                            // Marked true on successful verification.
     createdAt: v.number(),                        // Unix ms.
   })
-    .index("by_admin", ["adminId"]),              // storeMfaCode + checkMfaCode lookup
+    .index("by_admin", ["adminId"])              // storeMfaCode + checkMfaCode lookup
+    .index("by_email_normalized_createdAt", ["emailNormalized", "createdAt"]),
 
   // ── adminAuditLog ──────────────────────────────────────────────────────────
   // Immutable audit trail for sensitive admin actions. DPDP Act 2023 compliance.
@@ -316,7 +332,7 @@ export default defineSchema({
   // ── otpRecords ─────────────────────────────────────────────────────────────
   // WhatsApp OTP verification records. bcrypt-hashed codes (10 rounds, in action).
   // 10-minute expiry. Max 3 incorrect attempts → 5-minute cooldown.
-  // Rate-limited: max 5 dispatches per phone per hour (sliding window).
+  // Rate-limited: max 5 dispatches per phone per UTC hour (fixed window, top of hour).
   otpRecords: defineTable({
     phone: v.string(),                            // Phone number the OTP was sent to (E.164 format).
     otpHash: v.string(),                          // bcrypt hash of the 6-digit code.

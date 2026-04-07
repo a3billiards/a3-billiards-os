@@ -14,7 +14,7 @@ export default ({ config }: ConfigContext) => ({
   },
   android: {
     package: "com.a3billiards.adminapp",
-    googleServicesFile: "./google-services.json",
+    googleServicesFile: "./admin-google-services.json",
   },
   plugins: [
     "expo-router",
@@ -22,6 +22,6 @@ export default ({ config }: ConfigContext) => ({
     "@sentry/react-native/expo",
   ],
   experiments: {
-    typedRoutes: true,
+    typedRoutes: false,
   },
 });
