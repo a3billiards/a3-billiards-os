@@ -4,10 +4,10 @@
 // Audited: March 2026
 //
 // Two logical namespaces in one Convex deployment:
-//   Central DB (10 tables):
+//   Central DB (11 tables):
 //     users, complaints, adminNotifications, passwordResetTokens,
 //     adminMfaCodes, adminAuditLog, otpRecords, sessionLogs,
-//     bookingLogs, paymentReceipts
+//     bookingLogs, paymentReceipts, dataExportRequests
 //   Club DB (9 tables):
 //     clubs, tables, sessions, bookings, snacks, staffRoles,
 //     cancellationCounts, customerBookingStats, sessions_archive
@@ -112,6 +112,7 @@ const resetTokenType = v.union(
 
 const adminAuditAction = v.union(
   v.literal("phone_update"),
+  v.literal("admin_profile_edit"),
   v.literal("user_freeze"),
   v.literal("user_unfreeze"),
   v.literal("password_reset"),
@@ -174,7 +175,7 @@ const bookingSettingsObj = v.object({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CENTRAL DATABASE TABLES (10 tables)
+// CENTRAL DATABASE TABLES (11 tables)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default defineSchema({
@@ -221,6 +222,9 @@ export default defineSchema({
     deletionRequestedAt: v.optional(v.number()),  // Unix ms. Triggers 30-day grace period.
                                                   // Checked by: booking submission, session start, data export.
                                                   // Login blocked immediately when set.
+    ownerDataExportRequestedAt: v.optional(v.number()), // Unix ms. Rate-limits owner data export requests (24h).
+    /** Set when admin completes email MFA; cleared when a new MFA code is issued (login flow). */
+    adminMfaVerifiedAt: v.optional(v.number()),
     deletionCancelToken: v.optional(v.string()),  // SHA-256 hashed token for email cancellation link. Single-use.
     consentGiven: v.boolean(),                    // Explicit Privacy Policy/ToS consent checkbox.
                                                   // Required true before account creation (server-enforced).
@@ -270,7 +274,9 @@ export default defineSchema({
     )),
     deliveryStatus: v.record(v.string(), deliveryStatusValue), // Map<userId, 'sent'|'delivered'|'failed'>
     createdAt: v.number(),                        // Unix ms.
-  }),
+  })
+    .index("by_createdAt", ["createdAt"])
+    .index("by_sentByAdmin_createdAt", ["sentByAdminId", "createdAt"]),
 
   // ── passwordResetTokens ────────────────────────────────────────────────────
   // SHA-256 hashed tokens for password and passcode resets.
@@ -315,7 +321,7 @@ export default defineSchema({
 
   // ── adminAuditLog ──────────────────────────────────────────────────────────
   // Immutable audit trail for sensitive admin actions. DPDP Act 2023 compliance.
-  // Actions: phone_update, user_freeze, user_unfreeze, password_reset,
+  // Actions: phone_update, admin_profile_edit, user_freeze, user_unfreeze, password_reset,
   //          passcode_reset, role_change, complaint_dismiss, session_force_end
   adminAuditLog: defineTable({
     adminId: v.id("users"),                       // Admin who performed the action.
@@ -332,7 +338,7 @@ export default defineSchema({
   // ── otpRecords ─────────────────────────────────────────────────────────────
   // WhatsApp OTP verification records. bcrypt-hashed codes (10 rounds, in action).
   // 10-minute expiry. Max 3 incorrect attempts → 5-minute cooldown.
-  // Rate-limited: max 5 dispatches per phone per UTC hour (fixed window, top of hour).
+  // Rate-limited: max 5 dispatches per phone per rolling 60-minute window (see otp.countRecentDispatches).
   otpRecords: defineTable({
     phone: v.string(),                            // Phone number the OTP was sent to (E.164 format).
     otpHash: v.string(),                          // bcrypt hash of the 6-digit code.
@@ -364,6 +370,11 @@ export default defineSchema({
                                                   // Optional for backward compatibility with pre-existing records.
     paymentStatus: paymentStatus,                 // 'pending' | 'paid' | 'credit'
     paymentMethod: v.optional(paymentMethod),     // 'cash' | 'upi' | 'card' | 'credit'
+    /** Mirrored from club `sessions` when credit is resolved (list badge: Credit Resolved). */
+    creditResolvedAt: v.optional(v.number()),
+    creditResolvedMethod: v.optional(
+      v.union(v.literal("cash"), v.literal("upi"), v.literal("card")),
+    ),
     status: sessionStatus,                        // 'active' | 'completed' | 'cancelled'
     createdAt: v.number(),                        // Unix ms when sessionLog entry was created.
     updatedAt: v.number(),                        // Unix ms of last status change (completion, credit resolve).
@@ -373,7 +384,11 @@ export default defineSchema({
     // FIX #3: "You've played here 5 times" (PRD §8.3) queries by customerId + clubId
     .index("by_customer_club", ["customerId", "clubId"])
     // FIX F: Session completion and credit resolve mutations find sessionLog by sessionId
-    .index("by_sessionId", ["sessionId"]),
+    .index("by_sessionId", ["sessionId"])
+    // Admin dashboard: cross-club active session count
+    .index("by_status", ["status"])
+    // Admin dashboard: paid revenue aggregates (completed + paid)
+    .index("by_status_payment", ["status", "paymentStatus"]),
 
   // ── bookingLogs ────────────────────────────────────────────────────────────
   // Lightweight cross-club booking references. Central DB.
@@ -425,6 +440,14 @@ export default defineSchema({
   })
     .index("by_paymentId", ["paymentId"])          // Idempotency check: does this payment_id already exist?
     .index("by_owner", ["ownerId"]),               // Club lookup: find club record for this owner
+
+  // ── dataExportRequests ─────────────────────────────────────────────────────
+  // Customer data export (GDPR-style). Rate-limited 1 request / 24h per user (sliding window).
+  dataExportRequests: defineTable({
+    userId: v.id("users"),
+    requestedAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
 
   // ─────────────────────────────────────────────────────────────────────────────
   // PER-CLUB DATABASE TABLES (9 tables)
@@ -557,7 +580,9 @@ export default defineSchema({
     //         Outstanding credits: club + paymentStatus. Home: club + status + endTime date range.
     .index("by_club_status", ["clubId", "status"])
     // FIX E: Best-performing tables query (PRD §7.6) + table disable check (active session exists?)
-    .index("by_table", ["tableId"]),
+    .index("by_table", ["tableId"])
+    // Owner complaints: link session picker (completed sessions for customer at club)
+    .index("by_club_customer", ["clubId", "customerId"]),
 
   // ── bookings ───────────────────────────────────────────────────────────────
   // Online booking records. Per-club DB.
@@ -678,6 +703,8 @@ export default defineSchema({
   // Monthly financial aggregates are pre-computed at month-end to avoid full-table scans.
   // Schema mirrors sessions exactly for seamless data migration.
   sessions_archive: defineTable({
+    /** Original `sessions._id` before archival — lets sessionLogs / APIs resolve cold rows. */
+    archivedSessionId: v.string(),
     tableId: v.id("tables"),
     clubId: v.id("clubs"),
     customerId: v.optional(v.id("users")),
@@ -711,6 +738,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     // FIX #10: Monthly financial aggregate queries need to filter by club
-    .index("by_club", ["clubId"]),
+    .index("by_club", ["clubId"])
+    .index("by_archived_sessionId", ["archivedSessionId"]),
 
 });

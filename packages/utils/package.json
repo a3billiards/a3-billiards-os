@@ -1,6 +1,9 @@
 {
   "name": "@a3/utils",
   "version": "1.0.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "exports": {
     ".": "./index.ts",
     "./billing": "./billing.ts",
@@ -8,6 +11,11 @@
     "./fcm": "./fcm.ts",
     "./availability": "./availability.ts",
     "./timezone": "./timezone.ts",
-    "./analytics": "./analytics.ts"
+    "./geo": "./geo.ts",
+    "./analytics": "./analytics.ts",
+    "./bookingRate": "./bookingRate.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
   }
 }

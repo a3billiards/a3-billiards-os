@@ -36,7 +36,7 @@ export default function AuthGate() {
       return;
     }
 
-    router.replace("/(tabs)/discover");
+    router.replace("/(tabs)/home");
   }, [isLoading, isAuthenticated, user, router]);
 
   return (

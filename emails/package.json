@@ -2,7 +2,8 @@
   "name": "@a3/emails",
   "version": "1.0.0",
   "scripts": {
-    "dev": "email dev"
+    "dev": "email dev",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@react-email/components": "^0.0.22",

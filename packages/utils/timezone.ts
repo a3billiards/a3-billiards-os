@@ -14,6 +14,11 @@ export function dateYmdInTimeZone(utcMs: number, timeZone: string): string {
     .slice(0, 10);
 }
 
+/** Alias for PRD / financial attribution: session wall date in club TZ (`YYYY-MM-DD`). */
+export function toClubDate(unixMs: number, timezone: string): string {
+  return dateYmdInTimeZone(unixMs, timezone);
+}
+
 const weekdayToIndex: Record<string, number> = {
   sun: 0,
   mon: 1,
@@ -105,6 +110,62 @@ export function zonedWallTimeToUtcMs(
     utc += want - got;
   }
   return utc;
+}
+
+/** Booking wall time in club timezone → UTC ms. */
+export function computeBookingUnixTime(
+  requestedDate: string,
+  requestedStartTime: string,
+  timeZone: string,
+): number {
+  return zonedWallTimeToUtcMs(requestedDate, requestedStartTime, timeZone);
+}
+
+/** Add calendar days to a YYYY-MM-DD in `timeZone` (anchor at noon to reduce DST edge issues). */
+export function addCalendarDaysYmd(
+  dateYmd: string,
+  deltaDays: number,
+  timeZone: string,
+): string {
+  const anchor = zonedWallTimeToUtcMs(dateYmd, "12:00", timeZone);
+  return dateYmdInTimeZone(anchor + deltaDays * 86_400_000, timeZone);
+}
+
+/** Lexicographic compare for `YYYY-MM-DD` strings. */
+export function compareYmd(a: string, b: string): number {
+  return a.localeCompare(b);
+}
+
+/**
+ * Fills every calendar day between `dateFrom` and `dateTo` (inclusive) in `timeZone`
+ * with zero rows for dates missing from `results`. Returns ascending by date.
+ */
+export function fillDateGaps(
+  results: { date: string; revenue: number; sessionCount: number }[],
+  dateFrom: string,
+  dateTo: string,
+  timeZone: string,
+): { date: string; revenue: number; sessionCount: number }[] {
+  if (compareYmd(dateFrom, dateTo) > 0) return [];
+  const map = new Map(results.map((r) => [r.date, r]));
+  const filled: { date: string; revenue: number; sessionCount: number }[] = [];
+  let cur = dateFrom;
+  let guard = 0;
+  while (compareYmd(cur, dateTo) <= 0 && guard < 500) {
+    filled.push(map.get(cur) ?? { date: cur, revenue: 0, sessionCount: 0 });
+    cur = addCalendarDaysYmd(cur, 1, timeZone);
+    guard += 1;
+  }
+  return filled;
+}
+
+/** Short TZ label from IANA id (e.g. Asia/Kolkata → GMT+5:30 or IST depending on runtime). */
+export function timeZoneAbbreviation(timeZone: string, atUtcMs = Date.now()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    timeZoneName: "short",
+  }).formatToParts(new Date(atUtcMs));
+  return parts.find((p) => p.type === "timeZoneName")?.value ?? timeZone;
 }
  
 /** Current time as IST Date */

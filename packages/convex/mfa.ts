@@ -52,6 +52,8 @@ export const storeMfaCode = internalMutation({
       createdAt: now,
     });
 
+    await ctx.db.patch(adminId, { adminMfaVerifiedAt: undefined });
+
     return { email: user.email };
   },
 });
@@ -88,5 +90,6 @@ export const consumeMfaCode = internalMutation({
       throw new Error("AUTH_003: MFA code invalid or expired");
     }
     await ctx.db.patch(recordId, { used: true });
+    await ctx.db.patch(record.adminId, { adminMfaVerifiedAt: Date.now() });
   },
 });

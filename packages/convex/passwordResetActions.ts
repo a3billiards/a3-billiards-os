@@ -1,8 +1,10 @@
 "use node";
 
 import {
+  getAuthUserId,
   invalidateSessions,
   modifyAccountCredentials,
+  retrieveAccount,
 } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { createHash, randomUUID } from "crypto";
@@ -11,12 +13,6 @@ import { action } from "./_generated/server";
 
 const PASSWORD_PROVIDER = "password" as const;
 const MIN_PASSWORD_LENGTH = 8;
-
-function requireEnv(name: string): string {
-  const val = process.env[name];
-  if (!val) throw new Error(`DATA_001: Missing ${name}`);
-  return val;
-}
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -49,32 +45,12 @@ export const requestReset = action({
     const baseUrl =
       process.env.PASSWORD_RESET_URL ??
       "https://a3billiards.com/reset-password";
-    const link = `${baseUrl.replace(/\/$/, "")}?token=${encodeURIComponent(rawToken)}`;
+    const resetLink = `${baseUrl.replace(/\/$/, "")}?token=${encodeURIComponent(rawToken)}`;
 
-    const { Resend } = await import("resend");
-    const resend = new Resend(requireEnv("RESEND_API_KEY"));
-    const from =
-      process.env.RESEND_FROM ?? "A3 Billiards <onboarding@resend.dev>";
-
-    const { error } = await resend.emails.send({
-      from,
-      to: profile.providerAccountId,
-      subject: "Reset your A3 Billiards password",
-      html: `
-        <p>You requested a password reset. This link expires in <strong>1 hour</strong>:</p>
-        <p><a href="${link}">${link}</a></p>
-        <p>If you did not request this, you can ignore this email.</p>
-      `,
-      text: `Reset your password (expires in 1 hour): ${link}\n\nIf you did not request this, ignore this email.`,
+    await ctx.runAction(internal.notificationsFcm.sendPasswordResetEmail, {
+      email: profile.providerAccountId,
+      resetLink,
     });
-
-    if (error) {
-      const msg =
-        typeof error === "object" && error !== null && "message" in error
-          ? String((error as { message: unknown }).message)
-          : String(error);
-      throw new Error(`EMAIL_001: ${msg}`);
-    }
 
     return { success: true as const };
   },
@@ -163,6 +139,58 @@ export const resetPassword = action({
     });
 
     await invalidateSessions(ctx, { userId });
+
+    return { success: true as const };
+  },
+});
+
+/**
+ * Change password while signed in (email/password accounts). Current session stays valid.
+ */
+export const changePassword = action({
+  args: {
+    currentPassword: v.string(),
+    newPassword: v.string(),
+  },
+  handler: async (ctx, { currentPassword, newPassword }) => {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      throw new Error(
+        `DATA_002: Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+      );
+    }
+
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throw new Error("AUTH_001: Not authenticated");
+    }
+
+    const accountId = await ctx.runQuery(
+      internal.passwordReset.getPasswordProviderAccountId,
+      { userId },
+    );
+    if (!accountId) {
+      throw new Error(
+        "Your account uses Google Sign-In. Password management is handled by Google.",
+      );
+    }
+
+    try {
+      await retrieveAccount(ctx, {
+        provider: PASSWORD_PROVIDER,
+        account: { id: accountId, secret: currentPassword },
+      });
+    } catch {
+      throw new Error("Current password is incorrect.");
+    }
+
+    if (currentPassword === newPassword) {
+      throw new Error("New password must be different");
+    }
+
+    await modifyAccountCredentials(ctx, {
+      provider: PASSWORD_PROVIDER,
+      account: { id: accountId, secret: newPassword },
+    });
 
     return { success: true as const };
   },

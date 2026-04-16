@@ -4,3 +4,4 @@ export * from './fcm';
 export * from './availability';
 export * from './timezone';
 export * from './analytics';
+export * from './bookingRate';

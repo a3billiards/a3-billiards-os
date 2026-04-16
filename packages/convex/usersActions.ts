@@ -4,24 +4,30 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 
-/**
- * SHA-256 token hash runs in Node (crypto). Returns raw cancel token once — send via email in production.
- */
-export const deleteAccountRequest = action({
+export const requestCustomerDataExport = action({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
-    if (userId === null) throw new Error("AUTH_001: Not authenticated");
+    if (userId === null) {
+      throw new Error("AUTH_001: Not authenticated");
+    }
 
-    const crypto = await import("crypto");
-    const raw = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto.createHash("sha256").update(raw).digest("hex");
-
-    await ctx.runMutation(internal.users.applyDeletionRequest, {
+    const row = await ctx.runQuery(internal.deletion.getCustomerForExportEnqueue, {
       userId,
-      tokenHash,
+    });
+    if (!row) {
+      throw new Error("PERM_001: Customer only");
+    }
+    if (!row.email) {
+      throw new Error(
+        "Add an email address to your profile to request a data export.",
+      );
+    }
+
+    await ctx.runMutation(internal.deletion.enqueueCustomerDataExport, {
+      userId,
     });
 
-    return { cancelToken: raw };
+    return { queued: true as const };
   },
 });

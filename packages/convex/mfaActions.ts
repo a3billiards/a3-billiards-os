@@ -4,17 +4,10 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
-import { Resend } from "resend";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 
 const BCRYPT_ROUNDS = 10;
-
-function requireEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`DATA_001: Missing ${name}`);
-  return v;
-}
 
 /**
  * Admin-only MFA send: bcrypt hash + 10m expiry (mutation), Resend email,
@@ -36,22 +29,10 @@ export const generateMfaCode = action({
       codeHash,
     });
 
-    const resend = new Resend(requireEnv("RESEND_API_KEY"));
-    const from =
-      process.env.RESEND_FROM ?? "A3 Billiards <onboarding@resend.dev>";
-    const { error } = await resend.emails.send({
-      from,
-      to: email,
-      subject: "Your A3 Billiards admin verification code",
-      text: `Your verification code is ${digits}. It expires in 10 minutes. If you did not request this, ignore this email.`,
+    await ctx.runAction(internal.notificationsFcm.sendMfaEmail, {
+      email,
+      code: digits,
     });
-    if (error) {
-      const msg =
-        typeof error === "object" && error !== null && "message" in error
-          ? String((error as { message: unknown }).message)
-          : String(error);
-      throw new Error(`EMAIL_001: ${msg}`);
-    }
 
     return { success: true as const };
   },

@@ -10,7 +10,12 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useAction, useMutation } from "convex/react";
+import {
+  useAction,
+  useConvexAuth,
+  useMutation,
+  useQuery,
+} from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
@@ -30,9 +35,14 @@ type ScreenMode =
 export default function VerifyPhoneScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
-  const sendOtp = useAction(api.otpActions.sendOtp);
-  const verifyOtp = useAction(api.otpActions.verifyOtp);
+  const { isAuthenticated } = useConvexAuth();
+  const sendOtp = useAction(api.otp.sendOtp);
+  const verifyOtp = useAction(api.otp.verifyOtp);
   const updateUser = useMutation(api.users.updateUser);
+  const currentUser = useQuery(
+    api.users.getCurrentUser,
+    isAuthenticated ? {} : "skip",
+  );
 
   const [mode, setMode] = useState<ScreenMode>("sending");
   const [digits, setDigits] = useState<string[]>(Array(PIN_LENGTH).fill(""));
@@ -146,11 +156,16 @@ export default function VerifyPhoneScreen() {
   // ── Verify OTP ──
   const handleVerify = useCallback(async () => {
     if (!isComplete || mode !== "input" || !phone) return;
+    if (isAuthenticated && currentUser === undefined) return;
     setError(null);
     setMode("verifying");
 
     try {
-      await verifyOtp({ phone, code });
+      await verifyOtp({
+        phone,
+        code,
+        userId: currentUser?._id,
+      });
       await updateUser({ phone });
       router.replace("/(tabs)/discover");
     } catch (e) {
@@ -180,7 +195,19 @@ export default function VerifyPhoneScreen() {
       }
       resetDigits();
     }
-  }, [isComplete, mode, phone, verifyOtp, code, updateUser, router, resetDigits]);
+  }, [
+    isComplete,
+    mode,
+    phone,
+    verifyOtp,
+    code,
+    updateUser,
+    router,
+    resetDigits,
+    currentUser?._id,
+    isAuthenticated,
+    currentUser,
+  ]);
 
   // ── Auto-submit when all 6 digits entered ──
   useEffect(() => {

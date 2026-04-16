@@ -20,7 +20,7 @@ export const ERROR_CODES = {
     AUTH_005: "Consent not given",
     GOOGLE_AUTH_001: "Audience mismatch or invalid Google ID token",
     SESSION_001: "Table is already occupied",
-    SESSION_002: "Table lock expired — please retry",  // retryable
+    SESSION_002: "Table lock invalid, expired, or held by another device — please retry",  // retryable
     SESSION_003: "Table is inactive",
     SESSION_004: "Customer account is frozen",
     SESSION_005: "Customer account pending deletion",
@@ -45,6 +45,7 @@ export const ERROR_CODES = {
     OTP_006: "Phone cannot be used for this registration",
     OTP_007: "Phone already registered",
     CLUB_003: "Email already registered",
+    CLUB_004: "Bookable hours must fall within operating hours. Update bookable hours first.",
     RATE_001: "Rate limit exceeded — please retry later",  // retryable
     PAYMENT_001: "Invalid payment signature",
     PAYMENT_002: "Club not found for payment",
@@ -64,6 +65,7 @@ export const ERROR_CODES = {
     DELETION_003: "Owner subscription still active — cannot delete",
     PROMOTE_001: "Customers cannot be promoted. Register via Onboarding Website.",
     PROMOTE_002: "User is already an admin.",
+    FORCE_001: "Session not found or not active",
     UNKNOWN: "An unexpected error occurred",
   } as const;
    

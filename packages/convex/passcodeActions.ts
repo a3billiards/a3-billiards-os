@@ -3,7 +3,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import bcrypt from "bcryptjs";
-import { Resend } from "resend";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 import type { VerifyPasscodeResult } from "./model/passcodePermissions";
@@ -13,12 +12,6 @@ import {
 } from "./model/passcodePermissions";
 
 const BCRYPT_ROUNDS = 10;
-
-function requireEnv(name: string): string {
-  const val = process.env[name];
-  if (!val) throw new Error(`DATA_001: Missing ${name}`);
-  return val;
-}
 
 function assertSixDigitPin(passcode: string): string {
   const trimmed = passcode.trim();
@@ -123,27 +116,13 @@ export const resetPasscodeViaEmail = action({
       userId,
     });
 
-    const resend = new Resend(requireEnv("RESEND_API_KEY"));
-    const from =
-      process.env.RESEND_FROM ?? "A3 Billiards <onboarding@resend.dev>";
-    const { error } = await resend.emails.send({
-      from,
-      to: user.email,
-      subject: "Your A3 Billiards settings passcode was reset",
-      html: `
-        <p>Your settings passcode has been removed from your account. The next time you open <strong>Settings</strong> in the Owner app, you will be asked to set a new 6-digit passcode.</p>
-        <p>If you did not request this, contact support immediately.</p>
-      `,
-      text: `Your settings passcode has been removed from your account. The next time you open Settings in the Owner app, you will be asked to set a new 6-digit passcode. If you did not request this, contact support immediately.`,
+    const resetLink =
+      process.env.PASSCODE_RESET_URL ??
+      "https://links.a3billiards.com/owner/settings";
+    await ctx.runAction(internal.notificationsFcm.sendPasscodeResetEmail, {
+      email: user.email,
+      resetLink,
     });
-
-    if (error) {
-      const msg =
-        typeof error === "object" && error !== null && "message" in error
-          ? String((error as { message: unknown }).message)
-          : String(error);
-      throw new Error(`EMAIL_001: ${msg}`);
-    }
 
     return { success: true as const };
   },

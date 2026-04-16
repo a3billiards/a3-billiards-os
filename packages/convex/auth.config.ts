@@ -1,8 +1,8 @@
 import { convexAuth } from "@convex-dev/auth/server";
-import { Password } from "@convex-dev/auth/providers/Password";
+import { A3Password } from "./passwordProviderA3";
 
 export const { auth, signIn, signOut, store } = convexAuth({
-  providers: [Password],
+  providers: [A3Password()],
 });
 
 export default {

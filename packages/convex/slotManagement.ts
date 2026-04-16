@@ -97,6 +97,7 @@ export const getSlotDashboard = query({
     return {
       clubId: owner.clubId,
       currency: club.currency,
+      timezone: club.timezone,
       bookingSettingsEnabled: club.bookingSettings.enabled,
       todayYmd,
       bookingSummary: {

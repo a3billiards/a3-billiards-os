@@ -35,6 +35,10 @@ export default function TabsLayout() {
         options={{ title: "Complaints" }}
       />
       <Tabs.Screen
+        name="bookings"
+        options={{ title: "Bookings" }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{ title: "Settings" }}
       />

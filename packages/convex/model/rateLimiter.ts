@@ -1,6 +1,6 @@
 /**
  * Rate limits:
- * - OTP `sendOtp`: fixed window, max 5 / phone / hour, bucket resets at top of each UTC hour → OTP_003.
+ * - OTP `sendOtp`: sliding 60-minute window, max 5 dispatches / phone (see convex/otp.ts) → OTP_003.
  * - MFA generation: sliding window, max 5 / normalized email / rolling hour → RATE_001.
  */
 

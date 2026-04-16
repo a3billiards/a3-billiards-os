@@ -1,11 +1,17 @@
 {
   "name": "@a3/ui",
   "version": "1.0.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "exports": {
     ".": "./index.ts",
     "./theme": "./theme/index.ts",
     "./components": "./components/index.ts",
     "./errors": "./errors/index.ts"
+  },
+  "dependencies": {
+    "@a3/utils": "workspace:*"
   },
   "peerDependencies": {
     "react": "*",
