@@ -1,6 +1,5 @@
-import { ConfigContext } from "expo/config";
-
-export default ({ config }: ConfigContext) => ({
+// JS-parseable for EAS (no param type annotations). Not included in app `tsc` — Expo validates at prebuild.
+export default ({ config }) => ({
   ...config,
   name: "A3 Billiards Owner",
   slug: "a3-billiards-owner",
@@ -26,4 +25,3 @@ export default ({ config }: ConfigContext) => ({
     typedRoutes: false,
   },
 });
-

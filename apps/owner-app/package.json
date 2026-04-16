@@ -35,10 +35,10 @@
     "react-native-maps": "1.20.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-svg": "^15.15.4",
-    "react-native-web": "~0.21.0"
+    "react-native-web": "~0.21.0",
+    "typescript": "^5.4.0"
   },
   "devDependencies": {
-    "@types/react": "~19.2.10",
-    "typescript": "^5.4.0"
+    "@types/react": "~19.2.10"
   }
 }

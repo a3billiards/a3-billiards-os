@@ -74,13 +74,13 @@ importers:
       react-native-web:
         specifier: ~0.21.0
         version: 0.21.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
     devDependencies:
       '@types/react':
         specifier: ~19.2.10
         version: 19.2.14
-      typescript:
-        specifier: ^5.4.0
-        version: 5.9.3
 
   apps/customer-app:
     dependencies:
@@ -147,13 +147,13 @@ importers:
       react-native-web:
         specifier: ~0.21.0
         version: 0.21.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
     devDependencies:
       '@types/react':
         specifier: ~19.2.10
         version: 19.2.14
-      typescript:
-        specifier: ^5.4.0
-        version: 5.9.3
 
   apps/onboarding-web:
     dependencies:
@@ -266,13 +266,13 @@ importers:
       react-native-web:
         specifier: ~0.21.0
         version: 0.21.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
     devDependencies:
       '@types/react':
         specifier: ~19.2.10
         version: 19.2.14
-      typescript:
-        specifier: ^5.4.0
-        version: 5.9.3
 
   emails:
     dependencies:
