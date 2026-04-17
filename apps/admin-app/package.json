@@ -1,6 +1,7 @@
 {
   "name": "@a3/admin-app",
   "version": "1.0.0",
+  "packageManager": "pnpm@9.15.9",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",

@@ -5,6 +5,8 @@
   },
   "build": {
     "development": {
+      "node": "20.19.4",
+      "pnpm": "9.15.9",
       "developmentClient": true,
       "distribution": "internal",
       "android": {
@@ -15,11 +17,16 @@
       }
     },
     "preview": {
+      "node": "20.19.4",
+      "pnpm": "9.15.9",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       }
     },
-    "production": {}
+    "production": {
+      "node": "20.19.4",
+      "pnpm": "9.15.9"
+    }
   }
 }
