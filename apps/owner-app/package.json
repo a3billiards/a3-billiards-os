@@ -11,9 +11,9 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@a3/convex": "file:../../packages/convex",
-    "@a3/ui": "file:../../packages/ui",
-    "@a3/utils": "file:../../packages/utils",
+    "@a3/convex": "workspace:*",
+    "@a3/ui": "workspace:*",
+    "@a3/utils": "workspace:*",
     "@convex-dev/auth": "0.0.68",
     "@expo/metro-runtime": "~55.0.9",
     "@react-native-community/datetimepicker": "^9.1.0",

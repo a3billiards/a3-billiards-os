@@ -24,9 +24,9 @@
     "@expo/metro-runtime": "~55.0.9",
     "convex": "^1.13.0",
     "@convex-dev/auth": "0.0.68",
-    "@a3/convex": "file:../../packages/convex",
-    "@a3/ui": "file:../../packages/ui",
-    "@a3/utils": "file:../../packages/utils",
+    "@a3/convex": "workspace:*",
+    "@a3/ui": "workspace:*",
+    "@a3/utils": "workspace:*",
     "@sentry/react-native": "~7.11.0",
     "posthog-react-native": "^3.3.0",
     "typescript": "^5.4.0"
