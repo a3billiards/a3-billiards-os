@@ -13,7 +13,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+        "EAS_SKIP_AUTO_FINGERPRINT": "1",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "preview": {
@@ -22,11 +23,17 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
       "node": "20.19.4",
-      "pnpm": "9.15.9"
+      "pnpm": "9.15.9",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     }
   }
 }
