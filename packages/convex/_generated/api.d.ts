@@ -9,6 +9,7 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as auth from "../auth.js";
 import type * as bookings from "../bookings.js";
 import type * as clubDiscovery from "../clubDiscovery.js";
 import type * as clubProfile from "../clubProfile.js";
@@ -19,6 +20,8 @@ import type * as deletionActions from "../deletionActions.js";
 import type * as financials from "../financials.js";
 import type * as googleAuth from "../googleAuth.js";
 import type * as googleAuthActions from "../googleAuthActions.js";
+import type * as googleAuthOps from "../googleAuthOps.js";
+import type * as googleCredentialsProvider from "../googleCredentialsProvider.js";
 import type * as http from "../http.js";
 import type * as mfa from "../mfa.js";
 import type * as mfaActions from "../mfaActions.js";
@@ -45,6 +48,7 @@ import type * as passwordReset from "../passwordReset.js";
 import type * as passwordResetActions from "../passwordResetActions.js";
 import type * as paymentReceipts from "../paymentReceipts.js";
 import type * as rls from "../rls.js";
+import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
 import type * as slotManagement from "../slotManagement.js";
 import type * as slots from "../slots.js";
@@ -63,6 +67,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  auth: typeof auth;
   bookings: typeof bookings;
   clubDiscovery: typeof clubDiscovery;
   clubProfile: typeof clubProfile;
@@ -73,6 +78,8 @@ declare const fullApi: ApiFromModules<{
   financials: typeof financials;
   googleAuth: typeof googleAuth;
   googleAuthActions: typeof googleAuthActions;
+  googleAuthOps: typeof googleAuthOps;
+  googleCredentialsProvider: typeof googleCredentialsProvider;
   http: typeof http;
   mfa: typeof mfa;
   mfaActions: typeof mfaActions;
@@ -99,6 +106,7 @@ declare const fullApi: ApiFromModules<{
   passwordResetActions: typeof passwordResetActions;
   paymentReceipts: typeof paymentReceipts;
   rls: typeof rls;
+  seed: typeof seed;
   sessions: typeof sessions;
   slotManagement: typeof slotManagement;
   slots: typeof slots;

@@ -8,7 +8,7 @@
 import { OAuth2Client } from "google-auth-library";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 
 function googleAudiences(): string[] {
@@ -59,6 +59,17 @@ async function verifyIdTokenClaims(idToken: string): Promise<{
  * Throws GOOGLE_AUTH_001 on failure.
  */
 export const verifyGoogleToken = action({
+  args: { idToken: v.string() },
+  handler: async (_ctx, { idToken }) => {
+    return await verifyIdTokenClaims(idToken);
+  },
+});
+
+/**
+ * Same as `verifyGoogleToken` but internal — invoked from the Google
+ * ConvexCredentials provider's `authorize` callback via `ctx.runAction`.
+ */
+export const verifyGoogleTokenInternal = internalAction({
   args: { idToken: v.string() },
   handler: async (_ctx, { idToken }) => {
     return await verifyIdTokenClaims(idToken);

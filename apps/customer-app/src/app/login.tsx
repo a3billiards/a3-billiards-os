@@ -106,6 +106,14 @@ export default function CustomerLoginScreen() {
         return;
       }
 
+      // Existing user — establish a real Convex Auth session via the A3Google provider.
+      const { signingIn } = await signIn("google", { idToken });
+      if (!signingIn) {
+        setError("Google sign-in failed. Please try again.");
+        setGoogleLoading(false);
+        return;
+      }
+
       navigatePostLogin();
     } catch (e) {
       const appError = parseConvexError(e as Error);
@@ -120,7 +128,7 @@ export default function CustomerLoginScreen() {
       }
       setGoogleLoading(false);
     }
-  }, [loading, googleLoading, resolveGoogle, navigatePostLogin, router]);
+  }, [loading, googleLoading, signIn, resolveGoogle, navigatePostLogin, router]);
 
   const busy = loading || googleLoading;
 

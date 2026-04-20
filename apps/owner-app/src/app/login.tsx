@@ -12,8 +12,6 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useAction, useQuery } from "convex/react";
-import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
@@ -26,7 +24,6 @@ GoogleSignin.configure({
 export default function OwnerLoginScreen() {
   const router = useRouter();
   const { signIn } = useAuthActions();
-  const resolveGoogle = useAction(api.googleAuthActions.resolveGoogleSignIn);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -96,12 +93,10 @@ export default function OwnerLoginScreen() {
         return;
       }
 
-      const result = await resolveGoogle({ idToken });
-
-      if (result.isNewUser) {
-        setError(
-          "No owner account found for this Google account. Register via the Onboarding Website.",
-        );
+      // This establishes a real Convex Auth session via the A3Google provider.
+      const { signingIn } = await signIn("google", { idToken });
+      if (!signingIn) {
+        setError("Google sign-in failed. Please try again.");
         setGoogleLoading(false);
         return;
       }
@@ -113,6 +108,10 @@ export default function OwnerLoginScreen() {
         setError("This account is frozen. Contact support.");
       } else if (appError.code === "AUTH_006") {
         setError("This account is pending deletion.");
+      } else if (appError.code === "GOOGLE_AUTH_NEW_USER") {
+        setError(
+          "No owner account found for this Google account. Register via the Onboarding Website.",
+        );
       } else if (appError.code === "GOOGLE_AUTH_001") {
         setError("Google authentication failed. Please try again.");
       } else if (appError.code !== "UNKNOWN") {
@@ -122,7 +121,7 @@ export default function OwnerLoginScreen() {
       }
       setGoogleLoading(false);
     }
-  }, [loading, googleLoading, resolveGoogle, navigatePostLogin]);
+  }, [loading, googleLoading, signIn, navigatePostLogin]);
 
   const busy = loading || googleLoading;
 
