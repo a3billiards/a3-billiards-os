@@ -1,19 +1,25 @@
-// JS-parseable for EAS (no param type annotations). Not included in app `tsc` — Expo validates at prebuild.
-export default ({ config }) => ({
-  ...config,
+// Single source of truth. JS-parseable for EAS (no param type annotations).
+// Asset references (icon, splash, adaptiveIcon) intentionally omitted until
+// real assets are added under ./assets/images/.
+export default () => ({
   name: "A3 Billiards",
   slug: "a3-billiards-customer",
   version: "1.0.0",
   orientation: "portrait",
   scheme: "a3customer",
+  userInterfaceStyle: "automatic",
   newArchEnabled: true,
+  owner: "a3333",
   ios: {
+    supportsTablet: true,
     bundleIdentifier: "com.a3billiards.customerapp",
-    googleServicesFile: "./GoogleService-Info.plist",
+    // googleServicesFile: "./GoogleService-Info.plist",
   },
   android: {
     package: "com.a3billiards.customerapp",
-    googleServicesFile: "./google-services.json",
+    edgeToEdgeEnabled: true,
+    predictiveBackGestureEnabled: false,
+    // googleServicesFile: "./google-services.json",
   },
   plugins: [
     "expo-router",
@@ -24,5 +30,11 @@ export default ({ config }) => ({
   ],
   experiments: {
     typedRoutes: false,
+  },
+  extra: {
+    router: {},
+    eas: {
+      projectId: "b66e7417-e0e5-4276-9552-75e7c06b4138",
+    },
   },
 });
