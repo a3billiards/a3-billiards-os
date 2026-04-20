@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Stack } from "expo-router";
 import {
   ConvexReactClient,
@@ -6,6 +7,8 @@ import {
 } from "convex/react";
 import { ConvexAuthProvider, type TokenStorage } from "@convex-dev/auth/react";
 import * as SecureStore from "expo-secure-store";
+import * as SplashScreen from "expo-splash-screen";
+import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
 import {
   View,
@@ -17,7 +20,33 @@ import {
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography } from "@a3/ui/theme";
 
-const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
+// Keep splash screen visible until the auth gate decides where to route.
+// Wrapped in try/catch because hot reload can call this twice in dev.
+try {
+  void SplashScreen.preventAutoHideAsync();
+} catch {}
+
+// Initialize Sentry once at module load. The plugin in app.config.ts only
+// configures the native build — Sentry.init must run at runtime to capture errors.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (
+  SENTRY_DSN &&
+  !SENTRY_DSN.includes("xxxx") &&
+  SENTRY_DSN.startsWith("https://")
+) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    enableAutoSessionTracking: true,
+    tracesSampleRate: 0.1,
+  });
+}
+
+const CONVEX_URL = process.env.EXPO_PUBLIC_CONVEX_URL;
+const RENEW_URL = "https://register.a3billiards.com/renew";
+
+// Lazily create the client only if the URL is present so a missing env var
+// surfaces as a clear error screen instead of a white-screen crash.
+const convex = CONVEX_URL ? new ConvexReactClient(CONVEX_URL) : null;
 
 const secureStorage: TokenStorage = {
   getItem: (key) => SecureStore.getItemAsync(key),
@@ -25,7 +54,22 @@ const secureStorage: TokenStorage = {
   removeItem: (key) => SecureStore.deleteItemAsync(key),
 };
 
-const RENEW_URL = "https://register.a3billiards.com/renew";
+function MissingConfigScreen() {
+  useEffect(() => {
+    void SplashScreen.hideAsync().catch(() => {});
+  }, []);
+  return (
+    <View style={configErrorStyles.root}>
+      <Text style={configErrorStyles.icon}>⚠️</Text>
+      <Text style={configErrorStyles.heading}>Configuration Error</Text>
+      <Text style={configErrorStyles.body}>
+        EXPO_PUBLIC_CONVEX_URL is missing from this build. The app cannot
+        connect to the backend. Please reinstall the latest build or contact
+        support at support@a3billiards.com.
+      </Text>
+    </View>
+  );
+}
 
 function FrozenScreen({ renewUrl }: { renewUrl: string }) {
   return (
@@ -75,7 +119,7 @@ function GraceSubscriptionBanner({ renewUrl }: { renewUrl: string }) {
 }
 
 function OwnerSubscriptionShell() {
-  const { isAuthenticated } = useConvexAuth();
+  const { isAuthenticated, isLoading } = useConvexAuth();
   const user = useQuery(
     api.users.getCurrentUser,
     isAuthenticated ? {} : "skip",
@@ -89,6 +133,13 @@ function OwnerSubscriptionShell() {
     api.subscriptions.getSubscriptionStatus,
     clubId ? { clubId } : "skip",
   );
+
+  // Hide splash once the auth state is resolved (success or anonymous).
+  useEffect(() => {
+    if (!isLoading) {
+      void SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isLoading]);
 
   if (
     isAuthenticated &&
@@ -121,7 +172,10 @@ function OwnerSubscriptionShell() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
+  if (!convex) {
+    return <MissingConfigScreen />;
+  }
   return (
     <ConvexAuthProvider client={convex} storage={secureStorage}>
       <StatusBar style="light" />
@@ -130,8 +184,33 @@ export default function RootLayout() {
   );
 }
 
+export default Sentry.wrap(RootLayout);
+
 const shellStyles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg.primary },
+});
+
+const configErrorStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.bg.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+  icon: { fontSize: 48, marginBottom: 16 },
+  heading: {
+    ...typography.heading2,
+    color: colors.status.error,
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  body: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
 });
 
 const frozenStyles = StyleSheet.create({

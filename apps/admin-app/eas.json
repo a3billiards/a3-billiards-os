@@ -14,7 +14,10 @@
       },
       "env": {
         "EAS_SKIP_AUTO_FINGERPRINT": "1",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
+        "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_xxxxxxxxxxxx",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://xxxx@sentry.io/xxxxx"
       }
     },
     "preview": {
@@ -25,14 +28,20 @@
         "buildType": "apk"
       },
       "env": {
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
+        "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_xxxxxxxxxxxx",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://xxxx@sentry.io/xxxxx"
       }
     },
     "production": {
       "node": "20.19.4",
       "pnpm": "9.15.9",
       "env": {
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
+        "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_xxxxxxxxxxxx",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://xxxx@sentry.io/xxxxx"
       }
     }
   }
