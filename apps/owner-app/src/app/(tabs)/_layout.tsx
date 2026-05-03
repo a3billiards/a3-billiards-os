@@ -1,5 +1,14 @@
 import { Tabs } from "expo-router";
+import { MaterialIcons } from "@expo/vector-icons";
 import { colors, typography, layout } from "@a3/ui/theme";
+
+type IconName = React.ComponentProps<typeof MaterialIcons>["name"];
+
+function tabIcon(name: IconName) {
+  return ({ color, size }: { color: string; size: number }) => (
+    <MaterialIcons name={name} color={color} size={size} />
+  );
+}
 
 export default function TabsLayout() {
   return (
@@ -20,27 +29,27 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="slots"
-        options={{ title: "Slots" }}
+        options={{ title: "Slots", tabBarIcon: tabIcon("view-module") }}
       />
       <Tabs.Screen
         name="snacks"
-        options={{ title: "Snacks" }}
+        options={{ title: "Snacks", tabBarIcon: tabIcon("fastfood") }}
       />
       <Tabs.Screen
         name="financials"
-        options={{ title: "Financials" }}
+        options={{ title: "Financials", tabBarIcon: tabIcon("attach-money") }}
       />
       <Tabs.Screen
         name="complaints"
-        options={{ title: "Complaints" }}
+        options={{ title: "Complaints", tabBarIcon: tabIcon("report-problem") }}
       />
       <Tabs.Screen
         name="bookings"
-        options={{ title: "Bookings" }}
+        options={{ title: "Bookings", tabBarIcon: tabIcon("event") }}
       />
       <Tabs.Screen
         name="settings"
-        options={{ title: "Settings" }}
+        options={{ title: "Settings", tabBarIcon: tabIcon("settings") }}
       />
     </Tabs>
   );

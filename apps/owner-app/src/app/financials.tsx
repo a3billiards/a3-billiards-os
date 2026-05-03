@@ -16,13 +16,12 @@ import { useRouter } from "expo-router";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import { BarChart } from "react-native-gifted-charts";
 import { useMutation, useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
 import {
   addCalendarDaysYmd,
   toClubDate,
@@ -32,6 +31,7 @@ import {
 import { formatCurrency } from "@a3/utils/billing";
 import { getActiveRoleId } from "../lib/activeRoleStorage";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
+import { SafeBarChart } from "../components/SafeBarChart";
 
 type SortKey = "date" | "amount";
 
@@ -123,7 +123,7 @@ function formatEndDateLabel(endTime: number, tz: string): string {
   }).format(new Date(endTime));
 }
 
-export default function FinancialsScreen(): React.JSX.Element {
+function FinancialsContent(): React.JSX.Element {
   const router = useRouter();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
@@ -411,7 +411,8 @@ export default function FinancialsScreen(): React.JSX.Element {
                   style={styles.chartOverlay}
                 />
               ) : null}
-              <BarChart
+              <SafeBarChart
+                emptyMessage="No revenue recorded for this period."
                 parentWidth={chartWidth}
                 data={barData}
                 maxValue={maxBar}
@@ -448,13 +449,11 @@ export default function FinancialsScreen(): React.JSX.Element {
                     </View>
                   );
                 }}
-                {...({
-                  pointerConfig: {
-                    activatePointersOnLongPress: false,
-                    pointerStripColor: colors.border.default,
-                    pointerStripWidth: 1,
-                  },
-                } as object)}
+                pointerConfig={{
+                  activatePointersOnLongPress: false,
+                  pointerStripColor: colors.border.default,
+                  pointerStripWidth: 1,
+                }}
               />
             </View>
             <View style={styles.summaryRow}>
@@ -661,6 +660,14 @@ export default function FinancialsScreen(): React.JSX.Element {
         </Pressable>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+export default function FinancialsScreen(): React.JSX.Element {
+  return (
+    <TabErrorBoundary tabName="Financials">
+      <FinancialsContent />
+    </TabErrorBoundary>
   );
 }
 

@@ -14,8 +14,8 @@ import {
   Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import MapView, { Marker } from "react-native-maps";
 import * as ImagePicker from "expo-image-picker";
+import { SafeLocationPicker } from "./SafeLocationPicker";
 import { useRouter } from "expo-router";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -1354,18 +1354,15 @@ export default function OwnerSettingsContent(): React.JSX.Element {
 
               <Text style={styles.label}>Location pin</Text>
               <View style={styles.mapBox}>
-                <MapView style={styles.map} initialRegion={mapRegion}>
-                  {markerCoord ? (
-                    <Marker
-                      coordinate={markerCoord}
-                      draggable={!frozen}
-                      onDragEnd={(e) => {
-                        setMarkerCoord(e.nativeEvent.coordinate);
-                        setLocationDirty(true);
-                      }}
-                    />
-                  ) : null}
-                </MapView>
+                <SafeLocationPicker
+                  initialRegion={mapRegion}
+                  markerCoord={markerCoord}
+                  draggable={!frozen}
+                  onChange={(c) => {
+                    setMarkerCoord(c);
+                    setLocationDirty(true);
+                  }}
+                />
               </View>
               {locationDirty ? (
                 <Pressable

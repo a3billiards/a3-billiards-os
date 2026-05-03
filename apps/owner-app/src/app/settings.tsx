@@ -5,10 +5,11 @@ import { useRouter } from "expo-router";
 import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { PasscodeGate } from "@a3/ui/components";
+import { TabErrorBoundary } from "@a3/ui/errors";
 import { colors } from "@a3/ui/theme";
 import OwnerSettingsContent from "../components/OwnerSettingsContent";
 
-export default function SettingsScreen(): React.JSX.Element {
+function SettingsContent(): React.JSX.Element {
   const router = useRouter();
   const [unlocked, setUnlocked] = useState(false);
   const verifyPasscode = useAction(api.passcodeActions.verifyPasscode);
@@ -28,6 +29,14 @@ export default function SettingsScreen(): React.JSX.Element {
   }
 
   return <OwnerSettingsContent />;
+}
+
+export default function SettingsScreen(): React.JSX.Element {
+  return (
+    <TabErrorBoundary tabName="Settings">
+      <SettingsContent />
+    </TabErrorBoundary>
+  );
 }
 
 const styles = StyleSheet.create({
