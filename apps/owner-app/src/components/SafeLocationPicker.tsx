@@ -6,19 +6,34 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Platform,
 } from "react-native";
+import Constants from "expo-constants";
 import { colors, typography, spacing, radius } from "@a3/ui/theme";
 
 /**
- * `react-native-maps` requires a Google Maps API key on Android. When the key
- * is missing, MapView crashes the entire screen on render. We wrap the map in
- * a lazy boundary + ErrorBoundary so that:
- *  - Module-level import failures don't tear down the React tree.
- *  - Render-time native module crashes show a manual lat/lng fallback instead
- *    of a white screen.
+ * `react-native-maps` requires native Google Maps SDK keys. Without them,
+ * `MapView` can **hard-crash** the Android/iOS process — React error boundaries
+ * never run. We therefore skip loading `react-native-maps` entirely unless
+ * `expo-constants` reports a configured key (same source as the native embed).
  *
- * Falls back to a numeric input UI for lat/lng when the map isn't available.
+ * Otherwise we show a manual lat/lng fallback.
  */
+
+function hasNativeGoogleMapsApiKey(): boolean {
+  const ex = Constants.expoConfig;
+  if (!ex) return false;
+  if (Platform.OS === "android") {
+    const k = ex.android?.config?.googleMaps?.apiKey;
+    return typeof k === "string" && k.trim().length >= 8;
+  }
+  if (Platform.OS === "ios") {
+    const ios = ex.ios as { config?: { googleMapsApiKey?: string } } | undefined;
+    const k = ios?.config?.googleMapsApiKey;
+    return typeof k === "string" && k.trim().length >= 8;
+  }
+  return false;
+}
 
 type Coord = { latitude: number; longitude: number };
 
@@ -156,6 +171,10 @@ export function SafeLocationPicker(props: Props): React.JSX.Element {
       onChange={props.onChange}
     />
   );
+
+  if (!hasNativeGoogleMapsApiKey()) {
+    return fallback;
+  }
 
   return (
     <MapErrorBoundary fallback={fallback}>

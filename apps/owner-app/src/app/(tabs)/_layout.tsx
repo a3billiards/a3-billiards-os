@@ -4,10 +4,12 @@ import { colors, typography, layout } from "@a3/ui/theme";
 
 type IconName = React.ComponentProps<typeof MaterialIcons>["name"];
 
-function tabIcon(name: IconName) {
-  return ({ color, size }: { color: string; size: number }) => (
-    <MaterialIcons name={name} color={color} size={size} />
-  );
+function makeTabBarIcon(name: IconName) {
+  function TabBarIcon({ color, size }: { color: string; size: number }) {
+    return <MaterialIcons name={name} color={color} size={size} />;
+  }
+  TabBarIcon.displayName = `TabBarIcon(${String(name)})`;
+  return TabBarIcon;
 }
 
 export default function TabsLayout() {
@@ -29,27 +31,27 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="slots"
-        options={{ title: "Slots", tabBarIcon: tabIcon("view-module") }}
+        options={{ title: "Slots", tabBarIcon: makeTabBarIcon("view-module") }}
       />
       <Tabs.Screen
         name="snacks"
-        options={{ title: "Snacks", tabBarIcon: tabIcon("fastfood") }}
+        options={{ title: "Snacks", tabBarIcon: makeTabBarIcon("fastfood") }}
       />
       <Tabs.Screen
         name="financials"
-        options={{ title: "Financials", tabBarIcon: tabIcon("attach-money") }}
+        options={{ title: "Financials", tabBarIcon: makeTabBarIcon("attach-money") }}
       />
       <Tabs.Screen
         name="complaints"
-        options={{ title: "Complaints", tabBarIcon: tabIcon("report-problem") }}
+        options={{ title: "Complaints", tabBarIcon: makeTabBarIcon("report-problem") }}
       />
       <Tabs.Screen
         name="bookings"
-        options={{ title: "Bookings", tabBarIcon: tabIcon("event") }}
+        options={{ title: "Bookings", tabBarIcon: makeTabBarIcon("event") }}
       />
       <Tabs.Screen
         name="settings"
-        options={{ title: "Settings", tabBarIcon: tabIcon("settings") }}
+        options={{ title: "Settings", tabBarIcon: makeTabBarIcon("settings") }}
       />
     </Tabs>
   );

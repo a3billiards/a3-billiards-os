@@ -162,7 +162,7 @@ export default function SnacksScreen() {
       {snacks.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>
-            No snack items yet. Tap '+ Add Item' to create your menu.
+            {`No snack items yet. Tap '+ Add Item' to create your menu.`}
           </Text>
         </View>
       ) : (

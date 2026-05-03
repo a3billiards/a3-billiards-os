@@ -19,6 +19,9 @@ export default () => {
   const googleSchemes = googleIosUrlSchemes();
   const plistPath = process.env.GOOGLE_SERVICE_INFO_PLIST;
   const androidJsonPath = process.env.GOOGLE_SERVICES_JSON;
+  /** Embed Google Maps SDK keys (EAS secrets). Required for `react-native-maps` MapView. */
+  const googleMapsAndroidKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY;
+  const googleMapsIosKey = process.env.GOOGLE_MAPS_IOS_API_KEY;
 
   const ios: Record<string, unknown> = {
     supportsTablet: true,
@@ -26,6 +29,9 @@ export default () => {
   };
   if (typeof plistPath === "string" && plistPath.length > 0) {
     ios.googleServicesFile = plistPath;
+  }
+  if (typeof googleMapsIosKey === "string" && googleMapsIosKey.trim().length >= 8) {
+    ios.config = { googleMapsApiKey: googleMapsIosKey.trim() };
   }
   if (googleSchemes.length > 0) {
     ios.infoPlist = {
@@ -45,6 +51,14 @@ export default () => {
   };
   if (typeof androidJsonPath === "string" && androidJsonPath.length > 0) {
     android.googleServicesFile = androidJsonPath;
+  }
+  if (
+    typeof googleMapsAndroidKey === "string" &&
+    googleMapsAndroidKey.trim().length >= 8
+  ) {
+    android.config = {
+      googleMaps: { apiKey: googleMapsAndroidKey.trim() },
+    };
   }
 
   return {

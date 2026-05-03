@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -193,7 +192,7 @@ export default function PasscodeSetupScreen() {
         )}
 
         <Text style={styles.hint}>
-          You'll need this passcode every time you access Settings or approve
+          You{"'"}ll need this passcode every time you access Settings or approve
           staff actions.
         </Text>
       </View>

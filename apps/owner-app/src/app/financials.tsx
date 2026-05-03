@@ -27,6 +27,7 @@ import {
   toClubDate,
   zonedWallTimeToUtcMs,
   timeZoneAbbreviation,
+  normalizeIanaTimeZone,
 } from "@a3/utils/timezone";
 import { formatCurrency } from "@a3/utils/billing";
 import { getActiveRoleId } from "../lib/activeRoleStorage";
@@ -115,19 +116,24 @@ function formatBarAxisLabel(
 }
 
 function formatEndDateLabel(endTime: number, tz: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: tz,
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(endTime));
+  const timeZone = normalizeIanaTimeZone(tz);
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(endTime));
+  } catch {
+    return new Date(endTime).toLocaleDateString("en-GB");
+  }
 }
 
 function FinancialsContent(): React.JSX.Element {
   const router = useRouter();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
-  const clubTimezone = dashboard?.timezone ?? "Asia/Kolkata";
+  const clubTimezone = normalizeIanaTimeZone(dashboard?.timezone);
 
   const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
 
@@ -355,11 +361,14 @@ function FinancialsContent(): React.JSX.Element {
 
         {picker ? (
           <DateTimePicker
-            value={ymdToDate(picker === "from" ? dateFrom : dateTo, clubTimezone)}
+            value={ymdToDate(
+              (picker === "from" ? dateFrom : dateTo) || dashboard.todayYmd,
+              clubTimezone,
+            )}
             mode="date"
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={onDateChange}
-            themeVariant="dark"
+            {...(Platform.OS === "ios" ? { themeVariant: "dark" as const } : {})}
           />
         ) : null}
         {Platform.OS === "ios" && picker ? (
@@ -434,7 +443,7 @@ function FinancialsContent(): React.JSX.Element {
                 yAxisLabelWidth={44}
                 hideRules={false}
                 showFractionalValues={false}
-                renderTooltip={(items: ReadonlyArray<{ index?: number }>) => {
+                renderTooltip={(items: readonly { index?: number }[]) => {
                   const it = items?.[0];
                   if (!it) return null;
                   const idx = typeof it.index === "number" ? it.index : 0;

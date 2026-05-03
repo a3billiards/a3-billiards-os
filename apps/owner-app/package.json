@@ -43,7 +43,9 @@
     "typescript": "^5.4.0"
   },
   "devDependencies": {
-    "@types/react": "~19.2.10"
+    "@types/react": "~19.2.10",
+    "eslint": "^9.18.0",
+    "eslint-config-expo": "^55.0.0"
   },
   "expo": {
     "install": {
