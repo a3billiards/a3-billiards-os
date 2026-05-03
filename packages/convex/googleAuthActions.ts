@@ -220,6 +220,10 @@ export const completeGoogleRegistration = action({
 
 /**
  * Owner app: after consent + phone + age on the client, persist `role=owner` + Google link.
+ *
+ * Does **not** create a Convex Auth JWT session — the client must call
+ * `signIn("googleOwner", { idToken })` afterward. Returns `{ userId }` for debugging;
+ * the credentials provider resolves the user by `googleId` / `authAccounts` on sign-in.
  */
 export const completeOwnerGoogleRegistration = action({
   args: {

@@ -16,6 +16,7 @@ import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { formatCurrency } from "@a3/utils/billing";
+import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 
 type FormState = {
   name: string;
@@ -44,7 +45,20 @@ export default function SnacksScreen() {
     [snacks, editingSnackId],
   );
 
-  if (dashboard === undefined || snacks === undefined) {
+  if (dashboard === undefined) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.accent.green} />
+        <Text style={styles.centerText}>Loading snack menu...</Text>
+      </View>
+    );
+  }
+
+  if (dashboard === null) {
+    return <OwnerNoClubPlaceholder />;
+  }
+
+  if (snacks === undefined) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.accent.green} />

@@ -23,6 +23,7 @@ import {
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { getActiveRoleId } from "../../lib/activeRoleStorage";
+import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 
 export default function SlotsScreen() {
   const router = useRouter();
@@ -239,6 +240,10 @@ export default function SlotsScreen() {
         <Text style={styles.loadingText}>Loading tables…</Text>
       </View>
     );
+  }
+
+  if (dashboard === null) {
+    return <OwnerNoClubPlaceholder />;
   }
 
   const summary = dashboard.bookingSummary;
@@ -602,6 +607,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.primary,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: layout.screenPadding,
   },
   loadingText: {
     ...typography.body,

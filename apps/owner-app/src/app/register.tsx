@@ -85,63 +85,120 @@ export default function OwnerRegisterScreen() {
     !loading;
 
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit || !params.googleId) return;
-    setError(null);
-
-    if (parsedAge < 18) {
-      setError("You must be 18 or older to register.");
-      return;
-    }
-
-    setLoading(true);
-
     try {
-      const normalizedPhone = phone.replace(/\s/g, "");
+      if (!canSubmit || !params.googleId) return;
+      setError(null);
 
-      await completeOwnerReg({
-        googleId: params.googleId,
-        email: email.trim().toLowerCase(),
-        name: name.trim(),
-        phone: normalizedPhone,
-        age: parsedAge,
-        consentGiven: true,
-      });
-
-      const idToken = await resolveGoogleIdTokenForConvexAuth();
-      const { signingIn } = await signIn("googleOwner", { idToken });
-      if (!signingIn) {
-        throw new Error(
-          "GOOGLE_AUTH_001: Could not establish session after registration",
-        );
+      if (parsedAge < 18) {
+        setError("You must be 18 or older to register.");
+        return;
       }
 
-      router.replace("/post-login-gate");
-    } catch (e) {
-      const appError = parseConvexError(e as Error);
-      switch (appError.code) {
-        case "AUTH_005":
-          setError("You must agree to the Privacy Policy and Terms.");
-          break;
-        case "AUTH_007":
-          setError("You must be 18 or older to register.");
-          break;
-        case "OTP_006":
-        case "OTP_007":
-          setError("This phone number cannot be used for registration.");
-          break;
-        case "CLUB_003":
-          setError("This email is already registered. Try signing in.");
-          break;
-        case "GOOGLE_AUTH_001":
-          setError(
-            "Google session could not be restored. Return to login and use Continue with Google again.",
+      setLoading(true);
+
+      try {
+        const normalizedPhone = phone.replace(/\s/g, "");
+
+        try {
+          await completeOwnerReg({
+            googleId: params.googleId,
+            email: email.trim().toLowerCase(),
+            name: name.trim(),
+            phone: normalizedPhone,
+            age: parsedAge,
+            consentGiven: true,
+          });
+        } catch (regErr) {
+          console.error(
+            "[OwnerRegister] completeOwnerGoogleRegistration failed",
+            regErr,
+            regErr instanceof Error ? regErr.stack : undefined,
           );
-          break;
-        default:
-          setError(appError.message || "Registration failed. Please try again.");
+          throw regErr;
+        }
+
+        let idToken: string;
+        try {
+          idToken = await resolveGoogleIdTokenForConvexAuth();
+        } catch (tokenErr) {
+          console.error(
+            "[OwnerRegister] resolveGoogleIdTokenForConvexAuth failed",
+            tokenErr,
+            tokenErr instanceof Error ? tokenErr.stack : undefined,
+          );
+          throw tokenErr;
+        }
+
+        let signingIn: boolean;
+        try {
+          const out = await signIn("googleOwner", { idToken });
+          signingIn = out.signingIn;
+          if (!signingIn) {
+            console.error(
+              "[OwnerRegister] signIn(googleOwner) returned signingIn: false",
+              { idTokenLength: idToken.length },
+            );
+          }
+        } catch (signErr) {
+          console.error(
+            "[OwnerRegister] signIn(googleOwner) threw",
+            signErr,
+            signErr instanceof Error ? signErr.stack : undefined,
+          );
+          throw signErr;
+        }
+
+        if (!signingIn) {
+          throw new Error(
+            "GOOGLE_AUTH_001: Could not establish session after registration",
+          );
+        }
+
+        router.replace("/post-login-gate");
+      } catch (e) {
+        let serialized = "";
+        try {
+          serialized = JSON.stringify(
+            e,
+            Object.getOwnPropertyNames(Object(e ?? {})),
+          );
+        } catch {
+          serialized = "<non-serializable>";
+        }
+        console.error("[OwnerRegister] submit failed", {
+          err: e,
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+          serialized,
+        });
+        const appError = parseConvexError(e as Error);
+        switch (appError.code) {
+          case "AUTH_005":
+            setError("You must agree to the Privacy Policy and Terms.");
+            break;
+          case "AUTH_007":
+            setError("You must be 18 or older to register.");
+            break;
+          case "OTP_006":
+          case "OTP_007":
+            setError("This phone number cannot be used for registration.");
+            break;
+          case "CLUB_003":
+            setError("This email is already registered. Try signing in.");
+            break;
+          case "GOOGLE_AUTH_001":
+            setError(
+              "Google session could not be restored. Return to login and use Continue with Google again.",
+            );
+            break;
+          default:
+            setError(appError.message || "Registration failed. Please try again.");
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
+    } catch (outer) {
+      console.error("[OwnerRegister] unexpected outer failure", outer);
     }
   }, [
     canSubmit,

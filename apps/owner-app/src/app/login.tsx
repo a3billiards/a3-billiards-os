@@ -187,7 +187,6 @@ export default function OwnerLoginScreen() {
           user: response.data?.user,
         });
         setError("Google sign-in cancelled or failed.");
-        setGoogleLoading(false);
         return;
       }
 
@@ -201,7 +200,6 @@ export default function OwnerLoginScreen() {
             googleName: probe.pendingProfile.name,
           },
         });
-        setGoogleLoading(false);
         return;
       }
 
@@ -217,7 +215,6 @@ export default function OwnerLoginScreen() {
       if (!signingIn) {
         logOwnerGoogleError("signInReturnedFalse", { signingIn: false });
         setError("Google sign-in failed. Please try again.");
-        setGoogleLoading(false);
         return;
       }
 
@@ -241,6 +238,7 @@ export default function OwnerLoginScreen() {
       } else {
         setError("Google sign-in failed. Please try again.");
       }
+    } finally {
       setGoogleLoading(false);
     }
   }, [loading, googleLoading, signIn, navigatePostLogin, resolveOwnerGoogle, router]);

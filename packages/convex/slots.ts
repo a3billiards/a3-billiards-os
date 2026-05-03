@@ -5,11 +5,15 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
-import { assertMutationClubScope, requireOwner, requireViewer } from "./model/viewer";
+import {
+  assertMutationClubScope,
+  requireOwnerWithClub,
+  requireViewer,
+} from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
 
 async function loadOwnerClub(ctx: MutationCtx) {
-  const owner = requireOwner(await requireViewer(ctx));
+  const owner = requireOwnerWithClub(await requireViewer(ctx));
   const club = await ctx.db.get(owner.clubId);
   if (!club) throw new Error("DATA_003: Club not found");
   assertClubSubscriptionWritable(club);
@@ -19,7 +23,7 @@ async function loadOwnerClub(ctx: MutationCtx) {
 export const listTablesForSettings = query({
   args: {},
   handler: async (ctx) => {
-    const owner = requireOwner(await requireViewer(ctx));
+    const owner = requireOwnerWithClub(await requireViewer(ctx));
     return ctx.db
       .query("tables")
       .withIndex("by_club", (q) => q.eq("clubId", owner.clubId))

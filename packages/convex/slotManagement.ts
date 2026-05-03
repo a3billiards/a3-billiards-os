@@ -42,7 +42,11 @@ export const getSlotDashboard = query({
   handler: async (ctx) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
-    const club = await ctx.db.get(owner.clubId);
+    if (owner.clubId === null) {
+      return null;
+    }
+    const clubId = owner.clubId;
+    const club = await ctx.db.get(clubId);
     if (!club) {
       throw new Error("DATA_003: Club not found");
     }
@@ -52,13 +56,13 @@ export const getSlotDashboard = query({
 
     const tables = await ctx.db
       .query("tables")
-      .withIndex("by_club", (q) => q.eq("clubId", owner.clubId))
+      .withIndex("by_club", (q) => q.eq("clubId", clubId))
       .collect();
 
     const todaysBookings = await ctx.db
       .query("bookings")
       .withIndex("by_club_date", (q) =>
-        q.eq("clubId", owner.clubId).eq("requestedDate", todayYmd),
+        q.eq("clubId", clubId).eq("requestedDate", todayYmd),
       )
       .collect();
 
@@ -95,7 +99,7 @@ export const getSlotDashboard = query({
     }
 
     return {
-      clubId: owner.clubId,
+      clubId,
       currency: club.currency,
       timezone: club.timezone,
       bookingSettingsEnabled: club.bookingSettings.enabled,
@@ -123,13 +127,17 @@ export const getWalkInBookingConflict = query({
   handler: async (ctx, { tableId }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
-    const club = await ctx.db.get(owner.clubId);
+    if (owner.clubId === null) {
+      return { hasConflict: false as const };
+    }
+    const clubId = owner.clubId;
+    const club = await ctx.db.get(clubId);
     if (!club) {
       throw new Error("DATA_003: Club not found");
     }
 
     const table = await ctx.db.get(tableId);
-    if (!table || table.clubId !== owner.clubId) {
+    if (!table || table.clubId !== clubId) {
       throw new Error("DATA_003: Table not found");
     }
 
@@ -139,7 +147,7 @@ export const getWalkInBookingConflict = query({
     const todays = await ctx.db
       .query("bookings")
       .withIndex("by_club_date", (q) =>
-        q.eq("clubId", owner.clubId).eq("requestedDate", todayYmd),
+        q.eq("clubId", clubId).eq("requestedDate", todayYmd),
       )
       .collect();
     const confirmed = todays.filter((b) => b.status === "confirmed");

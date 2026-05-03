@@ -60,11 +60,11 @@ async function assertOwnerClubComplaintsView(
 ): Promise<void> {
   const viewer = await requireViewer(ctx);
   const owner = requireOwner(viewer);
-  if (owner.clubId !== clubId) {
-    throw new Error(AUTH_001);
-  }
   const club = await ctx.db.get(clubId);
   if (!club || club.ownerId !== owner.userId) {
+    throw new Error(AUTH_001);
+  }
+  if (owner.clubId !== null && owner.clubId !== clubId) {
     throw new Error(AUTH_001);
   }
   if (!roleId) return;
@@ -95,7 +95,14 @@ async function assertOwnerActsForClub(
   if (!club) {
     throw new Error(AUTH_001);
   }
-  if (club.ownerId !== viewer.userId || viewer.clubId !== clubId) {
+  if (club.ownerId !== viewer.userId) {
+    throw new Error(AUTH_001);
+  }
+  if (
+    viewer.role === "owner" &&
+    viewer.clubId !== null &&
+    viewer.clubId !== clubId
+  ) {
     throw new Error(AUTH_001);
   }
   return viewer;

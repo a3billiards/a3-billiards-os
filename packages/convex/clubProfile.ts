@@ -1,7 +1,12 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { assertMutationClubScope, requireOwner, requireViewer } from "./model/viewer";
+import {
+  assertMutationClubScope,
+  requireOwner,
+  requireOwnerWithClub,
+  requireViewer,
+} from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
 import { hhmmToMinutes } from "@a3/utils/timezone";
 
@@ -29,6 +34,9 @@ export const getMyClubProfile = query({
   args: {},
   handler: async (ctx) => {
     const owner = requireOwner(await requireViewer(ctx));
+    if (owner.clubId === null) {
+      return null;
+    }
     const club = await ctx.db.get(owner.clubId);
     if (!club) return null;
     const photos = await Promise.all(
@@ -60,7 +68,7 @@ export const getMyClubProfile = query({
 export const generateClubPhotoUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    const owner = requireOwner(await requireViewer(ctx));
+    const owner = requireOwnerWithClub(await requireViewer(ctx));
     const club = await ctx.db.get(owner.clubId);
     if (!club) throw new Error("DATA_003: Club not found");
     assertClubSubscriptionWritable(club);

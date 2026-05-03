@@ -20,6 +20,7 @@ import { parseConvexError } from "@a3/ui/errors";
 import { computeBookingUnixTime, timeZoneAbbreviation } from "@a3/utils/timezone";
 import { useLocalSearchParams } from "expo-router";
 import { getActiveRoleId } from "../../lib/activeRoleStorage";
+import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 
 type Segment = "pending" | "upcoming" | "history";
 
@@ -153,7 +154,23 @@ export default function BookingsTab() {
 
   const ensureHistoryData = useMemo(() => historyPage?.items ?? [], [historyPage]);
 
-  if (dashboard === undefined || (clubId && pending === undefined) || (clubId && upcoming === undefined)) {
+  if (dashboard === undefined) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.accent.green} />
+        <Text style={styles.loadingText}>Loading bookings...</Text>
+      </View>
+    );
+  }
+
+  if (dashboard === null) {
+    return <OwnerNoClubPlaceholder />;
+  }
+
+  if (
+    (clubId && pending === undefined) ||
+    (clubId && upcoming === undefined)
+  ) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.accent.green} />

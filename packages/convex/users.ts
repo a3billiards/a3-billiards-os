@@ -162,6 +162,9 @@ export const getUser = query({
       }
       throwErr("PERM_001: Cannot access this user");
     }
+    if (owner.clubId === null) {
+      throwErr("AUTH_008: No club found for owner account");
+    }
     const ok = await ownerCanViewCustomer(ctx, owner.clubId, targetId);
     if (!ok) throwErr("PERM_001: Cannot access this user");
     return sanitizeUser(target);

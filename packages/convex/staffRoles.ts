@@ -41,9 +41,13 @@ export const listStaffRoles = query({
   args: {},
   handler: async (ctx) => {
     const owner = requireOwner(await requireViewer(ctx));
+    if (owner.clubId === null) {
+      return [];
+    }
+    const clubId = owner.clubId;
     return ctx.db
       .query("staffRoles")
-      .withIndex("by_club", (q) => q.eq("clubId", owner.clubId))
+      .withIndex("by_club", (q) => q.eq("clubId", clubId))
       .collect();
   },
 });

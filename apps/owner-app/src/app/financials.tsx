@@ -31,6 +31,7 @@ import {
 } from "@a3/utils/timezone";
 import { formatCurrency } from "@a3/utils/billing";
 import { getActiveRoleId } from "../lib/activeRoleStorage";
+import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
 
 type SortKey = "date" | "amount";
 
@@ -282,7 +283,23 @@ export default function FinancialsScreen(): React.JSX.Element {
     [resolveCredit, roleId],
   );
 
-  if (dashboard === undefined || access === undefined) {
+  if (dashboard === undefined) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ActivityIndicator size="large" color={colors.accent.green} />
+      </SafeAreaView>
+    );
+  }
+
+  if (dashboard === null) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <OwnerNoClubPlaceholder />
+      </SafeAreaView>
+    );
+  }
+
+  if (access === undefined) {
     return (
       <SafeAreaView style={styles.safe}>
         <ActivityIndicator size="large" color={colors.accent.green} />

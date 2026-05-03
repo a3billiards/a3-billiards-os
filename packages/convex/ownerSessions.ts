@@ -8,7 +8,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
-import { requireOwner, requireViewer } from "./model/viewer";
+import { requireOwnerWithClub, requireViewer } from "./model/viewer";
 import { bookingAppliesToTable, resolveRatePerMinAtSessionStart } from "./model/sessionRate";
 import { computeBookingUnixTime, dateYmdInTimeZone } from "@a3/utils/timezone";
 import { countActiveComplaintsForUser } from "./complaints";
@@ -78,7 +78,7 @@ export const releaseTableLock = mutation({
   },
   handler: async (ctx, { tableId, lockToken }) => {
     const viewer = await requireViewer(ctx);
-    const owner = requireOwner(viewer);
+    const owner = requireOwnerWithClub(viewer);
 
     const table = await ctx.db.get(tableId);
     if (!table || table.clubId !== owner.clubId) {
@@ -115,7 +115,7 @@ export const startWalkInSession = mutation({
       staffAcknowledgedComplaint,
     } = args;
     const viewer = await requireViewer(ctx);
-    const owner = requireOwner(viewer);
+    const owner = requireOwnerWithClub(viewer);
     const club = await ctx.db.get(owner.clubId);
     if (!club) {
       throw new Error("DATA_003: Club not found");

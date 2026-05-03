@@ -20,6 +20,7 @@ import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { getActiveRoleId } from "../lib/activeRoleStorage";
+import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
 
 type ComplaintType =
   | "violent_behaviour"
@@ -260,7 +261,23 @@ export default function ComplaintsScreen(): React.JSX.Element {
     }
   }, [retractTarget, retractReason, roleId, retractComplaint]);
 
-  if (dashboard === undefined || access === undefined) {
+  if (dashboard === undefined) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ActivityIndicator size="large" color={colors.accent.green} />
+      </SafeAreaView>
+    );
+  }
+
+  if (dashboard === null) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <OwnerNoClubPlaceholder />
+      </SafeAreaView>
+    );
+  }
+
+  if (access === undefined) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <ActivityIndicator size="large" color={colors.accent.green} />
