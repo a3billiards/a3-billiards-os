@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -40,6 +41,45 @@ function logOwnerGoogleError(context: string, err: unknown): void {
     stack: o?.stack,
     json,
   });
+}
+
+/** On-screen diagnostic for Google Sign-In failures (no Metro/adb). */
+function googleSignInErrorAlertBody(err: unknown): string {
+  const o = err as Record<string, unknown> & {
+    code?: string | number;
+    message?: string;
+    name?: string;
+    stack?: string;
+    userInfo?: unknown;
+  };
+  const codeStr =
+    o.code !== undefined && o.code !== null ? String(o.code) : "(undefined)";
+  const msgStr =
+    typeof o.message === "string"
+      ? o.message
+      : err instanceof Error
+        ? err.message
+        : String(err);
+  const lines = [`code: ${codeStr}`, `message: ${msgStr}`];
+  if (typeof o.name === "string") lines.push(`name: ${o.name}`);
+  if (o.userInfo !== undefined) {
+    try {
+      lines.push(`userInfo: ${JSON.stringify(o.userInfo)}`);
+    } catch {
+      lines.push("userInfo: <non-serializable>");
+    }
+  }
+  if (typeof o.stack === "string" && o.stack.length > 0) {
+    lines.push(`stack:\n${o.stack}`);
+  }
+  try {
+    lines.push(
+      `JSON:\n${JSON.stringify(err, Object.getOwnPropertyNames(Object(err ?? {})))}`,
+    );
+  } catch {
+    lines.push("JSON: <non-serializable>");
+  }
+  return lines.join("\n\n");
 }
 
 GoogleSignin.configure({
@@ -166,6 +206,7 @@ export default function OwnerLoginScreen() {
       navigatePostLogin();
     } catch (e) {
       logOwnerGoogleError("handleGoogleLogin(catch)", e);
+      Alert.alert("Google Sign-In error", googleSignInErrorAlertBody(e));
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
         setError("This account is frozen. Contact support.");
