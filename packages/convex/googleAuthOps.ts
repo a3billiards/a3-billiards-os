@@ -6,23 +6,53 @@
 
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+
+export type ResolveOrLinkGoogleUserResult =
+  | { outcome: "existing"; userId: Id<"users"> }
+  | {
+      outcome: "newUser";
+      pendingProfile: {
+        googleId: string;
+        email: string | null;
+        name: string;
+      };
+    };
 
 /**
- * Given verified Google claims, return the userId for an existing account or
- * throw GOOGLE_AUTH_NEW_USER. When matched by email, we link the googleId
- * onto the user and insert an `authAccounts` row so Convex Auth can attach
- * a session to this provider.
+ * Given verified Google claims, either:
+ * - return `{ outcome: "existing", userId }` and ensure `authAccounts` has a google row, or
+ * - return `{ outcome: "newUser", pendingProfile }` when no matching account exists (client routes to registration).
+ *
+ * When `requireOwnerRole` is true (Owner app `googleOwner` provider), non-owner accounts
+ * never receive a Google link; `OWNER_001` is thrown instead.
  */
 export const resolveOrLinkGoogleUser = internalMutation({
   args: {
     googleId: v.string(),
     email: v.optional(v.string()),
+    name: v.optional(v.string()),
+    requireOwnerRole: v.optional(v.boolean()),
   },
-  handler: async (ctx, { googleId, email }) => {
+  handler: async (
+    ctx,
+    { googleId, email, name, requireOwnerRole },
+  ): Promise<ResolveOrLinkGoogleUserResult> => {
+    const displayName =
+      typeof name === "string" && name.trim().length > 0
+        ? name.trim()
+        : "Google User";
+
     let user = await ctx.db
       .query("users")
       .withIndex("by_googleId", (q) => q.eq("googleId", googleId))
       .unique();
+
+    if (user !== null && requireOwnerRole === true && user.role !== "owner") {
+      throw new Error(
+        "OWNER_001: This Google account is not registered as an owner account.",
+      );
+    }
 
     if (!user && email) {
       const normalized = email.trim().toLowerCase();
@@ -31,6 +61,11 @@ export const resolveOrLinkGoogleUser = internalMutation({
         .withIndex("by_email", (q) => q.eq("email", normalized))
         .unique();
       if (byEmail) {
+        if (requireOwnerRole === true && byEmail.role !== "owner") {
+          throw new Error(
+            "OWNER_001: This Google account is not registered as an owner account.",
+          );
+        }
         user = byEmail;
         if (!byEmail.googleId) {
           await ctx.db.patch(byEmail._id, { googleId });
@@ -39,8 +74,16 @@ export const resolveOrLinkGoogleUser = internalMutation({
     }
 
     if (!user) {
-      throw new Error("GOOGLE_AUTH_NEW_USER: No account found for this Google user");
+      return {
+        outcome: "newUser" as const,
+        pendingProfile: {
+          googleId,
+          email: email ?? null,
+          name: displayName,
+        },
+      };
     }
+
     if (user.isFrozen) {
       throw new Error("AUTH_002: Account is frozen");
     }
@@ -65,6 +108,6 @@ export const resolveOrLinkGoogleUser = internalMutation({
       throw new Error("DATA_002: Google account already linked to another user");
     }
 
-    return { userId: user._id };
+    return { outcome: "existing" as const, userId: user._id };
   },
 });

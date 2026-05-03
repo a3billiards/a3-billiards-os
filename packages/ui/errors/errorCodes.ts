@@ -20,6 +20,7 @@ export const ERROR_CODES = {
     AUTH_005: "Consent not given",
     GOOGLE_AUTH_001: "Audience mismatch or invalid Google ID token",
     GOOGLE_AUTH_NEW_USER: "No account found for this Google user",
+    OWNER_001: "This Google account is not registered as an owner",
     SESSION_001: "Table is already occupied",
     SESSION_002: "Table lock invalid, expired, or held by another device — please retry",  // retryable
     SESSION_003: "Table is inactive",

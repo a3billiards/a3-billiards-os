@@ -140,6 +140,58 @@ export const resolveGoogleSignIn = action({
   },
 });
 
+/** Same shape as `resolveGoogleSignIn`, but only `role === "owner"` accounts qualify. */
+export type ResolveOwnerGoogleSignInResult = ResolveGoogleSignInResult;
+
+/**
+ * Owner app: verify token, find an **owner** by googleId or email, link googleId when needed,
+ * or return `pendingProfile` for in-app registration (TDD §3.2).
+ */
+export const resolveOwnerGoogleSignIn = action({
+  args: { idToken: v.string() },
+  handler: async (ctx, { idToken }): Promise<ResolveOwnerGoogleSignInResult> => {
+    const { googleId, email, name } = await verifyIdTokenClaims(idToken);
+
+    const existing: Doc<"users"> | null = await ctx.runQuery(
+      internal.googleAuth.findExistingGoogleUser,
+      {
+        googleId,
+        email: email ?? undefined,
+      },
+    );
+
+    if (existing) {
+      if (existing.role !== "owner") {
+        throw new Error(
+          "OWNER_001: This Google account is not registered as an owner account.",
+        );
+      }
+      if (existing.isFrozen) {
+        throw new Error("AUTH_002: Account is frozen");
+      }
+      if (existing.deletionRequestedAt !== undefined) {
+        throw new Error("AUTH_006: Account pending deletion");
+      }
+      if (!existing.googleId) {
+        await ctx.runMutation(internal.googleAuth.linkGoogleId, {
+          userId: existing._id,
+          googleId,
+        });
+      }
+      return { isNewUser: false as const, userId: existing._id };
+    }
+
+    return {
+      isNewUser: true as const,
+      pendingProfile: {
+        googleId,
+        email,
+        name,
+      },
+    };
+  },
+});
+
 function throwReg(message: string): never {
   throw new Error(message);
 }
@@ -163,5 +215,27 @@ export const completeGoogleRegistration = action({
     if (!args.consentGiven) throwReg("AUTH_005: Consent not given");
     if (args.age < 18) throwReg("AUTH_007: Must be 18 or older");
     return await ctx.runMutation(internal.googleAuth.createGoogleUser, args);
+  },
+});
+
+/**
+ * Owner app: after consent + phone + age on the client, persist `role=owner` + Google link.
+ */
+export const completeOwnerGoogleRegistration = action({
+  args: {
+    googleId: v.string(),
+    email: v.optional(v.string()),
+    name: v.string(),
+    phone: v.string(),
+    age: v.number(),
+    consentGiven: v.boolean(),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ userId: Id<"users"> }> => {
+    if (!args.consentGiven) throwReg("AUTH_005: Consent not given");
+    if (args.age < 18) throwReg("AUTH_007: Must be 18 or older");
+    return await ctx.runMutation(internal.googleAuth.createOwnerGoogleUser, args);
   },
 });

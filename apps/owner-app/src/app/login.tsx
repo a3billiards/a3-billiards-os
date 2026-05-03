@@ -12,7 +12,9 @@ import {
   Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useAction } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
@@ -101,6 +103,9 @@ if (typeof __DEV__ !== "undefined" && __DEV__) {
 export default function OwnerLoginScreen() {
   const router = useRouter();
   const { signIn } = useAuthActions();
+  const resolveOwnerGoogle = useAction(
+    api.googleAuthActions.resolveOwnerGoogleSignIn,
+  );
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -186,13 +191,26 @@ export default function OwnerLoginScreen() {
         return;
       }
 
-      // This establishes a real Convex Auth session via the A3Google provider.
+      const probe = await resolveOwnerGoogle({ idToken });
+      if (probe.isNewUser) {
+        router.replace({
+          pathname: "/register",
+          params: {
+            googleId: probe.pendingProfile.googleId,
+            googleEmail: probe.pendingProfile.email ?? "",
+            googleName: probe.pendingProfile.name,
+          },
+        });
+        setGoogleLoading(false);
+        return;
+      }
+
       let signingIn: boolean;
       try {
-        const out = await signIn("google", { idToken });
+        const out = await signIn("googleOwner", { idToken });
         signingIn = out.signingIn;
       } catch (e) {
-        logOwnerGoogleError("signIn(google) Convex", e);
+        logOwnerGoogleError("signIn(googleOwner) Convex", e);
         throw e;
       }
 
@@ -212,9 +230,9 @@ export default function OwnerLoginScreen() {
         setError("This account is frozen. Contact support.");
       } else if (appError.code === "AUTH_006") {
         setError("This account is pending deletion.");
-      } else if (appError.code === "GOOGLE_AUTH_NEW_USER") {
+      } else if (appError.code === "OWNER_001") {
         setError(
-          "No owner account found for this Google account. Register via the Onboarding Website.",
+          "This Google account is not registered as an owner. Use the customer app or complete owner onboarding.",
         );
       } else if (appError.code === "GOOGLE_AUTH_001") {
         setError("Google authentication failed. Please try again.");
@@ -225,7 +243,7 @@ export default function OwnerLoginScreen() {
       }
       setGoogleLoading(false);
     }
-  }, [loading, googleLoading, signIn, navigatePostLogin]);
+  }, [loading, googleLoading, signIn, navigatePostLogin, resolveOwnerGoogle, router]);
 
   const busy = loading || googleLoading;
 
