@@ -15,7 +15,9 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed:test-owner": "node scripts/run-seed-test-owner.cjs",
+    "seed:test-club": "node scripts/run-seed-test-club-for-user.cjs"
   },
   "dependencies": {
     "@a3/utils": "workspace:*",
