@@ -16,10 +16,47 @@ import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
+/** Logs native / Convex errors for Google Sign-In (Metro + adb logcat). */
+function logOwnerGoogleError(context: string, err: unknown): void {
+  const o = err as Record<string, unknown> & {
+    message?: string;
+    code?: string;
+    stack?: string;
+    name?: string;
+    userInfo?: unknown;
+  };
+  let json = "";
+  try {
+    json = JSON.stringify(err, Object.getOwnPropertyNames(Object(err ?? {})));
+  } catch {
+    json = "<non-serializable>";
+  }
+  console.error(`[OwnerLogin:${context}]`, {
+    err,
+    name: o?.name,
+    code: o?.code,
+    message: o?.message,
+    userInfo: o?.userInfo,
+    stack: o?.stack,
+    json,
+  });
+}
+
 GoogleSignin.configure({
   webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  ...(typeof process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID === "string" &&
+  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID.length > 0
+    ? { iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }
+    : {}),
   offlineAccess: false,
 });
+
+if (typeof __DEV__ !== "undefined" && __DEV__) {
+  console.log("[OwnerLogin] GoogleSignin.configure", {
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "(missing)",
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "(omitted)",
+  });
+}
 
 export default function OwnerLoginScreen() {
   const router = useRouter();
@@ -83,19 +120,44 @@ export default function OwnerLoginScreen() {
     setGoogleLoading(true);
 
     try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const response = await GoogleSignin.signIn();
+      try {
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      } catch (e) {
+        logOwnerGoogleError("hasPlayServices", e);
+        throw e;
+      }
+
+      let response;
+      try {
+        response = await GoogleSignin.signIn();
+      } catch (e) {
+        logOwnerGoogleError("GoogleSignin.signIn", e);
+        throw e;
+      }
 
       const idToken = response.data?.idToken;
       if (!idToken) {
+        logOwnerGoogleError("missingIdToken", {
+          response,
+          user: response.data?.user,
+        });
         setError("Google sign-in cancelled or failed.");
         setGoogleLoading(false);
         return;
       }
 
       // This establishes a real Convex Auth session via the A3Google provider.
-      const { signingIn } = await signIn("google", { idToken });
+      let signingIn: boolean;
+      try {
+        const out = await signIn("google", { idToken });
+        signingIn = out.signingIn;
+      } catch (e) {
+        logOwnerGoogleError("signIn(google) Convex", e);
+        throw e;
+      }
+
       if (!signingIn) {
+        logOwnerGoogleError("signInReturnedFalse", { signingIn: false });
         setError("Google sign-in failed. Please try again.");
         setGoogleLoading(false);
         return;
@@ -103,6 +165,7 @@ export default function OwnerLoginScreen() {
 
       navigatePostLogin();
     } catch (e) {
+      logOwnerGoogleError("handleGoogleLogin(catch)", e);
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
         setError("This account is frozen. Contact support.");

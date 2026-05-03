@@ -17,6 +17,20 @@ import { useMutation, useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import { resolveGoogleIdTokenForConvexAuth } from "../lib/googleIdToken";
+
+const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+if (typeof webClientId === "string" && webClientId.length > 0) {
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  GoogleSignin.configure({
+    webClientId,
+    ...(typeof iosClientId === "string" && iosClientId.length > 0
+      ? { iosClientId }
+      : {}),
+    offlineAccess: false,
+  });
+}
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
 const TOS_URL = "https://a3billiards.com/terms";
@@ -88,6 +102,13 @@ export default function RegisterScreen() {
           age: parsedAge,
           consentGiven: true,
         });
+        const idToken = await resolveGoogleIdTokenForConvexAuth();
+        const { signingIn } = await signIn("google", { idToken });
+        if (!signingIn) {
+          throw new Error(
+            "GOOGLE_AUTH_001: Could not establish session after registration",
+          );
+        }
       } else {
         await signIn("password", {
           email: email.trim().toLowerCase(),
@@ -128,6 +149,11 @@ export default function RegisterScreen() {
           break;
         case "CLUB_003":
           setError("This email is already registered. Try signing in.");
+          break;
+        case "GOOGLE_AUTH_001":
+          setError(
+            "Google session could not be restored. Return to login and use Continue with Google again.",
+          );
           break;
         default:
           setError(appError.message || "Registration failed. Please try again.");

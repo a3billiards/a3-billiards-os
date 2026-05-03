@@ -20,6 +20,10 @@ import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 GoogleSignin.configure({
   webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  ...(typeof process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID === "string" &&
+  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID.length > 0
+    ? { iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }
+    : {}),
   offlineAccess: false,
 });
 

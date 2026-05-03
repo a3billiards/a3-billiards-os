@@ -80,12 +80,16 @@ export const ERROR_CODES = {
     retryable: boolean;
   }
    
-  /** Parses a Convex error "CODE_NNN: message" into a structured AppError */
+  /** Parses a Convex error "CODE_NNN: message" into a structured AppError (code may appear mid-string). */
   export function parseConvexError(error: Error): AppError {
-    const match = error.message.match(/^([A-Z_]+_\d{3,}): (.+)/);
+    const match = error.message.match(/([A-Z_]+_\d{3,}):\s*([^\n]+)/);
     if (!match) return { code: "UNKNOWN", message: error.message, retryable: false };
     const [, code, message] = match;
-    return { code: code as ErrorCode, message, retryable: RETRYABLE.has(code) };
+    return {
+      code: code as ErrorCode,
+      message: message.trim(),
+      retryable: RETRYABLE.has(code),
+    };
   }
    
   export function isRetryable(code: string): boolean {

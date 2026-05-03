@@ -99,7 +99,7 @@ export const createGoogleUser = internalMutation({
       googleId: args.googleId,
       age: args.age,
       role: "customer",
-      phoneVerified: true,
+      phoneVerified: false,
       isFrozen: false,
       settingsPasscodeSet: false,
       complaints: [],
@@ -114,7 +114,6 @@ export const createGoogleUser = internalMutation({
       provider: "google",
       providerAccountId: args.googleId,
       ...(args.email ? { emailVerified: args.email } : {}),
-      phoneVerified: phone,
     });
 
     return { userId };

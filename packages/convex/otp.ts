@@ -145,7 +145,11 @@ export const attemptVerify = internalMutation({
           "PERM_001: Phone does not match this account for verification",
         );
       }
-      await ctx.db.patch(userId, { phoneVerified: true });
+      if (user.phone === undefined) {
+        await ctx.db.patch(userId, { phone, phoneVerified: true });
+      } else {
+        await ctx.db.patch(userId, { phoneVerified: true });
+      }
     }
 
     return { verified: true as const, phone };

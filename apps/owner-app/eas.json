@@ -17,6 +17,7 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "298504132090-6slnps79adihgacaim1u7t83du55p6ei.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "298504132090-i21mat252ndfo0th5cp0t8m3sk4gmgt0.apps.googleusercontent.com",
         "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_xxxxxxxxxxxx",
         "EXPO_PUBLIC_SENTRY_DSN": "https://xxxx@sentry.io/xxxxx"
       }
@@ -32,6 +33,7 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "298504132090-6slnps79adihgacaim1u7t83du55p6ei.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "298504132090-i21mat252ndfo0th5cp0t8m3sk4gmgt0.apps.googleusercontent.com",
         "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_xxxxxxxxxxxx",
         "EXPO_PUBLIC_SENTRY_DSN": "https://xxxx@sentry.io/xxxxx"
       }
@@ -43,6 +45,7 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "298504132090-6slnps79adihgacaim1u7t83du55p6ei.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "298504132090-i21mat252ndfo0th5cp0t8m3sk4gmgt0.apps.googleusercontent.com",
         "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_xxxxxxxxxxxx",
         "EXPO_PUBLIC_SENTRY_DSN": "https://xxxx@sentry.io/xxxxx"
       }

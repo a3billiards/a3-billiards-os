@@ -1,2 +1,4 @@
 
 .env.local
+.jwt-pk.tmp
+.jwt-jwks.tmp

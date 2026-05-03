@@ -161,12 +161,23 @@ export default function VerifyPhoneScreen() {
     setMode("verifying");
 
     try {
+      const userIdForOtp =
+        isAuthenticated &&
+        currentUser !== undefined &&
+        currentUser !== null
+          ? currentUser._id
+          : undefined;
+
       await verifyOtp({
         phone,
         code,
-        userId: currentUser?._id,
+        userId: userIdForOtp,
       });
-      await updateUser({ phone });
+
+      if (isAuthenticated) {
+        await updateUser({ phone });
+      }
+
       router.replace("/(tabs)/discover");
     } catch (e) {
       const appError = parseConvexError(e as Error);

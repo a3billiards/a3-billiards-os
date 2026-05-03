@@ -11,9 +11,18 @@ import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 
+/** Supports multiple iOS apps (customer + owner) via comma-separated IDs. */
+function expandGoogleClientIds(raw: string | undefined): string[] {
+  if (raw === undefined || raw.length === 0) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 function googleAudiences(): string[] {
   const ids = [
-    process.env.GOOGLE_IOS_CLIENT_ID,
+    ...expandGoogleClientIds(process.env.GOOGLE_IOS_CLIENT_ID),
     process.env.GOOGLE_ANDROID_CLIENT_ID,
     process.env.GOOGLE_WEB_CLIENT_ID,
   ].filter((x): x is string => typeof x === "string" && x.length > 0);
@@ -32,7 +41,7 @@ async function verifyIdTokenClaims(idToken: string): Promise<{
   const audience = googleAudiences();
   if (audience.length === 0) {
     throw new Error(
-      "DATA_001: Missing Google client ID env (GOOGLE_IOS_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID, and/or GOOGLE_WEB_CLIENT_ID)",
+      "DATA_001: Missing Google client ID env (GOOGLE_IOS_CLIENT_ID comma-separated for multiple iOS apps, GOOGLE_ANDROID_CLIENT_ID, and/or GOOGLE_WEB_CLIENT_ID)",
     );
   }
 

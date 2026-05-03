@@ -86,8 +86,8 @@ This TDD translates PRD v23 into a complete, implementation-ready specification 
 
 | Store | Variables | Access |
 |-------|-----------|--------|
-| Convex Secrets | `WHATSAPP_API_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN`, `RAZORPAY_KEY_ID`, `RAZORPAY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RESEND_API_KEY`, `ADMIN_EMAIL`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `SENTRY_DSN`, `POSTHOG_API_KEY`, `GOOGLE_MAPS_API_KEY` | Server only |
-| EAS Secrets | `CONVEX_URL`, `SENTRY_AUTH_TOKEN`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID`, `POSTHOG_API_KEY` | Mobile build |
+| Convex Secrets | `JWT_PRIVATE_KEY`, `JWKS` (Convex Auth session JWTs — use `npx @convex-dev/auth` or generate an RS256 PKCS#8 key + JWKS; issuer `CONVEX_SITE_URL` is provided by Convex and must match `auth.config.ts`), `WHATSAPP_API_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN`, `RAZORPAY_KEY_ID`, `RAZORPAY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RESEND_API_KEY`, `ADMIN_EMAIL`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_IOS_CLIENT_ID` (comma-separated if Customer + Owner iOS OAuth clients must both verify), `GOOGLE_ANDROID_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `SENTRY_DSN`, `POSTHOG_API_KEY`, `GOOGLE_MAPS_API_KEY` | Server only |
+| EAS / app env | `EXPO_PUBLIC_CONVEX_URL`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` (iOS OAuth client for that app’s bundle; drives URL scheme in `app.config.ts`), optional `GOOGLE_SERVICE_INFO_PLIST` / `GOOGLE_SERVICES_JSON` paths for EAS file secrets, `CONVEX_URL`, `SENTRY_AUTH_TOKEN`, `POSTHOG_API_KEY` | Mobile build |
 | Vercel | `VITE_CONVEX_URL`, `VITE_RAZORPAY_KEY_ID`, `SENTRY_DSN`, `POSTHOG_API_KEY` | Web |
 
 ### 2.4 Monorepo Structure

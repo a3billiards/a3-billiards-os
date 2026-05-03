@@ -283,12 +283,16 @@ export const updateUser = mutation({
       throwErr("PERM_001: Cannot update another user");
     }
 
-    if (viewer.role === "customer" && phone !== undefined) {
-      throwErr("PERM_001: Phone number can only be changed by an admin");
-    }
-
     const target = await ctx.db.get(targetId);
     if (!target) throwErr("DATA_003: User not found");
+
+    if (
+      viewer.role === "customer" &&
+      phone !== undefined &&
+      target.phoneVerified === true
+    ) {
+      throwErr("PERM_001: Phone number can only be changed by an admin");
+    }
 
     const patch: Partial<Doc<"users">> = {};
 
@@ -321,7 +325,9 @@ export const updateUser = mutation({
       if (dup !== null && dup._id !== targetId) {
         throwIfPhoneUnavailableForNewAccount(dup);
       }
-      patch.phone = normalizedPhone;
+      if (target.phone !== normalizedPhone) {
+        patch.phone = normalizedPhone;
+      }
     }
 
     if (Object.keys(patch).length === 0) {

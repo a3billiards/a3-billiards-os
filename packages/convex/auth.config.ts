@@ -1,13 +1,17 @@
-import { convexAuth } from "@convex-dev/auth/server";
-import { A3Password } from "./passwordProviderA3";
-
-export const { auth, signIn, signOut, store } = convexAuth({
-  providers: [A3Password()],
-});
+/**
+ * JWT issuer validation for Convex Auth sessions.
+ * `domain` must match the deployment’s `CONVEX_SITE_URL` (built-in on Convex Cloud).
+ */
+const domain = process.env.CONVEX_SITE_URL;
+if (domain === undefined || domain.length === 0) {
+  throw new Error("CONVEX_SITE_URL is required in auth.config.ts");
+}
 
 export default {
-  providers: [{
-    domain: "https://ardent-albatross-880.convex.site",
-    applicationID: "convex",
-  }],
+  providers: [
+    {
+      domain,
+      applicationID: "convex",
+    },
+  ],
 };
