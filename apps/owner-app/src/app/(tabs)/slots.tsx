@@ -71,6 +71,7 @@ export default function SlotsScreen() {
   const [deskConsent, setDeskConsent] = useState(false);
   const [deskBusySend, setDeskBusySend] = useState(false);
   const [deskBusySubmit, setDeskBusySubmit] = useState(false);
+  const [deskBusyExtendLock, setDeskBusyExtendLock] = useState(false);
   const [deskError, setDeskError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -160,6 +161,7 @@ export default function SlotsScreen() {
     setDeskError(null);
     setDeskBusySend(false);
     setDeskBusySubmit(false);
+    setDeskBusyExtendLock(false);
   }, []);
 
   const runStartWalkIn = useCallback(
@@ -346,6 +348,14 @@ export default function SlotsScreen() {
 
   const summary = dashboard.bookingSummary;
   const showSummary = dashboard.bookingSettingsEnabled;
+  /** Do not cover the walk-in / conflict modals — overlay uses absoluteFill and can steal touches on some devices. */
+  const showLockOverlay =
+    acquiringLock ||
+    (walkInTableId !== null &&
+      walkInLockToken !== null &&
+      !showWalkInStartModal &&
+      !showConflictModal &&
+      conflict === undefined);
   const activeTables = dashboard.tables.filter(
     (table) => table.currentSessionId !== undefined,
   );
@@ -488,7 +498,7 @@ export default function SlotsScreen() {
         ) : null}
       </ScrollView>
 
-      {(acquiringLock || (walkInTableId !== null && conflict === undefined)) && (
+      {showLockOverlay && (
         <View style={styles.lockOverlay} pointerEvents="auto">
           <ActivityIndicator size="large" color={colors.accent.green} />
           <Text style={styles.lockOverlayText}>Reserving table…</Text>
@@ -551,9 +561,13 @@ export default function SlotsScreen() {
         }}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { maxHeight: "90%" }]}>
             {walkInStartStep === "choose" ? (
-              <>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
                 <Text style={styles.modalTitle}>Start session</Text>
                 <Text style={styles.modalBody}>
                   Walk-in guest starts immediately. For a registered customer, look up by phone.
@@ -567,6 +581,9 @@ export default function SlotsScreen() {
                   placeholder="Walk-in"
                   placeholderTextColor={colors.text.tertiary}
                 />
+                {deskError ? (
+                  <Text style={styles.walkInErr}>{deskError}</Text>
+                ) : null}
                 <View style={styles.modalActions}>
                   <Pressable
                     style={({ pressed }) => [
@@ -575,6 +592,7 @@ export default function SlotsScreen() {
                     ]}
                     onPress={() => {
                       if (!walkInTableId || !walkInLockToken) return;
+                      setDeskError(null);
                       const g = guestNameInput.trim() || "Walk-in";
                       void runStartWalkIn(walkInTableId, walkInLockToken, { guestName: g });
                     }}
@@ -587,6 +605,7 @@ export default function SlotsScreen() {
                       pressed && styles.pressed,
                     ]}
                     onPress={() => {
+                      setDeskError(null);
                       setWalkInStartStep("customer");
                       setPendingCustomerId(null);
                     }}
@@ -598,13 +617,17 @@ export default function SlotsScreen() {
                   <Pressable
                     style={({ pressed }) => [
                       styles.modalBtnSecondary,
-                      pressed && styles.pressed,
+                      (pressed || deskBusyExtendLock) && styles.pressed,
+                      deskBusyExtendLock && styles.modalBtnDisabled,
                     ]}
+                    disabled={deskBusyExtendLock}
+                    hitSlop={8}
                     onPress={() => {
                       void (async () => {
-                        if (!walkInTableId) return;
+                        if (!walkInTableId || deskBusyExtendLock) return;
                         setDeskError(null);
                         setActionError(null);
+                        setDeskBusyExtendLock(true);
                         try {
                           const { lockToken } = await acquireTableLock({
                             tableId: walkInTableId,
@@ -619,13 +642,19 @@ export default function SlotsScreen() {
                           setWalkInStartStep("deskRegister");
                         } catch (e) {
                           setDeskError(parseConvexError(e as Error).message);
+                        } finally {
+                          setDeskBusyExtendLock(false);
                         }
                       })();
                     }}
                   >
-                    <Text style={styles.modalBtnSecondaryText}>
-                      New customer — WhatsApp OTP
-                    </Text>
+                    {deskBusyExtendLock ? (
+                      <ActivityIndicator color={colors.text.primary} />
+                    ) : (
+                      <Text style={styles.modalBtnSecondaryText}>
+                        New customer — WhatsApp OTP
+                      </Text>
+                    )}
                   </Pressable>
                   <Pressable
                     style={({ pressed }) => [
@@ -639,7 +668,7 @@ export default function SlotsScreen() {
                     <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
                   </Pressable>
                 </View>
-              </>
+              </ScrollView>
             ) : walkInStartStep === "deskRegister" ? (
               <ScrollView
                 keyboardShouldPersistTaps="handled"
@@ -1312,6 +1341,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   pressed: { opacity: 0.88 },
+  modalBtnDisabled: { opacity: 0.55 },
   walkInLabel: {
     ...typography.caption,
     color: colors.text.secondary,
