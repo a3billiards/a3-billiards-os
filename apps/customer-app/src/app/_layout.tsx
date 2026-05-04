@@ -8,6 +8,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
 import { colors, typography } from "@a3/ui/theme";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 try {
   void SplashScreen.preventAutoHideAsync();
@@ -64,20 +65,26 @@ function SplashHider() {
 
 function RootLayout() {
   if (!convex) {
-    return <MissingConfigScreen />;
+    return (
+      <SafeAreaProvider>
+        <MissingConfigScreen />
+      </SafeAreaProvider>
+    );
   }
   return (
-    <ConvexAuthProvider client={convex} storage={secureStorage}>
-      <SplashHider />
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.bg.primary },
-          animation: "fade",
-        }}
-      />
-    </ConvexAuthProvider>
+    <SafeAreaProvider>
+      <ConvexAuthProvider client={convex} storage={secureStorage}>
+        <SplashHider />
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.bg.primary },
+            animation: "fade",
+          }}
+        />
+      </ConvexAuthProvider>
+    </SafeAreaProvider>
   );
 }
 

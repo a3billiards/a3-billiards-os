@@ -196,8 +196,6 @@ function SessionCard({
     return () => loop.stop();
   }, [isActive, pulse]);
 
-  void tick;
-
   const breakdown = useMemo(() => {
     if (!detail) return null;
     if (detail.status === "cancelled") return null;
@@ -233,6 +231,7 @@ function SessionCard({
     } catch {
       return null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `tick` advances the running clock for active-session breakdown (`Date.now()` above).
   }, [detail, tick]);
 
   const discountPct = detail?.discount ?? 0;
@@ -487,7 +486,7 @@ export default function SessionHistoryScreen(): React.JSX.Element {
     setDetailCache((c) => ({ ...c, [expandedKey]: detailRemote }));
   }, [expandedId, expandedKey, detailRemote]);
 
-  const sessions = history ?? [];
+  const sessions = useMemo(() => history ?? [], [history]);
   const hasActive = useMemo(() => sessions.some((s) => s.status === "active"), [sessions]);
   const [tick, setTick] = useState(0);
 

@@ -1,15 +1,19 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Stack, Redirect, useRouter, useSegments } from "expo-router";
-import { ConvexReactClient } from "convex/react";
+import {
+  ConvexReactClient,
+  useConvexAuth,
+  useQuery,
+} from "convex/react";
 import { ConvexAuthProvider, useAuthActions, type TokenStorage } from "@convex-dev/auth/react";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
-import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 try {
   void SplashScreen.preventAutoHideAsync();
@@ -203,12 +207,18 @@ function AdminAuthShell(): React.JSX.Element {
 
 function RootLayout() {
   if (!convex) {
-    return <MissingConfigScreen />;
+    return (
+      <SafeAreaProvider>
+        <MissingConfigScreen />
+      </SafeAreaProvider>
+    );
   }
   return (
-    <ConvexAuthProvider client={convex} storage={secureStorage}>
-      <AdminAuthShell />
-    </ConvexAuthProvider>
+    <SafeAreaProvider>
+      <ConvexAuthProvider client={convex} storage={secureStorage}>
+        <AdminAuthShell />
+      </ConvexAuthProvider>
+    </SafeAreaProvider>
   );
 }
 

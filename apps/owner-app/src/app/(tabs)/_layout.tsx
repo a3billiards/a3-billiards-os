@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { Tabs } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, layout } from "@a3/ui/theme";
 
 type IconName = React.ComponentProps<typeof MaterialIcons>["name"];
@@ -13,21 +15,31 @@ function makeTabBarIcon(name: IconName) {
 }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const tabBarStyle = useMemo(
+    () => ({
+      backgroundColor: colors.bg.secondary,
+      borderTopColor: colors.border.subtle,
+      paddingBottom: insets.bottom,
+      height: layout.tabBarHeight + insets.bottom,
+    }),
+    [insets.bottom],
+  );
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.bg.secondary,
-          borderTopColor: colors.border.subtle,
-          height: layout.tabBarHeight,
-        },
+        // Avoid double bottom inset: we pad the tab bar with insets.bottom in tabBarStyle.
+        safeAreaInsets: { bottom: 0 },
+        tabBarStyle,
         tabBarActiveTintColor: colors.accent.green,
         tabBarInactiveTintColor: colors.text.secondary,
         tabBarLabelStyle: {
           ...typography.tabLabel,
         },
-      }}
+        // expo-router Tabs types omit safeAreaInsets; react-navigation bottom tabs support it.
+      } as React.ComponentProps<typeof Tabs>["screenOptions"]}
     >
       <Tabs.Screen
         name="slots"

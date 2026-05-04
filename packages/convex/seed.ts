@@ -5,14 +5,14 @@
  * Dev owner + club + optional table (no onboarding website):
  *   From packages/convex (recommended on Windows — avoids PowerShell mangling JSON):
  *     pnpm seed:test-owner
- *   Edits: scripts/seed-test-owner-with-club.json then re-run.
+ *   Edits: ../../scripts/convex-seed/seed-test-owner-with-club.json (repo root) then re-run.
  *
  *   Bash / zsh (inline JSON):
  *     npx convex run seed:seedTestOwnerWithClub '{"email":"owner@test.local","password":"testpass12","name":"Test Owner","clubName":"Demo Club","withTable":true}'
  *
  * Club only for an existing owner userId (e.g. after Google registration):
  *     pnpm seed:test-club -- <users_document_id>
- *     (or edit scripts/seed-test-club-for-user.json, then pnpm seed:test-club with no args)
+ *     (or edit scripts/convex-seed/seed-test-club-for-user.json at repo root, then pnpm seed:test-club with no args)
  *
  * These are internal — not exposed to the client.
  *

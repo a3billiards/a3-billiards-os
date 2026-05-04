@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography } from "@a3/ui/theme";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // Keep splash screen visible until the auth gate decides where to route.
 // Wrapped in try/catch because hot reload can call this twice in dev.
@@ -174,13 +175,19 @@ function OwnerSubscriptionShell() {
 
 function RootLayout() {
   if (!convex) {
-    return <MissingConfigScreen />;
+    return (
+      <SafeAreaProvider>
+        <MissingConfigScreen />
+      </SafeAreaProvider>
+    );
   }
   return (
-    <ConvexAuthProvider client={convex} storage={secureStorage}>
-      <StatusBar style="light" />
-      <OwnerSubscriptionShell />
-    </ConvexAuthProvider>
+    <SafeAreaProvider>
+      <ConvexAuthProvider client={convex} storage={secureStorage}>
+        <StatusBar style="light" />
+        <OwnerSubscriptionShell />
+      </ConvexAuthProvider>
+    </SafeAreaProvider>
   );
 }
 

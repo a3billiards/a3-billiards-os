@@ -354,7 +354,6 @@ export default function NotificationCenterScreen(): React.JSX.Element {
   const recipientLoading = recipientPreview === undefined && canQuery;
 
   const rateAllowed = rate?.allowed !== false;
-  const rateRemaining = rate?.remainingCount ?? 10;
   const resetsAt = rate?.resetsAt ?? 0;
   const minutesLeft = Math.max(0, Math.ceil((resetsAt - tick) / 60_000));
 

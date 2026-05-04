@@ -12,7 +12,7 @@ import {
   NativeScrollEvent,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
@@ -68,6 +68,7 @@ const AMENITY_ICON: Record<string, string> = {
 };
 
 export default function PublicClubProfileScreen(): React.JSX.Element {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { clubId } = useLocalSearchParams<{ clubId: string }>();
   const profile = useQuery(
@@ -268,11 +269,11 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
             </View>
           ) : null}
 
-          <View style={{ height: layout.buttonHeight + spacing[8] }} />
+          <View style={{ height: layout.buttonHeight + spacing[8] + insets.bottom }} />
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         {profile.bookingEnabled ? (
           <Pressable
             style={styles.primaryCta}
@@ -391,7 +392,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: layout.screenPadding,
-    paddingBottom: spacing[4],
     paddingTop: spacing[3],
     backgroundColor: colors.bg.primary,
     borderTopWidth: StyleSheet.hairlineWidth,

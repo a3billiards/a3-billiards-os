@@ -9,7 +9,7 @@ import {
   ScrollView,
   Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
@@ -63,6 +63,7 @@ function statusPalette(status: string): { bg: string; fg: string } {
 }
 
 export default function BookingDetailScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { bookingId } = useLocalSearchParams<{ bookingId: string }>();
   const detail = useQuery(
@@ -159,7 +160,9 @@ export default function BookingDetailScreen() {
         <View style={styles.navBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView
+        contentContainerStyle={[styles.body, { paddingBottom: 140 + insets.bottom }]}
+      >
         {detail.thumbnailPhotoUrl ? (
           <Image source={{ uri: detail.thumbnailPhotoUrl }} style={styles.heroImage} resizeMode="cover" />
         ) : (
@@ -208,7 +211,7 @@ export default function BookingDetailScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         {!venue?.tombstone ? (
           <Pressable style={styles.secondaryBtn} onPress={() => router.push(`/club/${detail.clubId}` as any)}>
             <Text style={styles.secondaryBtnText}>View Club</Text>

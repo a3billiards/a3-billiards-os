@@ -154,7 +154,10 @@ export default function OwnerRegisterScreen() {
           );
         }
 
-        router.replace("/post-login-gate");
+        router.replace({
+          pathname: "/verify-phone",
+          params: { phone: normalizedPhone },
+        });
       } catch (e) {
         let serialized = "";
         try {

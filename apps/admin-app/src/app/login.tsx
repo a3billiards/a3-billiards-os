@@ -103,7 +103,7 @@ export default function LoginScreen() {
               textContentType="emailAddress"
               returnKeyType="next"
               onSubmitEditing={() => passwordRef.current?.focus()}
-              editable={!loading}
+              editable={!loading && !frozen}
               accessibilityLabel="Email address"
             />
 
@@ -121,7 +121,7 @@ export default function LoginScreen() {
               textContentType="password"
               returnKeyType="go"
               onSubmitEditing={handleLogin}
-              editable={!loading}
+              editable={!loading && !frozen}
               accessibilityLabel="Password"
             />
 
@@ -139,14 +139,14 @@ export default function LoginScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.button,
-                !canSubmit && styles.buttonDisabled,
-                pressed && canSubmit && styles.buttonPressed,
+                (!canSubmit || frozen) && styles.buttonDisabled,
+                pressed && canSubmit && !frozen && styles.buttonPressed,
               ]}
               onPress={handleLogin}
-              disabled={!canSubmit}
+              disabled={!canSubmit || frozen}
               accessibilityRole="button"
               accessibilityLabel="Sign in"
-              accessibilityState={{ disabled: !canSubmit }}
+              accessibilityState={{ disabled: !canSubmit || frozen }}
             >
               {loading ? (
                 <ActivityIndicator color={colors.bg.primary} />

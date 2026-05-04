@@ -159,13 +159,27 @@ export function fillDateGaps(
   return filled;
 }
 
+/** Normalise club / dashboard IANA ids — empty strings must not reach `Intl` (throws on Android Hermes). */
+export function normalizeIanaTimeZone(
+  tz: string | null | undefined,
+  fallback = "Asia/Kolkata",
+): string {
+  const s = typeof tz === "string" ? tz.trim() : "";
+  return s.length > 0 ? s : fallback;
+}
+
 /** Short TZ label from IANA id (e.g. Asia/Kolkata → GMT+5:30 or IST depending on runtime). */
 export function timeZoneAbbreviation(timeZone: string, atUtcMs = Date.now()): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    timeZoneName: "short",
-  }).formatToParts(new Date(atUtcMs));
-  return parts.find((p) => p.type === "timeZoneName")?.value ?? timeZone;
+  const tz = normalizeIanaTimeZone(timeZone);
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      timeZoneName: "short",
+    }).formatToParts(new Date(atUtcMs));
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? tz;
+  } catch {
+    return tz;
+  }
 }
  
 /** Current time as IST Date */

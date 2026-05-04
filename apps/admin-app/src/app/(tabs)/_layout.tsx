@@ -1,11 +1,24 @@
+import { useMemo } from "react";
 import { Tabs } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "convex/react";
 import { View, Text, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, typography, layout } from "@a3/ui/theme";
 import { api } from "@a3/convex/_generated/api";
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const tabBarStyle = useMemo(
+    () => ({
+      backgroundColor: colors.bg.secondary,
+      borderTopColor: colors.border.subtle,
+      paddingBottom: insets.bottom,
+      height: layout.tabBarHeight + insets.bottom,
+    }),
+    [insets.bottom],
+  );
+
   const user = useQuery(api.users.getCurrentUser, {});
   const canDash =
     user?.role === "admin" && user.adminMfaVerifiedAt !== undefined;
@@ -19,17 +32,14 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.bg.secondary,
-          borderTopColor: colors.border.subtle,
-          height: layout.tabBarHeight,
-        },
+        safeAreaInsets: { bottom: 0 },
+        tabBarStyle,
         tabBarActiveTintColor: colors.accent.green,
         tabBarInactiveTintColor: colors.text.secondary,
         tabBarLabelStyle: {
           ...typography.tabLabel,
         },
-      }}
+      } as React.ComponentProps<typeof Tabs>["screenOptions"]}
     >
       <Tabs.Screen
         name="index"

@@ -178,7 +178,7 @@ export default function VerifyPhoneScreen() {
         await updateUser({ phone });
       }
 
-      router.replace("/(tabs)/discover");
+      router.replace("/post-login-gate");
     } catch (e) {
       const appError = parseConvexError(e as Error);
       switch (appError.code) {
@@ -433,7 +433,7 @@ export default function VerifyPhoneScreen() {
 
         {inputVisible && (
           <Text style={styles.hint}>
-            Your account is inactive until phone verification is complete.
+            Complete verification to continue to your owner dashboard.
           </Text>
         )}
       </View>

@@ -116,8 +116,11 @@ export default function BookClubScreen() {
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const slotOptions: number[] =
-    ctx?.bookingSettings.slotDurationOptions ?? [30, 60, 90, 120];
+  const slotDurationOptions = ctx?.bookingSettings.slotDurationOptions;
+  const slotOptions = useMemo(
+    () => slotDurationOptions ?? [30, 60, 90, 120],
+    [slotDurationOptions],
+  );
   const defaultDuration = slotOptions[0] ?? 30;
 
   useEffect(() => {

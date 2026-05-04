@@ -22,6 +22,7 @@ import {
 } from "@a3/ui/components";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { formatCurrency } from "@a3/utils/billing";
 import { getActiveRoleId } from "../../lib/activeRoleStorage";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 
@@ -48,6 +49,11 @@ export default function SlotsScreen() {
   const [showComplaintGate, setShowComplaintGate] = useState(false);
   const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
   const walkInModalOpenedForTableRef = useRef<string | null>(null);
+  const [checkoutTableId, setCheckoutTableId] = useState<Id<"tables"> | null>(
+    null,
+  );
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
 
   useEffect(() => {
     void getActiveRoleId().then((v) => {
@@ -83,6 +89,14 @@ export default function SlotsScreen() {
   const acquireTableLock = useAction(api.ownerSessionActions.acquireTableLock);
   const releaseTableLock = useMutation(api.ownerSessions.releaseTableLock);
   const startWalkIn = useMutation(api.ownerSessions.startWalkInSession);
+  const checkoutTableSession = useMutation(api.ownerSessions.checkoutTableSession);
+
+  const checkoutPreview = useQuery(
+    api.ownerSessions.previewTableCheckout,
+    checkoutTableId !== null
+      ? { tableId: checkoutTableId, roleId }
+      : "skip",
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -161,13 +175,43 @@ export default function SlotsScreen() {
     setShowWalkInStartModal(true);
   }, [walkInTableId, walkInLockToken, conflict]);
 
+  const openCheckoutForTable = useCallback((tableId: Id<"tables">) => {
+    setActionError(null);
+    setCheckoutTableId(tableId);
+    setShowCheckoutModal(true);
+  }, []);
+
+  const closeCheckoutModal = useCallback(() => {
+    if (checkoutBusy) return;
+    setShowCheckoutModal(false);
+    setCheckoutTableId(null);
+  }, [checkoutBusy]);
+
+  const runCheckout = useCallback(
+    async (paymentMethod: "cash" | "upi" | "card" | "credit") => {
+      if (checkoutTableId === null) return;
+      setCheckoutBusy(true);
+      setActionError(null);
+      try {
+        await checkoutTableSession({ tableId: checkoutTableId, paymentMethod, roleId });
+        setShowCheckoutModal(false);
+        setCheckoutTableId(null);
+      } catch (e) {
+        setActionError(parseConvexError(e as Error).message);
+      } finally {
+        setCheckoutBusy(false);
+      }
+    },
+    [checkoutTableId, checkoutTableSession, roleId],
+  );
+
   const handleTablePress = useCallback(
     async (tableId: string) => {
       if (!dashboard) return;
       const t = dashboard.tables.find((x) => x._id === tableId);
       if (!t || !t.isActive) return;
       if (t.currentSessionId) {
-        setActionError("This table is already in use.");
+        openCheckoutForTable(tableId as Id<"tables">);
         return;
       }
       setActionError(null);
@@ -184,7 +228,7 @@ export default function SlotsScreen() {
         setAcquiringLock(false);
       }
     },
-    [dashboard, acquireTableLock],
+    [dashboard, acquireTableLock, openCheckoutForTable],
   );
 
   const pickDifferentTable = useCallback(async () => {
@@ -266,7 +310,7 @@ export default function SlotsScreen() {
       >
         <Text style={styles.screenTitle}>Slots</Text>
         <Text style={styles.screenSubtitle}>
-          Tap a free table to start a walk-in session
+          Tap a free table for a walk-in, or an occupied table to close out and free it.
         </Text>
 
         {showSummary && (
@@ -325,25 +369,36 @@ export default function SlotsScreen() {
           <View style={styles.activeSection}>
             <Text style={styles.activeSectionTitle}>Active Tables</Text>
             <Text style={styles.activeSectionHint}>
-              Add snacks to running sessions.
+              Close a table to run checkout and free it, or add snacks while play continues.
             </Text>
             {activeTables.map((table) => (
               <View key={table._id} style={styles.activeCard}>
-                <View>
+                <View style={styles.activeCardLeft}>
                   <Text style={styles.activeCardTitle}>{table.label}</Text>
                   <Text style={styles.activeCardMeta}>Session in progress</Text>
                 </View>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.addSnacksBtn,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={() =>
-                    setSnackPickerSessionId(table.currentSessionId as Id<"sessions">)
-                  }
-                >
-                  <Text style={styles.addSnacksBtnText}>Add Snacks</Text>
-                </Pressable>
+                <View style={styles.activeCardActions}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.closeTableBtn,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => openCheckoutForTable(table._id as Id<"tables">)}
+                  >
+                    <Text style={styles.closeTableBtnText}>Close table</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.addSnacksBtn,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() =>
+                      setSnackPickerSessionId(table.currentSessionId as Id<"sessions">)
+                    }
+                  >
+                    <Text style={styles.addSnacksBtnText}>Add Snacks</Text>
+                  </Pressable>
+                </View>
               </View>
             ))}
           </View>
@@ -588,6 +643,84 @@ export default function SlotsScreen() {
           onClose={() => setSnackPickerSessionId(null)}
         />
       ) : null}
+
+      <Modal
+        visible={showCheckoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeCheckoutModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Close table</Text>
+            <Text style={styles.modalBody}>
+              End the session, record the bill, and free this table for the next guest.
+            </Text>
+            {checkoutPreview === undefined ? (
+              <ActivityIndicator color={colors.accent.green} style={{ marginVertical: spacing[4] }} />
+            ) : checkoutPreview === null ? (
+              <Text style={styles.walkInErr}>
+                No active session on this table. It may have already been closed.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.checkoutTableName}>{checkoutPreview.tableLabel}</Text>
+                <Text style={styles.checkoutMeta}>
+                  {checkoutPreview.isGuest
+                    ? `Guest: ${checkoutPreview.guestName ?? "Walk-in"}`
+                    : "Registered customer"}
+                </Text>
+                <Text style={styles.checkoutBill}>
+                  Total due:{" "}
+                  <Text style={styles.checkoutBillStrong}>
+                    {formatCurrency(checkoutPreview.finalBill, checkoutPreview.currency)}
+                  </Text>
+                </Text>
+                <Text style={styles.checkoutDetail}>
+                  {checkoutPreview.billableMinutes} min billable ({checkoutPreview.actualMinutes} min
+                  played) · Snacks {formatCurrency(checkoutPreview.snackTotal, checkoutPreview.currency)}
+                </Text>
+                <Text style={styles.walkInLabel}>Payment</Text>
+                <View style={styles.payGrid}>
+                  {(
+                    [
+                      ["cash", "Cash"],
+                      ["upi", "UPI"],
+                      ["card", "Card"],
+                      ["credit", "On credit"],
+                    ] as const
+                  ).map(([method, label]) => (
+                    <Pressable
+                      key={method}
+                      style={({ pressed }) => [
+                        styles.payTile,
+                        pressed && styles.pressed,
+                        checkoutBusy && { opacity: 0.5 },
+                      ]}
+                      disabled={checkoutBusy}
+                      onPress={() => void runCheckout(method)}
+                    >
+                      <Text style={styles.payTileText}>{label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+            <View style={[styles.modalActions, { marginTop: spacing[4] }]}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalBtnSecondary,
+                  pressed && styles.pressed,
+                ]}
+                onPress={closeCheckoutModal}
+                disabled={checkoutBusy}
+              >
+                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -683,7 +816,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: spacing[2],
     marginBottom: spacing[2],
+  },
+  activeCardLeft: { flex: 1, minWidth: 0 },
+  activeCardActions: { gap: spacing[2] },
+  closeTableBtn: {
+    backgroundColor: colors.accent.green,
+    borderRadius: radius.md,
+    minHeight: layout.touchTarget,
+    paddingHorizontal: spacing[3],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeTableBtnText: {
+    ...typography.labelSmall,
+    color: "#fff",
+    fontWeight: "600",
   },
   activeCardTitle: {
     ...typography.label,
@@ -811,4 +960,46 @@ const styles = StyleSheet.create({
   },
   foundName: { ...typography.label, color: colors.text.primary, fontWeight: "700" },
   foundPhone: { ...typography.bodySmall, color: colors.text.secondary, marginTop: 4 },
+  checkoutTableName: {
+    ...typography.heading4,
+    color: colors.text.primary,
+    marginBottom: spacing[1],
+  },
+  checkoutMeta: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing[3],
+  },
+  checkoutBill: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginBottom: spacing[1],
+  },
+  checkoutBillStrong: {
+    ...typography.heading4,
+    color: colors.accent.green,
+  },
+  checkoutDetail: {
+    ...typography.caption,
+    color: colors.text.tertiary,
+    marginBottom: spacing[4],
+  },
+  payGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[2],
+  },
+  payTile: {
+    flexGrow: 1,
+    flexBasis: "45%",
+    backgroundColor: colors.bg.tertiary,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing[2],
+  },
+  payTileText: { ...typography.label, color: colors.text.primary },
 });

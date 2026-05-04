@@ -246,7 +246,7 @@ export default function CustomerLoginScreen() {
 
           {/* ── Register link ── */}
           <View style={styles.registerRow}>
-            <Text style={styles.registerText}>Don't have an account? </Text>
+            <Text style={styles.registerText}>Don{"'"}t have an account? </Text>
             <Pressable
               onPress={() => router.push("/register")}
               disabled={busy}

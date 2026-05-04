@@ -56,12 +56,12 @@ export default function MyBookingsScreen() {
     api.bookings.getCustomerBookings,
     user?._id ? { customerId: user._id } : "skip",
   );
-  const logsData = (logs ?? []) as CustomerBookingLog[];
   const cancelBooking = useMutation(api.bookings.cancelBooking);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
     if (!logs) return { upcoming: [], history: [] } as const;
+    const logsData = logs as CustomerBookingLog[];
     const upcoming = logsData
       .filter((x) => UPCOMING.has(x.status))
       .sort(
@@ -77,7 +77,7 @@ export default function MyBookingsScreen() {
           bookingMs(a.requestedDate, a.requestedStartTime),
       );
     return { upcoming, history } as const;
-  }, [logs, logsData]);
+  }, [logs]);
 
   const handleCancel = async (log: CustomerBookingLog) => {
     const title = "Cancel Booking?";

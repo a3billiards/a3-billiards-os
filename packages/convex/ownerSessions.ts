@@ -6,12 +6,29 @@
 
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, mutation } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireOwnerWithClub, requireViewer } from "./model/viewer";
 import { bookingAppliesToTable, resolveRatePerMinAtSessionStart } from "./model/sessionRate";
 import { computeBookingUnixTime, dateYmdInTimeZone } from "@a3/utils/timezone";
 import { countActiveComplaintsForUser } from "./complaints";
+import { computeBill } from "@a3/utils/billing";
+import { assertClubSubscriptionWritable } from "./model/clubSubscription";
+
+async function assertSlotsTabPermission(
+  ctx: MutationCtx | QueryCtx,
+  clubId: Id<"clubs">,
+  roleId?: Id<"staffRoles">,
+): Promise<void> {
+  if (!roleId) return;
+  const role = await ctx.db.get(roleId);
+  if (!role || role.clubId !== clubId) {
+    throw new Error("PERM_001: Staff role not found");
+  }
+  if (!role.allowedTabs.includes("slots")) {
+    throw new Error("PERM_001: Slots tab not allowed for active role");
+  }
+}
 
 /**
  * Called only from acquireTableLock action (server-side UUID).
@@ -267,5 +284,179 @@ export const startWalkInSession = mutation({
     });
 
     return { sessionId, hasUpcomingBooking: false as const };
+  },
+});
+
+const paymentMethodArg = v.union(
+  v.literal("cash"),
+  v.literal("upi"),
+  v.literal("card"),
+  v.literal("credit"),
+);
+
+function computeCheckoutBill(session: {
+  startTime: number;
+  ratePerMin: number;
+  minBillMinutes: number;
+  snackOrders: { snackId: Id<"snacks">; name: string; qty: number; priceAtOrder: number }[];
+  discount?: number;
+}) {
+  const now = Date.now();
+  const endTime = now <= session.startTime ? session.startTime + 1 : now;
+  const snackOrders = session.snackOrders.map((o) => ({
+    snackId: String(o.snackId),
+    name: o.name,
+    qty: o.qty,
+    priceAtOrder: o.priceAtOrder,
+  }));
+  return {
+    endTime,
+    bill: computeBill({
+      startTime: session.startTime,
+      endTime,
+      ratePerMin: session.ratePerMin,
+      minBillMinutes: session.minBillMinutes,
+      snackOrders,
+      discount: session.discount ?? 0,
+    }),
+  };
+}
+
+/** Bill preview for an occupied table (owner Slots checkout modal). */
+export const previewTableCheckout = query({
+  args: {
+    tableId: v.id("tables"),
+    roleId: v.optional(v.id("staffRoles")),
+  },
+  handler: async (ctx, { tableId, roleId }) => {
+    const viewer = await requireViewer(ctx);
+    const owner = requireOwnerWithClub(viewer);
+    const club = await ctx.db.get(owner.clubId);
+    if (!club) {
+      throw new Error("DATA_003: Club not found");
+    }
+    await assertSlotsTabPermission(ctx, owner.clubId, roleId);
+
+    const table = await ctx.db.get(tableId);
+    if (!table || table.clubId !== owner.clubId) {
+      return null;
+    }
+    if (table.currentSessionId === undefined) {
+      return null;
+    }
+
+    const session = await ctx.db.get(table.currentSessionId);
+    if (!session || session.clubId !== owner.clubId || session.status !== "active") {
+      return null;
+    }
+
+    const { bill } = computeCheckoutBill(session);
+    return {
+      sessionId: session._id,
+      tableLabel: table.label,
+      currency: session.currency,
+      isGuest: session.isGuest,
+      guestName: session.guestName ?? null,
+      finalBill: bill.finalBill,
+      billableMinutes: bill.billableMinutes,
+      actualMinutes: bill.actualMinutes,
+      snackTotal: bill.snackTotal,
+      discountedTable: bill.discountedTable,
+    };
+  },
+});
+
+/** Complete billing for the active session on a table and free the table. */
+export const checkoutTableSession = mutation({
+  args: {
+    tableId: v.id("tables"),
+    paymentMethod: paymentMethodArg,
+    roleId: v.optional(v.id("staffRoles")),
+  },
+  handler: async (ctx, { tableId, paymentMethod, roleId }) => {
+    const viewer = await requireViewer(ctx);
+    const owner = requireOwnerWithClub(viewer);
+    const club = await ctx.db.get(owner.clubId);
+    if (!club) {
+      throw new Error("DATA_003: Club not found");
+    }
+    assertClubSubscriptionWritable(club);
+    await assertSlotsTabPermission(ctx, owner.clubId, roleId);
+
+    const table = await ctx.db.get(tableId);
+    if (!table || table.clubId !== owner.clubId) {
+      throw new Error("DATA_003: Table not found");
+    }
+    if (table.currentSessionId === undefined) {
+      throw new Error("SESSION_004: No active session on this table");
+    }
+
+    const session = await ctx.db.get(table.currentSessionId);
+    if (!session || session.clubId !== owner.clubId) {
+      throw new Error("DATA_003: Session not found");
+    }
+    if (session.status !== "active") {
+      throw new Error("SESSION_004: Session is not active");
+    }
+
+    const { endTime, bill } = computeCheckoutBill(session);
+    const now = Date.now();
+    const paymentStatus = paymentMethod === "credit" ? "credit" : "paid";
+
+    await ctx.db.patch(session._id, {
+      endTime,
+      billableMinutes: bill.billableMinutes,
+      billTotal: bill.finalBill,
+      paymentMethod,
+      paymentStatus,
+      status: "completed",
+      updatedAt: now,
+    });
+
+    await ctx.db.patch(tableId, {
+      currentSessionId: undefined,
+      tableLock: undefined,
+      tableLockExpiry: undefined,
+    });
+
+    const log = await ctx.db
+      .query("sessionLogs")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
+      .first();
+
+    if (log !== null) {
+      await ctx.db.patch(log._id, {
+        endTime,
+        billTotal: bill.finalBill,
+        paymentStatus,
+        paymentMethod,
+        status: "completed",
+        updatedAt: now,
+      });
+    } else if (session.customerId !== undefined && session.isGuest !== true) {
+      await ctx.db.insert("sessionLogs", {
+        sessionId: session._id,
+        customerId: session.customerId,
+        clubId: session.clubId,
+        clubName: club.name,
+        tableLabel: table.label,
+        startTime: session.startTime,
+        endTime,
+        billTotal: bill.finalBill,
+        currency: session.currency,
+        paymentStatus,
+        paymentMethod,
+        status: "completed",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return {
+      sessionId: session._id,
+      finalBill: bill.finalBill,
+      currency: session.currency,
+      paymentStatus,
+    };
   },
 });

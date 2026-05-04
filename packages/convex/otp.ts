@@ -2,6 +2,7 @@
  * WhatsApp OTP: sliding-window dispatch limits, bcrypt codes, verify + optional phoneVerified.
  */
 
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import {
@@ -31,6 +32,13 @@ export const findUserByPhone = internalQuery({
       .query("users")
       .withIndex("by_phone", (q) => q.eq("phone", phone))
       .first();
+  },
+});
+
+export const getUserById = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    return await ctx.db.get(userId);
   },
 });
 
@@ -157,8 +165,15 @@ export const attemptVerify = internalMutation({
 });
 
 export const sendOtp = action({
-  args: { phone: v.string() },
-  handler: async (ctx, { phone }) => {
+  args: {
+    phone: v.string(),
+    /**
+     * Signed-in user verifying the phone already on their profile (post-registration).
+     * Without this, `throwIfPhoneUnavailableForNewAccount` rejects the row we just created (OTP_007).
+     */
+    verificationUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { phone, verificationUserId }) => {
     if (!E164_REGEX.test(phone)) {
       throw new Error("OTP_005: Invalid E.164 phone number format");
     }
@@ -166,7 +181,35 @@ export const sendOtp = action({
     const existing = await ctx.runQuery(internal.otp.findUserByPhone, {
       phone,
     });
-    throwIfPhoneUnavailableForNewAccount(existing);
+
+    if (verificationUserId !== undefined) {
+      const authId = await getAuthUserId(ctx);
+      if (authId === null) {
+        throw new Error("AUTH_001: Not authenticated");
+      }
+      if (authId !== verificationUserId) {
+        throw new Error("PERM_001: Cannot send verification OTP for another account");
+      }
+      const self = await ctx.runQuery(internal.otp.getUserById, {
+        userId: verificationUserId,
+      });
+      if (!self) {
+        throw new Error("DATA_003: User not found");
+      }
+      if (self.phoneVerified === true && self.phone === phone) {
+        throw new Error("DATA_002: Phone already verified");
+      }
+      if (self.phone !== undefined && self.phone !== phone) {
+        throw new Error(
+          "PERM_001: Phone number does not match the phone on this account",
+        );
+      }
+      if (existing !== null && existing._id !== verificationUserId) {
+        throw new Error("OTP_007: Phone already registered");
+      }
+    } else {
+      throwIfPhoneUnavailableForNewAccount(existing);
+    }
 
     const count = await ctx.runMutation(internal.otp.countRecentDispatches, {
       phone,
