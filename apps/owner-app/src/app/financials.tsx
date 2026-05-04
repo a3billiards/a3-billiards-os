@@ -191,6 +191,20 @@ function FinancialsContent(): React.JSX.Element {
   const creditsArgs = clubId ? { clubId, sortBy, roleId } : "skip";
   const credits = useQuery(api.financials.getOutstandingCredits, creditsArgs);
 
+  const analyticsArgs =
+    clubId && dateFrom && dateTo && !rangeInvalid
+      ? { clubId, dateFrom, dateTo, roleId }
+      : "skip";
+  const bestTables = useQuery(
+    api.financials.getBestPerformingTables,
+    analyticsArgs === "skip" ? "skip" : { ...analyticsArgs, limit: 5 },
+  );
+  const snackSales = useQuery(
+    api.financials.getSnackSalesBreakdown,
+    analyticsArgs === "skip" ? "skip" : { ...analyticsArgs, limit: 8 },
+  );
+  const heatmap = useQuery(api.financials.getPeakHourHeatmap, analyticsArgs);
+
   const resolveCredit = useMutation(api.financials.resolveCredit);
 
   const onPickChip = useCallback(
@@ -528,6 +542,209 @@ function FinancialsContent(): React.JSX.Element {
           </>
         )}
 
+        <Text style={[styles.sectionTitle, { marginTop: spacing[8] }]}>
+          Best-performing tables
+        </Text>
+        {bestTables === undefined ? (
+          <View style={{ gap: spacing[2] }}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.skelRow} />
+            ))}
+          </View>
+        ) : bestTables.tables.length === 0 ? (
+          <View style={styles.emptyAnalytics}>
+            <MaterialIcons
+              name="bar-chart"
+              size={32}
+              color={colors.text.secondary}
+            />
+            <Text style={styles.emptyAnalyticsTxt}>
+              No completed sessions in this range yet.
+            </Text>
+          </View>
+        ) : (
+          <View style={{ gap: spacing[2], marginBottom: spacing[6] }}>
+            {bestTables.tables.map((row, idx) => {
+              const top = bestTables.tables[0]!;
+              const pct =
+                top.revenue > 0
+                  ? Math.max(0.04, row.revenue / top.revenue)
+                  : 0;
+              return (
+                <View key={row.tableId} style={styles.tableRow}>
+                  <View style={styles.tableRowHead}>
+                    <Text style={styles.tableRank}>#{idx + 1}</Text>
+                    <Text style={styles.tableLbl} numberOfLines={1}>
+                      {row.tableLabel}
+                    </Text>
+                    <Text style={styles.tableAmt}>
+                      {formatMoney(row.revenue, bestTables.currency)}
+                    </Text>
+                  </View>
+                  <View style={styles.tableBarTrack}>
+                    <View
+                      style={[
+                        styles.tableBarFill,
+                        { width: `${Math.round(pct * 100)}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.tableSub}>
+                    {row.sessionCount} session
+                    {row.sessionCount === 1 ? "" : "s"}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        <Text style={styles.sectionTitle}>Snack sales</Text>
+        {snackSales === undefined ? (
+          <View style={{ gap: spacing[2] }}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.skelRow} />
+            ))}
+          </View>
+        ) : snackSales.snacks.length === 0 ? (
+          <View style={styles.emptyAnalytics}>
+            <MaterialIcons
+              name="fastfood"
+              size={32}
+              color={colors.text.secondary}
+            />
+            <Text style={styles.emptyAnalyticsTxt}>
+              No snacks sold in this range.
+            </Text>
+          </View>
+        ) : (
+          <View style={{ marginBottom: spacing[6] }}>
+            <Text style={styles.snackTotalLine}>
+              Total: {formatMoney(snackSales.totalRevenue, snackSales.currency)}{" "}
+              · {snackSales.totalUnits} item
+              {snackSales.totalUnits === 1 ? "" : "s"} sold
+            </Text>
+            <View style={{ gap: spacing[2], marginTop: spacing[2] }}>
+              {snackSales.snacks.map((row) => {
+                const top = snackSales.snacks[0]!;
+                const pct =
+                  top.revenue > 0
+                    ? Math.max(0.04, row.revenue / top.revenue)
+                    : 0;
+                return (
+                  <View key={row.snackId} style={styles.tableRow}>
+                    <View style={styles.tableRowHead}>
+                      <Text style={styles.tableLbl} numberOfLines={1}>
+                        {row.name}
+                      </Text>
+                      <Text style={styles.tableAmt}>
+                        {formatMoney(row.revenue, snackSales.currency)}
+                      </Text>
+                    </View>
+                    <View style={styles.tableBarTrack}>
+                      <View
+                        style={[
+                          styles.tableBarFill,
+                          {
+                            width: `${Math.round(pct * 100)}%`,
+                            backgroundColor: colors.accent.amber,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.tableSub}>{row.units} sold</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        <Text style={styles.sectionTitle}>Peak hours</Text>
+        {heatmap === undefined ? (
+          <View style={[styles.heatmapSkel]} />
+        ) : heatmap.totalSessions === 0 ? (
+          <View style={styles.emptyAnalytics}>
+            <MaterialIcons
+              name="schedule"
+              size={32}
+              color={colors.text.secondary}
+            />
+            <Text style={styles.emptyAnalyticsTxt}>
+              No completed sessions to chart.
+            </Text>
+          </View>
+        ) : (
+          <View style={{ marginBottom: spacing[6] }}>
+            <View style={styles.heatmapHeader}>
+              <View style={styles.heatmapDayCol} />
+              {[0, 6, 12, 18, 23].map((h) => (
+                <Text
+                  key={h}
+                  style={[
+                    styles.heatmapAxis,
+                    {
+                      position: "absolute",
+                      left: `${(h / 23) * 100}%`,
+                      transform: [{ translateX: -8 }],
+                    },
+                  ]}
+                >
+                  {h}
+                </Text>
+              ))}
+            </View>
+            {(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const).map(
+              (label, dow) => {
+                const dayCells = heatmap.cells.filter(
+                  (c) => c.dayOfWeek === dow,
+                );
+                return (
+                  <View key={label} style={styles.heatmapRow}>
+                    <Text style={styles.heatmapDayLbl}>{label}</Text>
+                    <View style={styles.heatmapCells}>
+                      {dayCells.map((c) => {
+                        const intensity =
+                          heatmap.maxCellSessions > 0
+                            ? c.sessions / heatmap.maxCellSessions
+                            : 0;
+                        const bg =
+                          c.sessions === 0
+                            ? colors.bg.tertiary
+                            : `rgba(67,160,71,${0.15 + intensity * 0.85})`;
+                        return (
+                          <View
+                            key={c.hour}
+                            style={[
+                              styles.heatmapCell,
+                              { backgroundColor: bg },
+                            ]}
+                          />
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              },
+            )}
+            <Text style={styles.heatmapNote}>
+              {heatmap.peak
+                ? `Busiest: ${
+                    [
+                      "Sunday",
+                      "Monday",
+                      "Tuesday",
+                      "Wednesday",
+                      "Thursday",
+                      "Friday",
+                      "Saturday",
+                    ][heatmap.peak.dayOfWeek] ?? ""
+                  } at ${String(heatmap.peak.hour).padStart(2, "0")}:00 (${heatmap.peak.sessions} session${heatmap.peak.sessions === 1 ? "" : "s"})`
+                : "No data"}
+            </Text>
+          </View>
+        )}
+
         <View style={styles.creditHeader}>
           <View style={styles.creditTitleRow}>
             <Text style={styles.sectionTitle}>Outstanding Credits</Text>
@@ -764,6 +981,115 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing[2],
     marginBottom: spacing[6],
+  },
+  emptyAnalytics: {
+    alignItems: "center",
+    gap: spacing[2],
+    paddingVertical: spacing[6],
+    backgroundColor: colors.bg.secondary,
+    borderRadius: radius.lg,
+    marginBottom: spacing[6],
+  },
+  emptyAnalyticsTxt: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  skelRow: {
+    height: 56,
+    borderRadius: radius.md,
+    backgroundColor: colors.bg.secondary,
+  },
+  tableRow: {
+    backgroundColor: colors.bg.secondary,
+    borderRadius: radius.md,
+    padding: spacing[3],
+    gap: spacing[1.5],
+  },
+  tableRowHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+  },
+  tableRank: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    width: 24,
+  },
+  tableLbl: {
+    ...typography.label,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  tableAmt: {
+    ...typography.label,
+    color: colors.accent.green,
+    fontWeight: "700",
+  },
+  tableBarTrack: {
+    height: 6,
+    backgroundColor: colors.bg.tertiary,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  tableBarFill: {
+    height: "100%",
+    backgroundColor: colors.accent.green,
+    borderRadius: 3,
+  },
+  tableSub: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  snackTotalLine: {
+    ...typography.label,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  heatmapSkel: {
+    height: 200,
+    backgroundColor: colors.bg.secondary,
+    borderRadius: radius.lg,
+    marginBottom: spacing[6],
+  },
+  heatmapHeader: {
+    height: 18,
+    flexDirection: "row",
+    marginLeft: 32,
+    position: "relative",
+  },
+  heatmapDayCol: {
+    width: 0,
+  },
+  heatmapAxis: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 10,
+  },
+  heatmapRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 3,
+  },
+  heatmapDayLbl: {
+    width: 32,
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  heatmapCells: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 2,
+  },
+  heatmapCell: {
+    flex: 1,
+    height: 18,
+    borderRadius: 2,
+  },
+  heatmapNote: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: spacing[3],
   },
   creditHeader: { marginBottom: spacing[2] },
   creditTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing[2] },

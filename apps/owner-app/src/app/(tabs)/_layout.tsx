@@ -28,6 +28,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      initialRouteName="home"
       screenOptions={{
         headerShown: false,
         // Avoid double bottom inset: we pad the tab bar with insets.bottom in tabBarStyle.
@@ -41,6 +42,10 @@ export default function TabsLayout() {
         // expo-router Tabs types omit safeAreaInsets; react-navigation bottom tabs support it.
       } as React.ComponentProps<typeof Tabs>["screenOptions"]}
     >
+      <Tabs.Screen
+        name="home"
+        options={{ title: "Home", tabBarIcon: makeTabBarIcon("dashboard") }}
+      />
       <Tabs.Screen
         name="slots"
         options={{ title: "Slots", tabBarIcon: makeTabBarIcon("view-module") }}

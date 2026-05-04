@@ -22,7 +22,7 @@ import {
 } from "@a3/ui/components";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { formatCurrency } from "@a3/utils/billing";
+import { formatCurrency, formatElapsed } from "@a3/utils/billing";
 import { getActiveRoleId } from "../../lib/activeRoleStorage";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 
@@ -54,6 +54,8 @@ export default function SlotsScreen() {
   );
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [discountInput, setDiscountInput] = useState("");
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   useEffect(() => {
     void getActiveRoleId().then((v) => {
@@ -65,6 +67,12 @@ export default function SlotsScreen() {
     const t = setTimeout(() => setDebouncedCustomerPhone(customerPhoneInput.trim()), 300);
     return () => clearTimeout(t);
   }, [customerPhoneInput]);
+
+  // Tick once a second so elapsed timers and live bill preview stay current.
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const phoneReady = /^\+91\d{10}$/.test(debouncedCustomerPhone);
   const customerPhoneSearch = useQuery(
@@ -91,10 +99,18 @@ export default function SlotsScreen() {
   const startWalkIn = useMutation(api.ownerSessions.startWalkInSession);
   const checkoutTableSession = useMutation(api.ownerSessions.checkoutTableSession);
 
+  const parsedDiscount = useMemo(() => {
+    const trimmed = discountInput.trim();
+    if (trimmed === "") return 0;
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.min(100, n);
+  }, [discountInput]);
+
   const checkoutPreview = useQuery(
     api.ownerSessions.previewTableCheckout,
     checkoutTableId !== null
-      ? { tableId: checkoutTableId, roleId }
+      ? { tableId: checkoutTableId, roleId, discountPercent: parsedDiscount }
       : "skip",
   );
 
@@ -177,6 +193,7 @@ export default function SlotsScreen() {
 
   const openCheckoutForTable = useCallback((tableId: Id<"tables">) => {
     setActionError(null);
+    setDiscountInput("");
     setCheckoutTableId(tableId);
     setShowCheckoutModal(true);
   }, []);
@@ -185,6 +202,7 @@ export default function SlotsScreen() {
     if (checkoutBusy) return;
     setShowCheckoutModal(false);
     setCheckoutTableId(null);
+    setDiscountInput("");
   }, [checkoutBusy]);
 
   const runCheckout = useCallback(
@@ -193,16 +211,22 @@ export default function SlotsScreen() {
       setCheckoutBusy(true);
       setActionError(null);
       try {
-        await checkoutTableSession({ tableId: checkoutTableId, paymentMethod, roleId });
+        await checkoutTableSession({
+          tableId: checkoutTableId,
+          paymentMethod,
+          roleId,
+          discountPercent: parsedDiscount > 0 ? parsedDiscount : undefined,
+        });
         setShowCheckoutModal(false);
         setCheckoutTableId(null);
+        setDiscountInput("");
       } catch (e) {
         setActionError(parseConvexError(e as Error).message);
       } finally {
         setCheckoutBusy(false);
       }
     },
-    [checkoutTableId, checkoutTableSession, roleId],
+    [checkoutTableId, checkoutTableSession, roleId, parsedDiscount],
   );
 
   const handleTablePress = useCallback(
@@ -295,6 +319,7 @@ export default function SlotsScreen() {
   const activeTables = dashboard.tables.filter(
     (table) => table.currentSessionId !== undefined,
   );
+  const activeSessionByTableId = dashboard.activeSessionByTableId ?? {};
 
   return (
     <View style={styles.screen}>
@@ -371,36 +396,64 @@ export default function SlotsScreen() {
             <Text style={styles.activeSectionHint}>
               Close a table to run checkout and free it, or add snacks while play continues.
             </Text>
-            {activeTables.map((table) => (
-              <View key={table._id} style={styles.activeCard}>
-                <View style={styles.activeCardLeft}>
-                  <Text style={styles.activeCardTitle}>{table.label}</Text>
-                  <Text style={styles.activeCardMeta}>Session in progress</Text>
+            {activeTables.map((table) => {
+              const session = activeSessionByTableId[table._id];
+              const elapsedLabel =
+                session !== undefined
+                  ? formatElapsed(Math.max(0, nowMs - session.startTime))
+                  : null;
+              return (
+                <View key={table._id} style={styles.activeCard}>
+                  <View style={styles.activeCardLeft}>
+                    <Text style={styles.activeCardTitle}>{table.label}</Text>
+                    <Text style={styles.activeCardCustomer} numberOfLines={1}>
+                      {session?.customerName ?? "Session in progress"}
+                      {session?.isGuest ? (
+                        <Text style={styles.guestBadgeInline}> · Guest</Text>
+                      ) : null}
+                    </Text>
+                    {elapsedLabel ? (
+                      <View style={styles.elapsedRow}>
+                        <View style={styles.elapsedDot} />
+                        <Text style={styles.activeCardMeta}>
+                          {elapsedLabel} elapsed
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.activeCardMeta}>
+                        Session in progress
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.activeCardActions}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.closeTableBtn,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() =>
+                        openCheckoutForTable(table._id as Id<"tables">)
+                      }
+                    >
+                      <Text style={styles.closeTableBtnText}>Close table</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.addSnacksBtn,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() =>
+                        setSnackPickerSessionId(
+                          table.currentSessionId as Id<"sessions">,
+                        )
+                      }
+                    >
+                      <Text style={styles.addSnacksBtnText}>Add Snacks</Text>
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={styles.activeCardActions}>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.closeTableBtn,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => openCheckoutForTable(table._id as Id<"tables">)}
-                  >
-                    <Text style={styles.closeTableBtnText}>Close table</Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.addSnacksBtn,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() =>
-                      setSnackPickerSessionId(table.currentSessionId as Id<"sessions">)
-                    }
-                  >
-                    <Text style={styles.addSnacksBtnText}>Add Snacks</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ) : null}
       </ScrollView>
@@ -677,9 +730,53 @@ export default function SlotsScreen() {
                   </Text>
                 </Text>
                 <Text style={styles.checkoutDetail}>
-                  {checkoutPreview.billableMinutes} min billable ({checkoutPreview.actualMinutes} min
-                  played) · Snacks {formatCurrency(checkoutPreview.snackTotal, checkoutPreview.currency)}
+                  {checkoutPreview.billableMinutes} min billable (
+                  {checkoutPreview.actualMinutes} min played) · Table{" "}
+                  {formatCurrency(
+                    checkoutPreview.discountedTable,
+                    checkoutPreview.currency,
+                  )}
+                  {checkoutPreview.discountAmount > 0
+                    ? ` (−${checkoutPreview.discountPercent}% off ${formatCurrency(
+                        checkoutPreview.tableSubtotal,
+                        checkoutPreview.currency,
+                      )})`
+                    : ""}{" "}
+                  · Snacks{" "}
+                  {formatCurrency(
+                    checkoutPreview.snackTotal,
+                    checkoutPreview.currency,
+                  )}
                 </Text>
+                {checkoutPreview.canApplyDiscount ? (
+                  <View style={styles.discountRow}>
+                    <Text style={styles.walkInLabel}>
+                      Discount %{" "}
+                      {checkoutPreview.maxDiscountPercent !== null
+                        ? `(max ${checkoutPreview.maxDiscountPercent}%)`
+                        : ""}
+                    </Text>
+                    <TextInput
+                      style={styles.discountInput}
+                      value={discountInput}
+                      onChangeText={setDiscountInput}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor={colors.text.tertiary}
+                      maxLength={5}
+                    />
+                    {checkoutPreview.maxDiscountPercent !== null &&
+                    parsedDiscount > checkoutPreview.maxDiscountPercent ? (
+                      <Text style={styles.discountHint}>
+                        Capped at {checkoutPreview.maxDiscountPercent}% by your role.
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={styles.discountHint}>
+                    Your role cannot apply discounts.
+                  </Text>
+                )}
                 <Text style={styles.walkInLabel}>Payment</Text>
                 <View style={styles.payGrid}>
                   {(
@@ -838,6 +935,27 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.text.primary,
   },
+  activeCardCustomer: {
+    ...typography.bodySmall,
+    color: colors.text.primary,
+    marginTop: spacing[0.5],
+  },
+  guestBadgeInline: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  elapsedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1.5],
+    marginTop: spacing[0.5],
+  },
+  elapsedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent.green,
+  },
   activeCardMeta: {
     ...typography.bodySmall,
     color: colors.text.secondary,
@@ -983,6 +1101,23 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.tertiary,
     marginBottom: spacing[4],
+  },
+  discountRow: {
+    marginBottom: spacing[3],
+  },
+  discountInput: {
+    backgroundColor: colors.bg.tertiary,
+    borderRadius: radius.md,
+    padding: spacing[3],
+    color: colors.text.primary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  discountHint: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: spacing[1],
+    marginBottom: spacing[2],
   },
   payGrid: {
     flexDirection: "row",
