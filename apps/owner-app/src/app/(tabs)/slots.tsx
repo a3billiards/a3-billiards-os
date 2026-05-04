@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
+  Linking,
 } from "react-native";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { useRouter } from "expo-router";
@@ -26,6 +27,9 @@ import { formatCurrency, formatElapsed } from "@a3/utils/billing";
 import { getActiveRoleId } from "../../lib/activeRoleStorage";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 
+const PRIVACY_URL = "https://a3billiards.com/privacy";
+const TOS_URL = "https://a3billiards.com/terms";
+
 export default function SlotsScreen() {
   const router = useRouter();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
@@ -41,7 +45,9 @@ export default function SlotsScreen() {
   const [snackPickerSessionId, setSnackPickerSessionId] =
     useState<Id<"sessions"> | null>(null);
   const [showWalkInStartModal, setShowWalkInStartModal] = useState(false);
-  const [walkInStartStep, setWalkInStartStep] = useState<"choose" | "customer">("choose");
+  const [walkInStartStep, setWalkInStartStep] = useState<
+    "choose" | "customer" | "deskRegister"
+  >("choose");
   const [guestNameInput, setGuestNameInput] = useState("Walk-in");
   const [customerPhoneInput, setCustomerPhoneInput] = useState("");
   const [debouncedCustomerPhone, setDebouncedCustomerPhone] = useState("");
@@ -56,6 +62,16 @@ export default function SlotsScreen() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [discountInput, setDiscountInput] = useState("");
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  /** Pool-side new customer: name, age, +91 phone, WhatsApp OTP, consent. */
+  const [deskName, setDeskName] = useState("");
+  const [deskAge, setDeskAge] = useState("");
+  const [deskPhone, setDeskPhone] = useState("+91");
+  const [deskOtp, setDeskOtp] = useState("");
+  const [deskConsent, setDeskConsent] = useState(false);
+  const [deskBusySend, setDeskBusySend] = useState(false);
+  const [deskBusySubmit, setDeskBusySubmit] = useState(false);
+  const [deskError, setDeskError] = useState<string | null>(null);
 
   useEffect(() => {
     void getActiveRoleId().then((v) => {
@@ -95,6 +111,12 @@ export default function SlotsScreen() {
   );
 
   const acquireTableLock = useAction(api.ownerSessionActions.acquireTableLock);
+  const ownerSendDeskCustomerOtp = useAction(
+    api.ownerDeskCustomerRegistration.ownerSendDeskCustomerRegistrationOtp,
+  );
+  const ownerCompleteDeskCustomerRegistration = useAction(
+    api.ownerDeskCustomerRegistration.ownerCompleteDeskCustomerRegistration,
+  );
   const releaseTableLock = useMutation(api.ownerSessions.releaseTableLock);
   const startWalkIn = useMutation(api.ownerSessions.startWalkInSession);
   const checkoutTableSession = useMutation(api.ownerSessions.checkoutTableSession);
@@ -130,6 +152,14 @@ export default function SlotsScreen() {
     setDebouncedCustomerPhone("");
     setPendingCustomerId(null);
     setShowComplaintGate(false);
+    setDeskName("");
+    setDeskAge("");
+    setDeskPhone("+91");
+    setDeskOtp("");
+    setDeskConsent(false);
+    setDeskError(null);
+    setDeskBusySend(false);
+    setDeskBusySubmit(false);
   }, []);
 
   const runStartWalkIn = useCallback(
@@ -527,6 +557,7 @@ export default function SlotsScreen() {
                 <Text style={styles.modalTitle}>Start session</Text>
                 <Text style={styles.modalBody}>
                   Walk-in guest starts immediately. For a registered customer, look up by phone.
+                  New customers can verify on WhatsApp and register here before play.
                 </Text>
                 <Text style={styles.walkInLabel}>Guest display name</Text>
                 <TextInput
@@ -570,6 +601,38 @@ export default function SlotsScreen() {
                       pressed && styles.pressed,
                     ]}
                     onPress={() => {
+                      void (async () => {
+                        if (!walkInTableId) return;
+                        setDeskError(null);
+                        setActionError(null);
+                        try {
+                          const { lockToken } = await acquireTableLock({
+                            tableId: walkInTableId,
+                            otpFlow: true,
+                          });
+                          setWalkInLockToken(lockToken);
+                          setDeskName("");
+                          setDeskAge("");
+                          setDeskPhone("+91");
+                          setDeskOtp("");
+                          setDeskConsent(false);
+                          setWalkInStartStep("deskRegister");
+                        } catch (e) {
+                          setDeskError(parseConvexError(e as Error).message);
+                        }
+                      })();
+                    }}
+                  >
+                    <Text style={styles.modalBtnSecondaryText}>
+                      New customer — WhatsApp OTP
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.modalBtnSecondary,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => {
                       void cancelWalkInStart();
                     }}
                   >
@@ -577,6 +640,205 @@ export default function SlotsScreen() {
                   </Pressable>
                 </View>
               </>
+            ) : walkInStartStep === "deskRegister" ? (
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.modalTitle}>Register customer</Text>
+                <Text style={styles.modalHint}>
+                  Enter their legal name, age (18+), and +91 mobile. We send a 6-digit code
+                  to WhatsApp; enter it here to create their verified profile, then start the
+                  session.
+                </Text>
+                {deskError ? (
+                  <Text style={styles.walkInErr}>{deskError}</Text>
+                ) : null}
+                <Text style={styles.walkInLabel}>Full name</Text>
+                <TextInput
+                  style={styles.walkInInput}
+                  value={deskName}
+                  onChangeText={setDeskName}
+                  placeholder="As on ID"
+                  placeholderTextColor={colors.text.tertiary}
+                />
+                <Text style={styles.walkInLabel}>Age</Text>
+                <TextInput
+                  style={styles.walkInInput}
+                  value={deskAge}
+                  onChangeText={setDeskAge}
+                  placeholder="18+"
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.text.tertiary}
+                />
+                <Text style={styles.walkInLabel}>Mobile (WhatsApp)</Text>
+                <TextInput
+                  style={styles.walkInInput}
+                  value={deskPhone}
+                  onChangeText={setDeskPhone}
+                  keyboardType="phone-pad"
+                  placeholder="+91xxxxxxxxxx"
+                  placeholderTextColor={colors.text.tertiary}
+                  autoCapitalize="none"
+                />
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.modalBtnSecondary,
+                    pressed && styles.pressed,
+                    deskBusySend && styles.pressed,
+                  ]}
+                  disabled={deskBusySend}
+                  onPress={() => {
+                    void (async () => {
+                      const phone = deskPhone.replace(/\s/g, "");
+                      if (!/^\+91\d{10}$/.test(phone)) {
+                        setDeskError("Use +91 followed by 10 digits.");
+                        return;
+                      }
+                      setDeskError(null);
+                      setDeskBusySend(true);
+                      try {
+                        await ownerSendDeskCustomerOtp({ phone });
+                      } catch (e) {
+                        setDeskError(parseConvexError(e as Error).message);
+                      } finally {
+                        setDeskBusySend(false);
+                      }
+                    })();
+                  }}
+                >
+                  <Text style={styles.modalBtnSecondaryText}>
+                    {deskBusySend ? "Sending…" : "Send WhatsApp code"}
+                  </Text>
+                </Pressable>
+                <Text style={styles.walkInLabel}>6-digit code</Text>
+                <TextInput
+                  style={styles.walkInInput}
+                  value={deskOtp}
+                  onChangeText={setDeskOtp}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  placeholder="000000"
+                  placeholderTextColor={colors.text.tertiary}
+                />
+                <View style={styles.consentRow}>
+                  <Pressable
+                    onPress={() => setDeskConsent((c) => !c)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: deskConsent }}
+                    hitSlop={8}
+                  >
+                    <View
+                      style={[
+                        styles.consentBox,
+                        deskConsent && styles.consentBoxOn,
+                      ]}
+                    />
+                  </Pressable>
+                  <Text style={styles.consentText}>
+                    Customer confirms they are 18+ and agrees to the{" "}
+                    <Text
+                      style={styles.linkInline}
+                      onPress={() => void Linking.openURL(TOS_URL)}
+                    >
+                      Terms
+                    </Text>{" "}
+                    and{" "}
+                    <Text
+                      style={styles.linkInline}
+                      onPress={() => void Linking.openURL(PRIVACY_URL)}
+                    >
+                      Privacy Policy
+                    </Text>
+                    .
+                  </Text>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.modalBtnPrimary,
+                    pressed && styles.pressed,
+                    deskBusySubmit && styles.pressed,
+                  ]}
+                  disabled={deskBusySubmit}
+                  onPress={() => {
+                    void (async () => {
+                      const name = deskName.trim();
+                      const ageN = Number(deskAge);
+                      const phone = deskPhone.replace(/\s/g, "");
+                      const code = deskOtp.replace(/\s/g, "");
+                      if (name.length < 2) {
+                        setDeskError("Please enter the customer's full name.");
+                        return;
+                      }
+                      if (!Number.isInteger(ageN) || ageN < 18) {
+                        setDeskError("Age must be a whole number, 18 or older.");
+                        return;
+                      }
+                      if (!/^\+91\d{10}$/.test(phone)) {
+                        setDeskError("Use +91 followed by 10 digits.");
+                        return;
+                      }
+                      if (!/^\d{6}$/.test(code)) {
+                        setDeskError("Enter the 6-digit WhatsApp code.");
+                        return;
+                      }
+                      if (!deskConsent) {
+                        setDeskError("Ask the customer to confirm the consent checkbox.");
+                        return;
+                      }
+                      setDeskError(null);
+                      setDeskBusySubmit(true);
+                      try {
+                        const { userId } = await ownerCompleteDeskCustomerRegistration({
+                          phone,
+                          code,
+                          name,
+                          age: ageN,
+                          consentGiven: true,
+                        });
+                        setPendingCustomerId(userId);
+                        setCustomerPhoneInput(phone);
+                        setDebouncedCustomerPhone(phone);
+                        setWalkInStartStep("customer");
+                        setDeskOtp("");
+                      } catch (e) {
+                        setDeskError(parseConvexError(e as Error).message);
+                      } finally {
+                        setDeskBusySubmit(false);
+                      }
+                    })();
+                  }}
+                >
+                  <Text style={styles.modalBtnPrimaryText}>
+                    {deskBusySubmit ? "Saving…" : "Verify & continue"}
+                  </Text>
+                </Pressable>
+                <View style={styles.modalActions}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.modalBtnSecondary,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => {
+                      setDeskError(null);
+                      setWalkInStartStep("choose");
+                    }}
+                  >
+                    <Text style={styles.modalBtnSecondaryText}>Back</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.modalBtnSecondary,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => {
+                      void cancelWalkInStart();
+                    }}
+                  >
+                    <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
             ) : (
               <>
                 <Text style={styles.modalTitle}>Customer phone</Text>
@@ -1137,4 +1399,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2],
   },
   payTileText: { ...typography.label, color: colors.text.primary },
+  consentRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing[3],
+    marginBottom: spacing[4],
+    marginTop: spacing[2],
+  },
+  consentBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.border.default,
+    marginTop: 2,
+  },
+  consentBoxOn: {
+    backgroundColor: colors.accent.green,
+    borderColor: colors.accent.green,
+  },
+  consentText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    flex: 1,
+  },
+  linkInline: {
+    color: colors.status.info,
+    textDecorationLine: "underline",
+  },
 });
