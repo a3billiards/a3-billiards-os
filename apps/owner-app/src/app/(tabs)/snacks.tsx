@@ -16,7 +16,9 @@ import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { formatCurrency } from "@a3/utils/billing";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
+import { ownerTabBarTotalInset } from "../../theme/ownerShell";
 
 type FormState = {
   name: string;
@@ -25,6 +27,8 @@ type FormState = {
 
 export default function SnacksScreen() {
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const snacks = useQuery(
     api.snacks.listSnacks,
     dashboard ? { clubId: dashboard.clubId } : "skip",
@@ -166,7 +170,7 @@ export default function SnacksScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}>
           {snacks.map((snack) => (
             <View key={snack._id} style={styles.card}>
               <View style={styles.cardTop}>

@@ -33,6 +33,8 @@ import { formatCurrency } from "@a3/utils/billing";
 import { getActiveRoleId } from "../lib/activeRoleStorage";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
 import { SafeBarChart } from "../components/SafeBarChart";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ownerTabBarTotalInset } from "../theme/ownerShell";
 
 type SortKey = "date" | "amount";
 
@@ -134,6 +136,8 @@ function FinancialsContent(): React.JSX.Element {
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
   const clubTimezone = normalizeIanaTimeZone(dashboard?.timezone);
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
 
   const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
 
@@ -357,7 +361,7 @@ function FinancialsContent(): React.JSX.Element {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.tzNote}>Dates in {tzAbbr}</Text>

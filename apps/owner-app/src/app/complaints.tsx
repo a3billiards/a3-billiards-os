@@ -21,6 +21,8 @@ import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { getActiveRoleId } from "../lib/activeRoleStorage";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ownerTabBarTotalInset } from "../theme/ownerShell";
 
 type ComplaintType =
   | "violent_behaviour"
@@ -109,6 +111,8 @@ export default function ComplaintsScreen(): React.JSX.Element {
   const router = useRouter();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
 
   const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
   useEffect(() => {
@@ -354,7 +358,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
       >
         {list === undefined ? (

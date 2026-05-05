@@ -11,13 +11,14 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
+import { adminTabBarTotalInset } from "../theme/adminShell";
 import { parseConvexError } from "@a3/ui/errors";
 
 type ComplaintType =
@@ -134,6 +135,7 @@ function typeBadgeStyle(t: ComplaintType): {
 }
 
 export default function ComplaintsScreen(): React.JSX.Element {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [statusTab, setStatusTab] = useState<StatusTab>("active");
@@ -507,7 +509,10 @@ export default function ComplaintsScreen(): React.JSX.Element {
         <FlatList
           data={rows}
           keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.listPad}
+          contentContainerStyle={[
+            styles.listPad,
+            { paddingBottom: adminTabBarTotalInset(insets.bottom) },
+          ]}
           onEndReached={loadMore}
           onEndReachedThreshold={0.35}
           ListFooterComponent={
@@ -850,7 +855,6 @@ const styles = StyleSheet.create({
   clearLink: { color: colors.accent.green, fontWeight: "600" },
   listPad: {
     paddingHorizontal: layout.screenPadding,
-    paddingBottom: spacing[10],
   },
   skelWrap: { paddingHorizontal: layout.screenPadding },
   skelCard: {

@@ -9,12 +9,13 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
+import { adminTabBarTotalInset } from "../../theme/adminShell";
 
 type RoleFilter = "all" | "admin" | "owner" | "customer";
 
@@ -61,6 +62,7 @@ function RoleBadge({ role }: { role: UserRow["role"] }): React.JSX.Element {
 }
 
 export default function UsersScreen(): React.JSX.Element {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ role?: string }>();
   const [search, setSearch] = useState("");
@@ -214,7 +216,10 @@ export default function UsersScreen(): React.JSX.Element {
               />
             ) : null
           }
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: adminTabBarTotalInset(insets.bottom) },
+          ]}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => router.push(`/user/${item._id}`)}
@@ -306,7 +311,6 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.text.primary, fontWeight: "600" },
   listContent: {
     paddingHorizontal: layout.screenPadding,
-    paddingBottom: spacing[10],
   },
   skeletonWrap: { paddingHorizontal: layout.screenPadding, gap: spacing[2] },
   skeletonRow: {

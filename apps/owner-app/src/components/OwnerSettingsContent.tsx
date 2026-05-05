@@ -25,6 +25,8 @@ import type { Doc, Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { getActiveRoleId, setActiveRoleId } from "../lib/activeRoleStorage";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ownerTabBarTotalInset } from "../theme/ownerShell";
 
 const RENEW_URL = "https://renew.a3billiards.com";
 const PREDEFINED_AMENITIES = ["AC", "Parking", "Cafe", "WiFi", "Lounge", "Restrooms"] as const;
@@ -80,6 +82,8 @@ function dayAbbrevList(days: number[]): string {
 export default function OwnerSettingsContent(): React.JSX.Element {
   const router = useRouter();
   const { signOut } = useAuthActions();
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const user = useQuery(api.users.getCurrentUser);
   const club = useQuery(
     api.clubProfile.getMyClubProfile,
@@ -559,7 +563,7 @@ export default function OwnerSettingsContent(): React.JSX.Element {
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.pad}>
+      <ScrollView contentContainerStyle={[styles.pad, { paddingBottom: bottomPad }]}>
         <Text style={styles.screenTitle}>Settings</Text>
 
         {/* Tables */}

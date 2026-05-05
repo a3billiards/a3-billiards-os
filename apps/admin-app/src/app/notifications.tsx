@@ -13,12 +13,13 @@ import {
   Platform,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useAction } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, layout, radius, zIndex } from "@a3/ui/theme";
+import { adminTabBarTotalInset } from "../theme/adminShell";
 import { parseConvexError } from "@a3/ui/errors";
 
 type MainTab = "compose" | "history";
@@ -254,6 +255,8 @@ function HistoryCard({
 }
 
 export default function NotificationCenterScreen(): React.JSX.Element {
+  const insets = useSafeAreaInsets();
+  const tabBarBottomPad = adminTabBarTotalInset(insets.bottom);
   const user = useQuery(api.users.getCurrentUser, {});
   const adminId = user?._id;
   const canQuery = user?.role === "admin";
@@ -534,7 +537,10 @@ export default function NotificationCenterScreen(): React.JSX.Element {
         {mainTab === "compose" ? (
           <ScrollView
             style={styles.flex}
-            contentContainerStyle={styles.composeScroll}
+            contentContainerStyle={[
+              styles.composeScroll,
+              { paddingBottom: tabBarBottomPad },
+            ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -787,7 +793,10 @@ export default function NotificationCenterScreen(): React.JSX.Element {
               <FlatList
                 data={histRows}
                 keyExtractor={(item) => item._id}
-                contentContainerStyle={styles.historyList}
+                contentContainerStyle={[
+                  styles.historyList,
+                  { paddingBottom: tabBarBottomPad },
+                ]}
                 onEndReached={loadMoreHistory}
                 onEndReachedThreshold={0.35}
                 ListEmptyComponent={
@@ -900,7 +909,6 @@ const styles = StyleSheet.create({
   },
   composeScroll: {
     paddingHorizontal: spacing[8],
-    paddingBottom: spacing[16],
   },
   hero: {
     marginBottom: spacing[6],
@@ -1135,7 +1143,7 @@ const styles = StyleSheet.create({
   sendBtnOff: { backgroundColor: colors.status.disabled },
   sendBtnText: { ...typography.button, color: colors.text.primary },
   historyWrap: { flex: 1, paddingHorizontal: spacing[8], minHeight: 0 },
-  historyList: { paddingBottom: spacing[16], gap: spacing[3] },
+  historyList: { gap: spacing[3] },
   skeletonWrap: { gap: spacing[3] },
   skeletonCard: {
     height: 140,

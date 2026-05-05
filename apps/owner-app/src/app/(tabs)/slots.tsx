@@ -24,14 +24,18 @@ import {
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { formatCurrency, formatElapsed } from "@a3/utils/billing";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getActiveRoleId } from "../../lib/activeRoleStorage";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
+import { ownerTabBarTotalInset } from "../../theme/ownerShell";
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
 const TOS_URL = "https://a3billiards.com/terms";
 
 export default function SlotsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const [walkInTableId, setWalkInTableId] = useState<Id<"tables"> | null>(
     null,
@@ -367,7 +371,7 @@ export default function SlotsScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

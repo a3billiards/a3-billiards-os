@@ -18,8 +18,10 @@ import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { computeBookingUnixTime, timeZoneAbbreviation } from "@a3/utils/timezone";
 import { useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getActiveRoleId } from "../../lib/activeRoleStorage";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
+import { ownerTabBarTotalInset } from "../../theme/ownerShell";
 
 type Segment = "pending" | "upcoming" | "history";
 
@@ -64,6 +66,8 @@ function canStartNow(booking: {
 
 export default function BookingsTab() {
   const params = useLocalSearchParams<{ segment?: string }>();
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
   const pending = useQuery(
@@ -443,7 +447,7 @@ export default function BookingsTab() {
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.list}>{renderSegment()}</ScrollView>
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}>{renderSegment()}</ScrollView>
 
       <Modal visible={showApproveModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
