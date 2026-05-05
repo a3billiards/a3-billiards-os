@@ -38,3 +38,26 @@ export const acquireTableLock = action({
     return { lockToken };
   },
 });
+
+/**
+ * While the walk-in modal is open you already hold `lockToken`. Do not call `acquireTableLock`
+ * again (that hits SESSION_002). This extends the same lock to the OTP flow window.
+ */
+export const extendTableLockForDeskOtp = action({
+  args: {
+    tableId: v.id("tables"),
+    lockToken: v.string(),
+  },
+  handler: async (ctx, { tableId, lockToken }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throw new Error("AUTH_001: Not authenticated");
+    }
+    await ctx.runMutation(internal.ownerSessions.extendTableLockForOtpFlow, {
+      ownerUserId: userId,
+      tableId,
+      lockToken,
+    });
+    return { lockToken };
+  },
+});

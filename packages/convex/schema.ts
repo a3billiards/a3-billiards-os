@@ -7,7 +7,7 @@
 //   Central DB (11 tables):
 //     users, complaints, adminNotifications, passwordResetTokens,
 //     adminMfaCodes, adminAuditLog, otpRecords, sessionLogs,
-//     bookingLogs, paymentReceipts, dataExportRequests
+//     bookingLogs, paymentReceipts, onboardingClubDrafts, dataExportRequests
 //   Club DB (9 tables):
 //     clubs, tables, sessions, bookings, snacks, staffRoles,
 //     cancellationCounts, customerBookingStats, sessions_archive
@@ -440,6 +440,20 @@ export default defineSchema({
   })
     .index("by_paymentId", ["paymentId"])          // Idempotency check: does this payment_id already exist?
     .index("by_owner", ["ownerId"]),               // Club lookup: find club record for this owner
+
+  // ── onboardingClubDrafts ───────────────────────────────────────────────────
+  // Owner account exists (email/password); club row is created after Razorpay webhook.
+  onboardingClubDrafts: defineTable({
+    ownerId: v.id("users"),
+    clubName: v.string(),
+    address: v.string(),
+    location: locationObj,
+    currency: v.string(),
+    baseRatePerMin: v.number(),
+    minBillMinutes: v.number(),
+    timezone: v.string(),
+    updatedAt: v.number(),
+  }).index("by_owner", ["ownerId"]),
 
   // ── dataExportRequests ─────────────────────────────────────────────────────
   // Customer data export (GDPR-style). Rate-limited 1 request / 24h per user (sliding window).

@@ -67,6 +67,9 @@ export const handleWebhook = internalAction({
     const amount = Number(entity.amount);
     const periodMs = Number(notes.periodMs);
     const paymentId = String(entity.id ?? "").trim();
+    const flowRaw =
+      notes.flow != null ? String(notes.flow).toLowerCase() : "renewal";
+    const flow = flowRaw === "onboarding" ? "onboarding" : "renewal";
 
     if (!ownerId || !Number.isFinite(periodMs) || Number.isNaN(periodMs)) {
       throw new Error(
@@ -84,14 +87,131 @@ export const handleWebhook = internalAction({
       );
     }
 
-    await ctx.runMutation(internal.paymentReceipts.processPayment, {
-      paymentId,
-      ownerId,
-      amount,
-      periodMs,
-    });
+    if (flow === "onboarding") {
+      await ctx.runMutation(internal.paymentReceipts.processOnboardingPayment, {
+        paymentId,
+        ownerId,
+        amount,
+        periodMs,
+      });
+    } else {
+      await ctx.runMutation(internal.paymentReceipts.processPayment, {
+        paymentId,
+        ownerId,
+        amount,
+        periodMs,
+      });
+    }
 
     return { status: "processed" as const, paymentId };
+  },
+});
+
+function formatExpiryWelcomeLabel(expiresAtMs: number, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      dateStyle: "long",
+      timeZone,
+    }).format(new Date(expiresAtMs));
+  } catch {
+    return new Date(expiresAtMs).toISOString().slice(0, 10);
+  }
+}
+
+export const processOnboardingPayment = internalMutation({
+  args: {
+    paymentId: v.string(),
+    ownerId: v.string(),
+    amount: v.number(),
+    periodMs: v.number(),
+  },
+  handler: async (ctx, { paymentId, ownerId, amount, periodMs }) => {
+    const existing = await ctx.db
+      .query("paymentReceipts")
+      .withIndex("by_paymentId", (q) => q.eq("paymentId", paymentId))
+      .first();
+    if (existing) return;
+
+    const ownerConvexId = ownerId as Id<"users">;
+    const owner = await ctx.db.get(ownerConvexId);
+    if (!owner || owner.role !== "owner") {
+      throw new Error("PAYMENT_002: Owner not found");
+    }
+
+    const existingClub = await ctx.db
+      .query("clubs")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ownerConvexId))
+      .first();
+    if (existingClub) {
+      throw new Error("PAYMENT_002: Club already exists — use renewal flow");
+    }
+
+    const draft = await ctx.db
+      .query("onboardingClubDrafts")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ownerConvexId))
+      .first();
+    if (!draft) {
+      throw new Error(
+        "PAYMENT_002: No club draft found — restart onboarding from club details",
+      );
+    }
+
+    const now = Date.now();
+    const subscriptionExpiresAt = now + periodMs;
+
+    const clubId = await ctx.db.insert("clubs", {
+      ownerId: ownerConvexId,
+      name: draft.clubName,
+      address: draft.address,
+      subscriptionStatus: "active",
+      subscriptionExpiresAt,
+      baseRatePerMin: draft.baseRatePerMin,
+      currency: draft.currency,
+      minBillMinutes: draft.minBillMinutes,
+      timezone: draft.timezone,
+      createdAt: now,
+      specialRates: [],
+      isDiscoverable: false,
+      location: draft.location,
+      bookingSettings: {
+        enabled: false,
+        maxAdvanceDays: 7,
+        minAdvanceMinutes: 60,
+        slotDurationOptions: [30, 60, 90, 120],
+        cancellationWindowMin: 30,
+        approvalDeadlineMin: 60,
+        bookableTableTypes: [],
+      },
+    });
+
+    await ctx.db.insert("paymentReceipts", {
+      paymentId,
+      ownerId: ownerConvexId,
+      clubId,
+      amountPaid: amount,
+      processedAt: now,
+    });
+
+    await ctx.runMutation(internal.onboardingWeb.deleteClubDraftByOwner, {
+      ownerId: ownerConvexId,
+    });
+
+    const email = owner.email;
+    if (email && email.length > 0) {
+      const subscriptionExpiryLabel = formatExpiryWelcomeLabel(
+        subscriptionExpiresAt,
+        draft.timezone,
+      );
+      await ctx.scheduler.runAfter(
+        0,
+        internal.notificationsFcm.sendOnboardingWelcomeEmail,
+        {
+          email,
+          clubName: draft.clubName,
+          subscriptionExpiryLabel,
+        },
+      );
+    }
   },
 });
 

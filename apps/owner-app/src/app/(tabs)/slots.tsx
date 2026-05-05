@@ -112,6 +112,9 @@ export default function SlotsScreen() {
   );
 
   const acquireTableLock = useAction(api.ownerSessionActions.acquireTableLock);
+  const extendTableLockForDeskOtp = useAction(
+    api.ownerSessionActions.extendTableLockForDeskOtp,
+  );
   const ownerSendDeskCustomerOtp = useAction(
     api.ownerDeskCustomerRegistration.ownerSendDeskCustomerRegistrationOtp,
   );
@@ -624,16 +627,21 @@ export default function SlotsScreen() {
                     hitSlop={8}
                     onPress={() => {
                       void (async () => {
-                        if (!walkInTableId || deskBusyExtendLock) return;
+                        if (
+                          !walkInTableId ||
+                          walkInLockToken === null ||
+                          deskBusyExtendLock
+                        ) {
+                          return;
+                        }
                         setDeskError(null);
                         setActionError(null);
                         setDeskBusyExtendLock(true);
                         try {
-                          const { lockToken } = await acquireTableLock({
+                          await extendTableLockForDeskOtp({
                             tableId: walkInTableId,
-                            otpFlow: true,
+                            lockToken: walkInLockToken,
                           });
-                          setWalkInLockToken(lockToken);
                           setDeskName("");
                           setDeskAge("");
                           setDeskPhone("+91");

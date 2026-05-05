@@ -12,7 +12,7 @@ import { requireOwnerWithClub, requireViewer } from "./model/viewer";
 import { bookingAppliesToTable, resolveRatePerMinAtSessionStart } from "./model/sessionRate";
 import { computeBookingUnixTime, dateYmdInTimeZone } from "@a3/utils/timezone";
 import { countActiveComplaintsForUser } from "./complaints";
-import { computeBill } from "@a3/utils/billing";
+import { computeBill, clampDiscountPercent } from "@a3/utils/billing";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
 
 async function assertSlotsTabPermission(
@@ -84,6 +84,66 @@ export const applyTableLock = internalMutation({
     await ctx.db.patch(tableId, {
       tableLock: lockToken,
       tableLockExpiry,
+    });
+  },
+});
+
+/** Same owner extends an existing walk-in lock for desk WhatsApp OTP (longer TTL, same token). */
+export const extendTableLockForOtpFlow = internalMutation({
+  args: {
+    ownerUserId: v.id("users"),
+    tableId: v.id("tables"),
+    lockToken: v.string(),
+  },
+  handler: async (ctx, { ownerUserId, tableId, lockToken }) => {
+    const OTP_FLOW_LOCK_MS = 180_000;
+    const user = await ctx.db.get(ownerUserId);
+    if (!user || user.role !== "owner") {
+      throw new Error("PERM_001: Owner only");
+    }
+    if (user.isFrozen) {
+      throw new Error("AUTH_002: Account is frozen");
+    }
+    if (user.deletionRequestedAt !== undefined) {
+      throw new Error("AUTH_006: Account pending deletion");
+    }
+
+    const club = await ctx.db
+      .query("clubs")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ownerUserId))
+      .unique();
+    if (!club) {
+      throw new Error("AUTH_008: No club found for owner account");
+    }
+    if (club.subscriptionStatus === "frozen") {
+      throw new Error("SUBSCRIPTION_003: Club account is frozen");
+    }
+
+    const table = await ctx.db.get(tableId);
+    if (!table || table.clubId !== club._id) {
+      throw new Error("DATA_003: Table not found");
+    }
+    if (!table.isActive) {
+      throw new Error("SESSION_003: Table is inactive");
+    }
+    if (table.currentSessionId !== undefined) {
+      throw new Error("SESSION_001: Table is already occupied");
+    }
+
+    const now = Date.now();
+    if (table.tableLock !== lockToken) {
+      throw new Error(
+        "SESSION_002: Table lock no longer matches — tap the table again to reserve it",
+      );
+    }
+    if (table.tableLockExpiry === undefined || table.tableLockExpiry <= now) {
+      throw new Error(
+        "SESSION_002: Table lock expired — tap the table again to continue",
+      );
+    }
+
+    await ctx.db.patch(tableId, {
+      tableLockExpiry: now + OTP_FLOW_LOCK_MS,
     });
   },
 });
@@ -322,13 +382,37 @@ function computeCheckoutBill(session: {
   };
 }
 
+/**
+ * Resolve discount permissions for the active role.
+ * Owner unrestricted (no role) → can apply, no cap.
+ * Staff role → uses `canApplyDiscount` and optional `maxDiscountPercent`.
+ */
+async function resolveDiscountPermissions(
+  ctx: QueryCtx | MutationCtx,
+  clubId: Id<"clubs">,
+  roleId?: Id<"staffRoles">,
+): Promise<{ canApplyDiscount: boolean; maxDiscountPercent: number | null }> {
+  if (!roleId) {
+    return { canApplyDiscount: true, maxDiscountPercent: null };
+  }
+  const role = await ctx.db.get(roleId);
+  if (!role || role.clubId !== clubId) {
+    return { canApplyDiscount: false, maxDiscountPercent: 0 };
+  }
+  return {
+    canApplyDiscount: role.canApplyDiscount,
+    maxDiscountPercent: role.maxDiscountPercent ?? null,
+  };
+}
+
 /** Bill preview for an occupied table (owner Slots checkout modal). */
 export const previewTableCheckout = query({
   args: {
     tableId: v.id("tables"),
     roleId: v.optional(v.id("staffRoles")),
+    discountPercent: v.optional(v.number()),
   },
-  handler: async (ctx, { tableId, roleId }) => {
+  handler: async (ctx, { tableId, roleId, discountPercent }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwnerWithClub(viewer);
     const club = await ctx.db.get(owner.clubId);
@@ -350,18 +434,35 @@ export const previewTableCheckout = query({
       return null;
     }
 
-    const { bill } = computeCheckoutBill(session);
+    const perms = await resolveDiscountPermissions(ctx, owner.clubId, roleId);
+    const requested =
+      typeof discountPercent === "number" && Number.isFinite(discountPercent)
+        ? discountPercent
+        : 0;
+    const appliedDiscountPct = clampDiscountPercent(
+      requested,
+      perms.canApplyDiscount,
+      perms.maxDiscountPercent,
+    );
+
+    const { bill } = computeCheckoutBill({ ...session, discount: appliedDiscountPct });
     return {
       sessionId: session._id,
       tableLabel: table.label,
       currency: session.currency,
       isGuest: session.isGuest,
       guestName: session.guestName ?? null,
+      startTime: session.startTime,
       finalBill: bill.finalBill,
       billableMinutes: bill.billableMinutes,
       actualMinutes: bill.actualMinutes,
       snackTotal: bill.snackTotal,
+      tableSubtotal: bill.tableSubtotal,
       discountedTable: bill.discountedTable,
+      discountAmount: bill.discountAmount,
+      discountPercent: appliedDiscountPct,
+      canApplyDiscount: perms.canApplyDiscount,
+      maxDiscountPercent: perms.maxDiscountPercent,
     };
   },
 });
@@ -372,8 +473,9 @@ export const checkoutTableSession = mutation({
     tableId: v.id("tables"),
     paymentMethod: paymentMethodArg,
     roleId: v.optional(v.id("staffRoles")),
+    discountPercent: v.optional(v.number()),
   },
-  handler: async (ctx, { tableId, paymentMethod, roleId }) => {
+  handler: async (ctx, { tableId, paymentMethod, roleId, discountPercent }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwnerWithClub(viewer);
     const club = await ctx.db.get(owner.clubId);
@@ -399,7 +501,21 @@ export const checkoutTableSession = mutation({
       throw new Error("SESSION_004: Session is not active");
     }
 
-    const { endTime, bill } = computeCheckoutBill(session);
+    const perms = await resolveDiscountPermissions(ctx, owner.clubId, roleId);
+    const requested =
+      typeof discountPercent === "number" && Number.isFinite(discountPercent)
+        ? discountPercent
+        : 0;
+    const appliedDiscountPct = clampDiscountPercent(
+      requested,
+      perms.canApplyDiscount,
+      perms.maxDiscountPercent,
+    );
+
+    const { endTime, bill } = computeCheckoutBill({
+      ...session,
+      discount: appliedDiscountPct,
+    });
     const now = Date.now();
     const paymentStatus = paymentMethod === "credit" ? "credit" : "paid";
 
@@ -410,6 +526,9 @@ export const checkoutTableSession = mutation({
       paymentMethod,
       paymentStatus,
       status: "completed",
+      discount: appliedDiscountPct > 0 ? appliedDiscountPct : undefined,
+      discountAppliedByRoleId: appliedDiscountPct > 0 ? roleId : undefined,
+      discountAppliedAt: appliedDiscountPct > 0 ? now : undefined,
       updatedAt: now,
     });
 

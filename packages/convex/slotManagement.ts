@@ -98,6 +98,35 @@ export const getSlotDashboard = query({
       }
     }
 
+    type ActiveSessionMeta = {
+      sessionId: import("./_generated/dataModel").Id<"sessions">;
+      startTime: number;
+      isGuest: boolean;
+      customerName: string;
+    };
+
+    const activeSessionByTableId: Record<string, ActiveSessionMeta> = {};
+    for (const t of tables) {
+      if (t.currentSessionId === undefined) continue;
+      const s = await ctx.db.get(t.currentSessionId);
+      if (!s || s.status !== "active") continue;
+      let customerName: string;
+      if (s.isGuest) {
+        customerName = (s.guestName ?? "").trim() || "Walk-in";
+      } else if (s.customerId) {
+        const u = await ctx.db.get(s.customerId);
+        customerName = u?.name ?? "[Deleted Customer]";
+      } else {
+        customerName = "Customer";
+      }
+      activeSessionByTableId[t._id] = {
+        sessionId: s._id,
+        startTime: s.startTime,
+        isGuest: s.isGuest,
+        customerName,
+      };
+    }
+
     return {
       clubId,
       currency: club.currency,
@@ -118,6 +147,7 @@ export const getSlotDashboard = query({
         currentSessionId: t.currentSessionId,
       })),
       bookingTagByTableId,
+      activeSessionByTableId,
     };
   },
 });

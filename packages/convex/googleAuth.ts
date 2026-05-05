@@ -89,6 +89,40 @@ export const createGoogleUser = internalMutation({
       .query("users")
       .withIndex("by_phone", (q) => q.eq("phone", phone))
       .first();
+
+    /** Pool desk registration: customer row exists with verified phone, no Google yet. */
+    const isDeskLinkable =
+      existingPhone !== null &&
+      existingPhone.role === "customer" &&
+      existingPhone.googleId === undefined &&
+      existingPhone.phoneVerified === true &&
+      (existingPhone.email === undefined ||
+        String(existingPhone.email).trim().length === 0);
+
+    if (isDeskLinkable) {
+      if (args.email) {
+        const emailUser = await ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", args.email))
+          .unique();
+        if (emailUser && emailUser._id !== existingPhone._id) {
+          throwErr("CLUB_003: Email already registered");
+        }
+      }
+      await ctx.db.patch(existingPhone._id, {
+        googleId: args.googleId,
+        email: args.email || undefined,
+        name: trimmedName,
+      });
+      await ctx.db.insert("authAccounts", {
+        userId: existingPhone._id,
+        provider: "google",
+        providerAccountId: args.googleId,
+        ...(args.email ? { emailVerified: args.email } : {}),
+      });
+      return { userId: existingPhone._id };
+    }
+
     throwIfPhoneUnavailableForNewAccount(existingPhone ?? null);
 
     const now = Date.now();

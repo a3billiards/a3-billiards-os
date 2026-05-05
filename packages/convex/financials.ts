@@ -19,7 +19,13 @@ import {
   requireViewer,
 } from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
-import { compareYmd, fillDateGaps, toClubDate } from "@a3/utils/timezone";
+import {
+  compareYmd,
+  dayOfWeekInTimeZone,
+  fillDateGaps,
+  minutesFromMidnightInTimeZone,
+  toClubDate,
+} from "@a3/utils/timezone";
 import { doRatesOverlap } from "@a3/utils/availability";
 
 function throwPerm(message: string): never {
@@ -421,6 +427,222 @@ export const getHomePageDailyStats = query({
       completedToday,
       activeTables,
       currency: club.currency,
+    };
+  },
+});
+
+/**
+ * Top tables by paid revenue within `[dateFrom, dateTo]` (club timezone).
+ * Includes count of completed paid sessions per table.
+ */
+export const getBestPerformingTables = query({
+  args: {
+    clubId: v.id("clubs"),
+    dateFrom: v.string(),
+    dateTo: v.string(),
+    limit: v.optional(v.number()),
+    roleId: v.optional(v.id("staffRoles")),
+  },
+  handler: async (ctx, { clubId, dateFrom, dateTo, limit, roleId }) => {
+    await assertOwnerFinancialAccess(ctx, clubId, roleId);
+    const club = await ctx.db.get(clubId);
+    if (!club) throwPerm("DATA_003: Club not found");
+
+    if (compareYmd(dateFrom, dateTo) > 0) {
+      return { tables: [], currency: club.currency };
+    }
+
+    const completed = await loadCompletedSessionsForClub(ctx, clubId);
+    const totals: Record<string, { revenue: number; sessions: number }> = {};
+
+    for (const s of completed) {
+      const endMs = s.endTime ?? s.startTime;
+      const sessionDate = toClubDate(endMs, club.timezone);
+      if (
+        compareYmd(sessionDate, dateFrom) < 0 ||
+        compareYmd(sessionDate, dateTo) > 0
+      ) {
+        continue;
+      }
+      // Only count realised revenue: paid (or resolved credit).
+      const realised =
+        s.paymentStatus === "paid" ||
+        (s.paymentStatus === "credit" && s.creditResolvedAt != null);
+      if (!realised) continue;
+
+      const key = String(s.tableId);
+      const bucket = totals[key] ?? { revenue: 0, sessions: 0 };
+      bucket.revenue += s.billTotal ?? 0;
+      bucket.sessions += 1;
+      totals[key] = bucket;
+    }
+
+    const tablesDocs = await ctx.db
+      .query("tables")
+      .withIndex("by_club", (q) => q.eq("clubId", clubId))
+      .collect();
+    const labelByTable: Record<string, string> = {};
+    for (const t of tablesDocs) labelByTable[t._id] = t.label;
+
+    const rows = Object.entries(totals)
+      .map(([tableId, v]) => ({
+        tableId,
+        tableLabel: labelByTable[tableId] ?? "[Removed table]",
+        revenue: Math.round(v.revenue * 100) / 100,
+        sessionCount: v.sessions,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const cap = Math.max(1, Math.min(limit ?? 5, 20));
+    return { tables: rows.slice(0, cap), currency: club.currency };
+  },
+});
+
+/**
+ * Snack sales rolled up across paid/resolved-credit sessions in the date range.
+ * Sums `qty * priceAtOrder` per `snackId` snapshot. Names use last seen value.
+ */
+export const getSnackSalesBreakdown = query({
+  args: {
+    clubId: v.id("clubs"),
+    dateFrom: v.string(),
+    dateTo: v.string(),
+    limit: v.optional(v.number()),
+    roleId: v.optional(v.id("staffRoles")),
+  },
+  handler: async (ctx, { clubId, dateFrom, dateTo, limit, roleId }) => {
+    await assertOwnerFinancialAccess(ctx, clubId, roleId);
+    const club = await ctx.db.get(clubId);
+    if (!club) throwPerm("DATA_003: Club not found");
+
+    if (compareYmd(dateFrom, dateTo) > 0) {
+      return { snacks: [], totalRevenue: 0, totalUnits: 0, currency: club.currency };
+    }
+
+    const completed = await loadCompletedSessionsForClub(ctx, clubId);
+    const totals: Record<
+      string,
+      { name: string; revenue: number; units: number }
+    > = {};
+    let totalRevenue = 0;
+    let totalUnits = 0;
+
+    for (const s of completed) {
+      const endMs = s.endTime ?? s.startTime;
+      const sessionDate = toClubDate(endMs, club.timezone);
+      if (
+        compareYmd(sessionDate, dateFrom) < 0 ||
+        compareYmd(sessionDate, dateTo) > 0
+      ) {
+        continue;
+      }
+      const realised =
+        s.paymentStatus === "paid" ||
+        (s.paymentStatus === "credit" && s.creditResolvedAt != null);
+      if (!realised) continue;
+
+      for (const o of s.snackOrders) {
+        const key = String(o.snackId);
+        const lineRevenue = o.priceAtOrder * o.qty;
+        const bucket = totals[key] ?? { name: o.name, revenue: 0, units: 0 };
+        bucket.name = o.name; // refresh to most recent
+        bucket.revenue += lineRevenue;
+        bucket.units += o.qty;
+        totals[key] = bucket;
+        totalRevenue += lineRevenue;
+        totalUnits += o.qty;
+      }
+    }
+
+    const rows = Object.entries(totals)
+      .map(([snackId, v]) => ({
+        snackId,
+        name: v.name,
+        revenue: Math.round(v.revenue * 100) / 100,
+        units: v.units,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const cap = Math.max(1, Math.min(limit ?? 10, 50));
+    return {
+      snacks: rows.slice(0, cap),
+      totalRevenue: Math.round(totalRevenue * 100) / 100,
+      totalUnits,
+      currency: club.currency,
+    };
+  },
+});
+
+/**
+ * 7×24 (day-of-week × hour-of-day) heatmap of realised session counts.
+ * Buckets by `endTime` in the club's timezone. Day index: 0=Sun … 6=Sat.
+ */
+export const getPeakHourHeatmap = query({
+  args: {
+    clubId: v.id("clubs"),
+    dateFrom: v.string(),
+    dateTo: v.string(),
+    roleId: v.optional(v.id("staffRoles")),
+  },
+  handler: async (ctx, { clubId, dateFrom, dateTo, roleId }) => {
+    await assertOwnerFinancialAccess(ctx, clubId, roleId);
+    const club = await ctx.db.get(clubId);
+    if (!club) throwPerm("DATA_003: Club not found");
+
+    const cells: { dayOfWeek: number; hour: number; sessions: number }[] = [];
+    const grid: number[][] = Array.from({ length: 7 }, () =>
+      Array.from({ length: 24 }, () => 0),
+    );
+    let total = 0;
+    let peak = { dayOfWeek: -1, hour: -1, sessions: 0 };
+
+    if (compareYmd(dateFrom, dateTo) <= 0) {
+      const completed = await loadCompletedSessionsForClub(ctx, clubId);
+      for (const s of completed) {
+        const endMs = s.endTime ?? s.startTime;
+        const sessionDate = toClubDate(endMs, club.timezone);
+        if (
+          compareYmd(sessionDate, dateFrom) < 0 ||
+          compareYmd(sessionDate, dateTo) > 0
+        ) {
+          continue;
+        }
+        const realised =
+          s.paymentStatus === "paid" ||
+          (s.paymentStatus === "credit" && s.creditResolvedAt != null);
+        if (!realised) continue;
+
+        const dow = dayOfWeekInTimeZone(endMs, club.timezone);
+        const hour = Math.floor(
+          minutesFromMidnightInTimeZone(endMs, club.timezone) / 60,
+        );
+        if (
+          dow >= 0 &&
+          dow < 7 &&
+          hour >= 0 &&
+          hour < 24 &&
+          grid[dow] !== undefined
+        ) {
+          grid[dow]![hour] = (grid[dow]![hour] ?? 0) + 1;
+          total += 1;
+          if (grid[dow]![hour]! > peak.sessions) {
+            peak = { dayOfWeek: dow, hour, sessions: grid[dow]![hour]! };
+          }
+        }
+      }
+    }
+
+    for (let d = 0; d < 7; d += 1) {
+      for (let h = 0; h < 24; h += 1) {
+        cells.push({ dayOfWeek: d, hour: h, sessions: grid[d]![h] ?? 0 });
+      }
+    }
+
+    return {
+      cells,
+      totalSessions: total,
+      maxCellSessions: peak.sessions,
+      peak: peak.sessions > 0 ? peak : null,
     };
   },
 });
