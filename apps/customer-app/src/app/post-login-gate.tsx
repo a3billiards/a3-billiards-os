@@ -30,7 +30,7 @@ export default function PostLoginGate() {
       return;
     }
 
-    router.replace("/(tabs)/discover");
+    router.replace("/(tabs)/home");
   }, [user, router]);
 
   return (

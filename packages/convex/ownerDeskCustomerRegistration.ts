@@ -5,10 +5,12 @@
  */
 
 import { getAuthUserId } from "@convex-dev/auth/server";
+import bcrypt from "bcryptjs";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
+import { dispatchWhatsAppOtp } from "./model/otp";
 import { parseIndiaE164OrThrow, throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
@@ -70,7 +72,6 @@ export const ownerSendDeskCustomerRegistrationOtp = action({
       );
     }
 
-    const bcrypt = await import("bcryptjs");
     const rawCode = randomSixDigitString();
     const otpHash = await bcrypt.hash(rawCode, 10);
     const now = Date.now();
@@ -82,7 +83,6 @@ export const ownerSendDeskCustomerRegistrationOtp = action({
     });
 
     try {
-      const { dispatchWhatsAppOtp } = await import("./model/otp");
       await dispatchWhatsAppOtp(normalized, rawCode);
     } catch (e) {
       await ctx.runMutation(internal.otp.deleteOtpRecord, { recordId });

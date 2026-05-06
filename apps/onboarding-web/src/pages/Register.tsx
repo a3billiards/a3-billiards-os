@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../convexApi";
@@ -33,7 +34,16 @@ type SubscriptionPlanRow = {
   currency: string;
 };
 
+const PHONE_COUNTRY_CODES = [
+  { label: "India (+91)", value: "+91" },
+  { label: "USA (+1)", value: "+1" },
+  { label: "KSA (+966)", value: "+966" },
+  { label: "UAE (+971)", value: "+971" },
+  { label: "UK (+44)", value: "+44" },
+] as const;
+
 export default function Register() {
+  const [searchParams] = useSearchParams();
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const { signIn } = useAuthActions();
   const registerOwner = useAction(api.onboardingWebActions.registerOwnerAccount);
@@ -50,9 +60,11 @@ export default function Register() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phoneCountryCode, setPhoneCountryCode] = useState("+91");
+  const [phoneLocal, setPhoneLocal] = useState("");
   const [consent, setConsent] = useState(false);
 
   const [clubName, setClubName] = useState("");
@@ -67,12 +79,30 @@ export default function Register() {
   const [planId, setPlanId] = useState<"monthly" | "yearly">("monthly");
   const [paymentPending, setPaymentPending] = useState(false);
   const [couponCode, setCouponCode] = useState("");
+  const [postSignInPending, setPostSignInPending] = useState(false);
+  const canUseProtectedOnboarding =
+    !authLoading && isAuthenticated && status?.loggedIn === true;
 
   useEffect(() => {
     if (!authLoading && isAuthenticated && status?.loggedIn && status.hasClub) {
       setStep(4);
     }
   }, [authLoading, isAuthenticated, status]);
+
+  useEffect(() => {
+    if (!postSignInPending) return;
+    if (!authLoading && isAuthenticated && status?.loggedIn) {
+      setPostSignInPending(false);
+      setStep(2);
+    }
+  }, [postSignInPending, authLoading, isAuthenticated, status]);
+
+  useEffect(() => {
+    const plan = searchParams.get("plan");
+    if (plan === "monthly" || plan === "yearly") {
+      setPlanId(plan);
+    }
+  }, [searchParams]);
 
   const handleStep1 = useCallback(async () => {
     setError(null);
@@ -81,14 +111,21 @@ export default function Register() {
       return;
     }
     const ageN = Number(age);
-    if (!email.trim() || password.length < 8 || !name.trim()) {
+    if (!email.trim() || password.length < 8 || !confirmPassword || !name.trim()) {
       setError("Email, password (8+ characters), and name are required.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Password and confirm password must match.");
       return;
     }
     if (!Number.isFinite(ageN) || ageN < 18) {
       setError("Age must be 18 or older.");
       return;
     }
+    const phoneDigits = phoneLocal.replace(/\D/g, "");
+    const fullPhone =
+      phoneDigits.length > 0 ? `${phoneCountryCode}${phoneDigits}` : undefined;
     setBusy(true);
     try {
       await registerOwner({
@@ -96,7 +133,7 @@ export default function Register() {
         password,
         name: name.trim(),
         age: ageN,
-        phone: phone.trim() || undefined,
+        phone: fullPhone,
         consentGiven: true,
       });
       const { signingIn } = await signIn("password", {
@@ -110,7 +147,7 @@ export default function Register() {
         return;
       }
       captureEvent("onboarding_owner_registered");
-      setStep(2);
+      setPostSignInPending(true);
     } catch (e) {
       setError(parseConvexError(e as Error).message);
     } finally {
@@ -121,8 +158,10 @@ export default function Register() {
     age,
     email,
     password,
+    confirmPassword,
     name,
-    phone,
+    phoneCountryCode,
+    phoneLocal,
     registerOwner,
     signIn,
   ]);
@@ -147,6 +186,9 @@ export default function Register() {
 
   const handleStep2 = useCallback(async () => {
     setError(null);
+    if (!canUseProtectedOnboarding) {
+      return;
+    }
     const rate = Number(baseRate);
     const minM = Number(minBill);
     if (!clubName.trim() || !address.trim()) {
@@ -180,6 +222,7 @@ export default function Register() {
       setBusy(false);
     }
   }, [
+    canUseProtectedOnboarding,
     lat,
     lng,
     clubName,
@@ -193,6 +236,9 @@ export default function Register() {
 
   const handlePay = useCallback(async () => {
     setError(null);
+    if (!canUseProtectedOnboarding) {
+      return;
+    }
     setBusy(true);
     setPaymentPending(true);
     try {
@@ -224,10 +270,13 @@ export default function Register() {
       setBusy(false);
       setPaymentPending(false);
     }
-  }, [createOrder, planId, email, name]);
+  }, [canUseProtectedOnboarding, createOrder, planId, email, name]);
 
   const handleCoupon = useCallback(async () => {
     setError(null);
+    if (!canUseProtectedOnboarding) {
+      return;
+    }
     setBusy(true);
     setPaymentPending(true);
     try {
@@ -243,7 +292,7 @@ export default function Register() {
     } finally {
       setBusy(false);
     }
-  }, [applyCoupon, couponCode, planId]);
+  }, [canUseProtectedOnboarding, applyCoupon, couponCode, planId]);
 
   useEffect(() => {
     if (!paymentPending || !status?.loggedIn) return;
@@ -297,6 +346,14 @@ export default function Register() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          <label htmlFor="confirmPassword">Confirm password</label>
+          <input
+            id="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
           <label htmlFor="name">Full name</label>
           <input
             id="name"
@@ -314,13 +371,27 @@ export default function Register() {
               />
             </div>
             <div>
-              <label htmlFor="phone">Mobile (optional, +91…)</label>
-              <input
-                id="phone"
-                value={phone}
-                placeholder="+91xxxxxxxxxx"
-                onChange={(e) => setPhone(e.target.value)}
-              />
+              <label htmlFor="phone">Mobile (optional)</label>
+              <div style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 8 }}>
+                <select
+                  id="phoneCountry"
+                  value={phoneCountryCode}
+                  onChange={(e) => setPhoneCountryCode(e.target.value)}
+                >
+                  {PHONE_COUNTRY_CODES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  id="phone"
+                  value={phoneLocal}
+                  inputMode="numeric"
+                  placeholder="Mobile number"
+                  onChange={(e) => setPhoneLocal(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           <div className="consent-row">
@@ -347,8 +418,13 @@ export default function Register() {
             </label>
           </div>
           <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void handleStep1()}>
-            {busy ? "Please wait…" : "Continue"}
+            {busy || postSignInPending ? "Please wait…" : "Continue"}
           </button>
+          {postSignInPending ? (
+            <p className="muted" style={{ marginTop: 10 }}>
+              Finalizing secure session…
+            </p>
+          ) : null}
         </>
       )}
 
@@ -429,8 +505,27 @@ export default function Register() {
               />
             </div>
           </div>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void handleStep2()}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || !canUseProtectedOnboarding}
+            onClick={() => void handleStep2()}
+          >
             Continue to payment
+          </button>
+          {!canUseProtectedOnboarding ? (
+            <p className="muted" style={{ marginTop: 10 }}>
+              Finalizing secure session…
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() => setStep(1)}
+            style={{ marginLeft: 10 }}
+          >
+            Back to account
           </button>
         </>
       )}
@@ -462,7 +557,12 @@ export default function Register() {
             After payment, Razorpay confirms in the background (usually within seconds). This page will advance
             automatically when your club is created.
           </p>
-          <button type="button" className="btn btn-primary" disabled={busy || paymentPending} onClick={() => void handlePay()}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || paymentPending || !canUseProtectedOnboarding}
+            onClick={() => void handlePay()}
+          >
             Pay with Razorpay
           </button>
           <div style={{ marginTop: 16 }}>
@@ -478,7 +578,12 @@ export default function Register() {
               <button
                 type="button"
                 className="btn btn-secondary"
-                disabled={busy || paymentPending || couponCode.trim().length === 0}
+                disabled={
+                  busy ||
+                  paymentPending ||
+                  couponCode.trim().length === 0 ||
+                  !canUseProtectedOnboarding
+                }
                 onClick={() => void handleCoupon()}
               >
                 Apply coupon
@@ -493,6 +598,15 @@ export default function Register() {
               Waiting for payment confirmation… You can keep this tab open.
             </p>
           ) : null}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy || paymentPending}
+            onClick={() => setStep(2)}
+            style={{ marginTop: 12 }}
+          >
+            Back to club details
+          </button>
         </>
       )}
 

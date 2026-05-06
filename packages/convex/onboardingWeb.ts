@@ -6,7 +6,7 @@
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import { parseIndiaE164OrThrow } from "./model/phoneRegistration";
+import { parseGenericE164OrThrow } from "./model/phoneRegistration";
 import { listOnboardingPlansFromEnv } from "./onboardingPlanPricing";
 
 const locationObj = v.object({
@@ -213,13 +213,24 @@ export const insertOwnerAccountForWeb = internalMutation({
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", normalized))
       .unique();
-    if (dupEmail) {
-      throw new Error("CLUB_003: Email already registered");
+    const existingPasswordAccount = await ctx.db
+      .query("authAccounts")
+      .withIndex("providerAndAccountId", (q) =>
+        q.eq("provider", "password").eq("providerAccountId", normalized),
+      )
+      .unique();
+
+    // If user row was manually deleted but credential row still exists, cleanup orphan and continue.
+    if (existingPasswordAccount) {
+      const linkedUser = await ctx.db.get(existingPasswordAccount.userId);
+      if (!linkedUser) {
+        await ctx.db.delete(existingPasswordAccount._id);
+      }
     }
 
     let normalizedPhone: string | undefined;
     if (phone !== undefined && phone.trim().length > 0) {
-      normalizedPhone = parseIndiaE164OrThrow(phone);
+      normalizedPhone = parseGenericE164OrThrow(phone);
       const dupPhone = await ctx.db
         .query("users")
         .withIndex("by_phone", (q) => q.eq("phone", normalizedPhone))
@@ -229,14 +240,37 @@ export const insertOwnerAccountForWeb = internalMutation({
       }
     }
 
-    const existingPasswordAccount = await ctx.db
-      .query("authAccounts")
-      .withIndex("providerAndAccountId", (q) =>
-        q.eq("provider", "password").eq("providerAccountId", normalized),
-      )
-      .unique();
-    if (existingPasswordAccount) {
-      throw new Error("CLUB_003: Email already registered");
+    // Reuse unfinished onboarding owner accounts (no club yet) instead of hard-failing duplicate email.
+    if (dupEmail) {
+      const existingClub = await ctx.db
+        .query("clubs")
+        .withIndex("by_owner", (q) => q.eq("ownerId", dupEmail._id))
+        .first();
+      if (dupEmail.role !== "owner" || existingClub) {
+        throw new Error("CLUB_003: Email already registered");
+      }
+      const passwordAccount = await ctx.db
+        .query("authAccounts")
+        .withIndex("providerAndAccountId", (q) =>
+          q.eq("provider", "password").eq("providerAccountId", normalized),
+        )
+        .unique();
+      if (!passwordAccount || passwordAccount.userId !== dupEmail._id) {
+        throw new Error("CLUB_003: Email already registered");
+      }
+
+      await ctx.db.patch(dupEmail._id, {
+        phone: normalizedPhone,
+        phoneVerified: false,
+        name: trimmedName,
+        age,
+        isFrozen: false,
+        settingsPasscodeSet: false,
+        consentGiven: true,
+        consentGivenAt: Date.now(),
+      });
+      await ctx.db.patch(passwordAccount._id, { secret: passwordHash });
+      return { userId: dupEmail._id };
     }
 
     const now = Date.now();

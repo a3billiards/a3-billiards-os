@@ -17,23 +17,10 @@ import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { resolveGoogleIdTokenForConvexAuth } from "../lib/googleIdToken";
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
 const TOS_URL = "https://a3billiards.com/terms";
-
-const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-if (typeof webClientId === "string" && webClientId.length > 0) {
-  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-  GoogleSignin.configure({
-    webClientId,
-    ...(typeof iosClientId === "string" && iosClientId.length > 0
-      ? { iosClientId }
-      : {}),
-    offlineAccess: false,
-  });
-}
 
 /**
  * Owner Google registration (TDD §3.2): consent + phone + age, then Convex session.
@@ -154,10 +141,7 @@ export default function OwnerRegisterScreen() {
           );
         }
 
-        router.replace({
-          pathname: "/verify-phone",
-          params: { phone: normalizedPhone },
-        });
+        router.replace("/post-login-gate");
       } catch (e) {
         let serialized = "";
         try {

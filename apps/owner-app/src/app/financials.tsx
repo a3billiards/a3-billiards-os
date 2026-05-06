@@ -335,7 +335,7 @@ function FinancialsContent(): React.JSX.Element {
     return (
       <SafeAreaView style={styles.safe}>
         <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/slots"))}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/home"))}
           style={styles.backRow}
         >
           <MaterialIcons name="arrow-back" size={22} color={colors.text.primary} />

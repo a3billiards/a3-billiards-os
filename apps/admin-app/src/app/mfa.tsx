@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useAction } from "convex/react";
+import { useAction, useConvexAuth } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
@@ -19,23 +19,57 @@ const CODE_LENGTH = 6;
 
 export default function MfaScreen() {
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const verifyMfa = useAction(api.mfaActions.verifyMfaCode);
   const generateMfa = useAction(api.mfaActions.generateMfaCode);
 
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(""));
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
+  const [sendingInitial, setSendingInitial] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [frozen, setFrozen] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   const inputs = useRef<(TextInput | null)[]>([]);
+  const initialSentRef = useRef(false);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [resendCooldown]);
+
+  /**
+   * Auto-dispatch the first MFA code as soon as the Convex Auth JWT is in place.
+   * Login screen no longer triggers this (race-prone); we own it here so
+   * `getAuthUserId(ctx)` resolves the admin id reliably.
+   */
+  useEffect(() => {
+    if (authLoading || !isAuthenticated || initialSentRef.current) return;
+    initialSentRef.current = true;
+    setSendingInitial(true);
+    setError(null);
+    generateMfa()
+      .then(() => {
+        setResendCooldown(60);
+      })
+      .catch((e: unknown) => {
+        initialSentRef.current = false;
+        const appError = parseConvexError(e as Error);
+        if (appError.code === "RATE_001") {
+          setError("Code send rate limit reached. Please wait and tap Re-send code.");
+        } else if (appError.code === "AUTH_002") {
+          setFrozen(true);
+          setError("This account is frozen. Contact support.");
+        } else {
+          setError(appError.message);
+        }
+      })
+      .finally(() => {
+        setSendingInitial(false);
+      });
+  }, [authLoading, isAuthenticated, generateMfa]);
 
   const handleChange = useCallback(
     (text: string, index: number) => {
@@ -150,7 +184,9 @@ export default function MfaScreen() {
         <Text style={styles.logo}>A3</Text>
         <Text style={styles.title}>Verification Code</Text>
         <Text style={styles.subtitle}>
-          Enter the 6-digit code sent to your admin email
+          {sendingInitial
+            ? "Sending a 6-digit code to your admin email…"
+            : "Enter the 6-digit code sent to your admin email"}
         </Text>
 
         <View style={styles.codeRow}>
@@ -181,7 +217,7 @@ export default function MfaScreen() {
           ))}
         </View>
 
-        {loading && (
+        {(loading || sendingInitial) && (
           <ActivityIndicator
             color={colors.accent.green}
             style={{ marginTop: spacing[4] }}

@@ -2,6 +2,7 @@ import type { Doc } from "../_generated/dataModel";
 
 /** India mobile E.164: +91 plus exactly 10 digits (e.g. +919876543210). */
 const INDIA_E164 = /^\+91\d{10}$/;
+const GENERIC_E164 = /^\+[1-9]\d{6,14}$/;
 
 /**
  * Normalizes whitespace and validates +91XXXXXXXXXX.
@@ -15,6 +16,23 @@ export function parseIndiaE164OrThrow(raw: string): string {
   if (!INDIA_E164.test(phone)) {
     throw new Error(
       "OTP_005: Invalid E.164 format — use +91 followed by 10 digits",
+    );
+  }
+  return phone;
+}
+
+/**
+ * Generic E.164 format: + followed by 7..15 digits total (first digit non-zero).
+ * Example: +919876543210, +14155552671, +966512345678
+ */
+export function parseGenericE164OrThrow(raw: string): string {
+  const phone = raw.trim();
+  if (phone.length === 0) {
+    throw new Error("OTP_005: Phone is required");
+  }
+  if (!GENERIC_E164.test(phone)) {
+    throw new Error(
+      "OTP_005: Invalid E.164 format — use country code followed by digits (e.g. +919876543210)",
     );
   }
   return phone;

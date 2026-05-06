@@ -10,17 +10,12 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useAction } from "convex/react";
-import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
 export default function LoginScreen() {
-  const router = useRouter();
   const { signIn } = useAuthActions();
-  const generateMfa = useAction(api.mfaActions.generateMfaCode);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,6 +27,13 @@ export default function LoginScreen() {
 
   const canSubmit = email.trim().length > 0 && password.length >= 8 && !loading;
 
+  /**
+   * After signIn() succeeds, the Convex Auth JWT must propagate to the client
+   * before any authenticated action will resolve. AdminAuthShell (in _layout)
+   * watches `useConvexAuth().isAuthenticated` and `user.adminMfaVerifiedAt` and
+   * redirects to `/mfa`, where `generateMfaCode` is dispatched on mount. Calling
+   * `generateMfa()` here would race the JWT propagation and throw AUTH_001.
+   */
   const handleLogin = useCallback(async () => {
     if (!canSubmit) return;
     setError(null);
@@ -50,10 +52,7 @@ export default function LoginScreen() {
         setLoading(false);
         return;
       }
-
-      await generateMfa();
-
-      router.replace("/mfa");
+      // Leave loading=true; AdminAuthShell will redirect to /mfa once auth + role check resolve.
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
@@ -71,7 +70,7 @@ export default function LoginScreen() {
       }
       setLoading(false);
     }
-  }, [canSubmit, email, password, signIn, generateMfa, router]);
+  }, [canSubmit, email, password, signIn]);
 
   return (
     <KeyboardAvoidingView

@@ -1,5 +1,1 @@
-import { Redirect } from "expo-router";
-
-export default function DiscoverTab() {
-  return <Redirect href="/discover" />;
-}
+export { default } from "../discover";

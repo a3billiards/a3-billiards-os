@@ -1,4 +1,16 @@
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
+async function getGoogleSignin() {
+  const mod = await import("@react-native-google-signin/google-signin");
+  const GoogleSignin = mod.GoogleSignin;
+  GoogleSignin.configure({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    ...(typeof process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID === "string" &&
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID.length > 0
+      ? { iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }
+      : {}),
+    offlineAccess: false,
+  });
+  return GoogleSignin;
+}
 
 /**
  * Obtains a fresh Google **ID token** (JWT) for Convex Auth
@@ -12,6 +24,15 @@ import { GoogleSignin } from "@react-native-google-signin/google-signin";
  * - Audience must match server `GOOGLE_*_CLIENT_ID` env (same Web client ID as login).
  */
 export async function resolveGoogleIdTokenForConvexAuth(): Promise<string> {
+  let GoogleSignin: Awaited<ReturnType<typeof getGoogleSignin>>;
+  try {
+    GoogleSignin = await getGoogleSignin();
+  } catch {
+    throw new Error(
+      "GOOGLE_AUTH_001: Google Sign-In native module unavailable. Use a development build or email login.",
+    );
+  }
+
   const silent = await GoogleSignin.signInSilently().catch(() => null);
   if (silent?.data?.idToken) {
     return silent.data.idToken;

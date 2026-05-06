@@ -34,8 +34,12 @@ type ScreenMode =
 
 export default function VerifyPhoneScreen() {
   const router = useRouter();
-  const { phone } = useLocalSearchParams<{ phone: string }>();
-  const { isAuthenticated } = useConvexAuth();
+  const raw = useLocalSearchParams<{ phone: string }>().phone;
+  // Expo Router can URL-encode '+' as '%2B' — decode it back to E.164
+  const phone = Array.isArray(raw)
+    ? decodeURIComponent(raw[0] ?? "")
+    : decodeURIComponent(raw ?? "");
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const sendOtp = useAction(api.otp.sendOtp);
   const verifyOtp = useAction(api.otp.verifyOtp);
   const updateUser = useMutation(api.users.updateUser);
@@ -44,40 +48,14 @@ export default function VerifyPhoneScreen() {
     isAuthenticated ? {} : "skip",
   );
 
-  const [mode, setMode] = useState<ScreenMode>("sending");
+  const [mode, setMode] = useState<ScreenMode>("input");
   const [digits, setDigits] = useState<string[]>(Array(PIN_LENGTH).fill(""));
   const [error, setError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [lockCountdown, setLockCountdown] = useState(0);
+  const [otpRequested, setOtpRequested] = useState(false);
 
   const inputs = useRef<(TextInput | null)[]>([]);
-  const sentInitial = useRef(false);
-
-  // ── Auto-send OTP on mount (wait for current user when signed in — sendOtp needs verificationUserId) ──
-  useEffect(() => {
-    if (!phone || sentInitial.current) return;
-    if (isAuthenticated && currentUser === undefined) return;
-
-    sentInitial.current = true;
-
-    setMode("sending");
-    const verificationUserId =
-      isAuthenticated && currentUser != null ? currentUser._id : undefined;
-    sendOtp({ phone, verificationUserId })
-      .then(() => {
-        setResendCooldown(RESEND_COOLDOWN_SEC);
-        setMode("input");
-      })
-      .catch((e) => {
-        const appError = parseConvexError(e as Error);
-        if (appError.code === "OTP_003") {
-          setMode("rateLimited");
-        } else {
-          setError(appError.message);
-          setMode("input");
-        }
-      });
-  }, [phone, sendOtp, isAuthenticated, currentUser]);
 
   // ── Resend cooldown timer (60s between sends) ──
   useEffect(() => {
@@ -109,6 +87,44 @@ export default function VerifyPhoneScreen() {
     setError(null);
     setTimeout(() => inputs.current[0]?.focus(), 50);
   }, []);
+
+  const requestOtp = useCallback(async () => {
+    if (!phone) {
+      setError("Missing phone number. Please login again.");
+      return;
+    }
+    if (authLoading) return;
+    if (isAuthenticated && currentUser === undefined) return;
+
+    setError(null);
+    setMode("sending");
+    try {
+      const verificationUserId =
+        isAuthenticated && currentUser != null ? currentUser._id : undefined;
+      await sendOtp({ phone, verificationUserId });
+      setOtpRequested(true);
+      setResendCooldown(RESEND_COOLDOWN_SEC);
+      setLockCountdown(0);
+      setMode("input");
+      resetDigits();
+    } catch (e) {
+      const appError = parseConvexError(e as Error);
+      if (appError.code === "OTP_003") {
+        setMode("rateLimited");
+        setOtpRequested(false);
+      } else {
+        setError(appError.message);
+        setMode("input");
+      }
+    }
+  }, [
+    phone,
+    authLoading,
+    isAuthenticated,
+    currentUser,
+    sendOtp,
+    resetDigits,
+  ]);
 
   // ── Digit input handling ──
   const handleChange = useCallback((text: string, index: number) => {
@@ -159,8 +175,19 @@ export default function VerifyPhoneScreen() {
 
   // ── Verify OTP ──
   const handleVerify = useCallback(async () => {
-    if (!isComplete || mode !== "input" || !phone) return;
-    if (isAuthenticated && currentUser === undefined) return;
+    if (!otpRequested) {
+      setError("Click Send OTP first.");
+      return;
+    }
+    if (!isComplete || mode !== "input" || !phone) {
+      return;
+    }
+    if (authLoading) {
+      return;
+    }
+    if (isAuthenticated && currentUser === undefined) {
+      return;
+    }
     setError(null);
     setMode("verifying");
 
@@ -192,7 +219,7 @@ export default function VerifyPhoneScreen() {
             setMode("expired");
             setError(null);
           } else {
-            setError("Incorrect code. Check and try again.");
+            setError(appError.message || "Wrong OTP. Please try again.");
             setMode("input");
           }
           break;
@@ -217,41 +244,17 @@ export default function VerifyPhoneScreen() {
     resetDigits,
     isAuthenticated,
     currentUser,
+    authLoading,
+    otpRequested,
   ]);
-
-  // ── Auto-submit when all 6 digits entered ──
-  useEffect(() => {
-    if (isComplete && mode === "input") {
-      handleVerify();
-    }
-  }, [isComplete, mode, handleVerify]);
 
   // ── Resend OTP ──
   const handleResend = useCallback(async () => {
+    if (!otpRequested) return;
     if (resendCooldown > 0 || !phone) return;
     if (mode === "verifying" || mode === "sending") return;
-
-    setError(null);
-    setMode("sending");
-
-    try {
-      const verificationUserId =
-        isAuthenticated && currentUser != null ? currentUser._id : undefined;
-      await sendOtp({ phone, verificationUserId });
-      setResendCooldown(RESEND_COOLDOWN_SEC);
-      setLockCountdown(0);
-      setMode("input");
-      resetDigits();
-    } catch (e) {
-      const appError = parseConvexError(e as Error);
-      if (appError.code === "OTP_003") {
-        setMode("rateLimited");
-      } else {
-        setError(appError.message);
-        setMode("input");
-      }
-    }
-  }, [resendCooldown, phone, mode, sendOtp, resetDigits, isAuthenticated, currentUser]);
+    void requestOtp();
+  }, [otpRequested, resendCooldown, phone, mode, requestOtp]);
 
   const maskedPhone = phone
     ? `${phone.slice(0, 4)}••••${phone.slice(-3)}`
@@ -263,7 +266,11 @@ export default function VerifyPhoneScreen() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  const inputVisible = mode === "input" || mode === "verifying";
+  // True while auth or current-user query is still resolving — gate action buttons.
+  const awaitingUser =
+    authLoading || (isAuthenticated && currentUser === undefined);
+
+  const inputVisible = otpRequested && (mode === "input" || mode === "verifying");
   const showResend =
     mode === "input" || mode === "expired";
 
@@ -327,6 +334,23 @@ export default function VerifyPhoneScreen() {
           </View>
         )}
 
+        {/* ── Manual send button: OTP only on click ── */}
+        {!otpRequested && mode !== "rateLimited" && mode !== "sending" && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.verifyButton,
+              awaitingUser && styles.resendDisabled,
+              pressed && !awaitingUser && styles.pressed,
+            ]}
+            onPress={requestOtp}
+            disabled={awaitingUser}
+            accessibilityRole="button"
+            accessibilityLabel="Send OTP"
+          >
+            <Text style={styles.verifyButtonText}>Send OTP</Text>
+          </Pressable>
+        )}
+
         {/* ── Normal OTP input ── */}
         {inputVisible && (
           <>
@@ -357,7 +381,22 @@ export default function VerifyPhoneScreen() {
               ))}
             </View>
 
-            {mode === "verifying" && (
+            {/* ── Verify button (shown when all 6 digits filled) ── */}
+            {mode === "input" && otpRequested && isComplete && !awaitingUser && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.verifyButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleVerify}
+                accessibilityRole="button"
+                accessibilityLabel="Verify code"
+              >
+                <Text style={styles.verifyButtonText}>Verify Code</Text>
+              </Pressable>
+            )}
+
+            {(mode === "verifying" || (isComplete && awaitingUser)) && (
               <ActivityIndicator
                 color={colors.accent.green}
                 style={{ marginTop: spacing[4] }}
@@ -379,7 +418,7 @@ export default function VerifyPhoneScreen() {
         )}
 
         {/* ── Resend button ── */}
-        {showResend && (
+        {otpRequested && showResend && (
           <Pressable
             style={({ pressed }) => [
               mode === "expired"
@@ -577,6 +616,21 @@ const styles = StyleSheet.create({
     color: colors.bg.primary,
   },
   pressed: { opacity: 0.85 },
+
+  verifyButton: {
+    height: layout.buttonHeight,
+    backgroundColor: colors.accent.green,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: spacing[6],
+    paddingHorizontal: spacing[8],
+    minWidth: 180,
+  },
+  verifyButtonText: {
+    ...typography.buttonLarge,
+    color: colors.bg.primary,
+  },
 
   hint: {
     ...typography.caption,

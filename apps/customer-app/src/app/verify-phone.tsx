@@ -178,7 +178,7 @@ export default function VerifyPhoneScreen() {
         await updateUser({ phone });
       }
 
-      router.replace("/(tabs)/discover");
+      router.replace("/(tabs)/home");
     } catch (e) {
       const appError = parseConvexError(e as Error);
       switch (appError.code) {

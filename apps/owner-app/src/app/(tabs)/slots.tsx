@@ -77,6 +77,7 @@ export default function SlotsScreen() {
   const [deskBusySubmit, setDeskBusySubmit] = useState(false);
   const [deskBusyExtendLock, setDeskBusyExtendLock] = useState(false);
   const [deskError, setDeskError] = useState<string | null>(null);
+  const [deskInfo, setDeskInfo] = useState<string | null>(null);
 
   useEffect(() => {
     void getActiveRoleId().then((v) => {
@@ -166,6 +167,7 @@ export default function SlotsScreen() {
     setDeskOtp("");
     setDeskConsent(false);
     setDeskError(null);
+    setDeskInfo(null);
     setDeskBusySend(false);
     setDeskBusySubmit(false);
     setDeskBusyExtendLock(false);
@@ -591,6 +593,9 @@ export default function SlotsScreen() {
                 {deskError ? (
                   <Text style={styles.walkInErr}>{deskError}</Text>
                 ) : null}
+                {deskInfo ? (
+                  <Text style={styles.walkInOk}>{deskInfo}</Text>
+                ) : null}
                 <View style={styles.modalActions}>
                   <Pressable
                     style={({ pressed }) => [
@@ -734,13 +739,17 @@ export default function SlotsScreen() {
                       const phone = deskPhone.replace(/\s/g, "");
                       if (!/^\+91\d{10}$/.test(phone)) {
                         setDeskError("Use +91 followed by 10 digits.");
+                        setDeskInfo(null);
                         return;
                       }
                       setDeskError(null);
+                      setDeskInfo(null);
                       setDeskBusySend(true);
                       try {
                         await ownerSendDeskCustomerOtp({ phone });
+                        setDeskInfo("OTP sent to WhatsApp.");
                       } catch (e) {
+                        setDeskInfo(null);
                         setDeskError(parseConvexError(e as Error).message);
                       } finally {
                         setDeskBusySend(false);
@@ -809,25 +818,31 @@ export default function SlotsScreen() {
                       const code = deskOtp.replace(/\s/g, "");
                       if (name.length < 2) {
                         setDeskError("Please enter the customer's full name.");
+                        setDeskInfo(null);
                         return;
                       }
                       if (!Number.isInteger(ageN) || ageN < 18) {
                         setDeskError("Age must be a whole number, 18 or older.");
+                        setDeskInfo(null);
                         return;
                       }
                       if (!/^\+91\d{10}$/.test(phone)) {
                         setDeskError("Use +91 followed by 10 digits.");
+                        setDeskInfo(null);
                         return;
                       }
                       if (!/^\d{6}$/.test(code)) {
                         setDeskError("Enter the 6-digit WhatsApp code.");
+                        setDeskInfo(null);
                         return;
                       }
                       if (!deskConsent) {
                         setDeskError("Ask the customer to confirm the consent checkbox.");
+                        setDeskInfo(null);
                         return;
                       }
                       setDeskError(null);
+                      setDeskInfo(null);
                       setDeskBusySubmit(true);
                       try {
                         const { userId } = await ownerCompleteDeskCustomerRegistration({
@@ -843,6 +858,7 @@ export default function SlotsScreen() {
                         setWalkInStartStep("customer");
                         setDeskOtp("");
                       } catch (e) {
+                        setDeskInfo(null);
                         setDeskError(parseConvexError(e as Error).message);
                       } finally {
                         setDeskBusySubmit(false);
@@ -1371,6 +1387,11 @@ const styles = StyleSheet.create({
   walkInErr: {
     ...typography.bodySmall,
     color: colors.status.error,
+    marginBottom: spacing[2],
+  },
+  walkInOk: {
+    ...typography.bodySmall,
+    color: colors.accent.green,
     marginBottom: spacing[2],
   },
   foundCard: {

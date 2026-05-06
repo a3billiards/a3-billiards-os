@@ -68,6 +68,21 @@ a {
   color: var(--accent);
 }
 
+.nav-logout {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.nav-logout:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);

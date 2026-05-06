@@ -17,7 +17,6 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 /** Logs native / Convex errors for Google Sign-In (Metro + adb logcat). */
 function logOwnerGoogleError(context: string, err: unknown): void {
@@ -84,20 +83,8 @@ function googleSignInErrorAlertBody(err: unknown): string {
   return lines.join("\n\n");
 }
 
-GoogleSignin.configure({
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-  ...(typeof process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID === "string" &&
-  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID.length > 0
-    ? { iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }
-    : {}),
-  offlineAccess: false,
-});
-
-if (typeof __DEV__ !== "undefined" && __DEV__) {
-  console.log("[OwnerLogin] GoogleSignin.configure", {
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "(missing)",
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "(omitted)",
-  });
+async function getGoogleSigninModule() {
+  return await import("@react-native-google-signin/google-signin");
 }
 
 export default function OwnerLoginScreen() {
@@ -165,6 +152,26 @@ export default function OwnerLoginScreen() {
     setGoogleLoading(true);
 
     try {
+      let GoogleSignin: (typeof import("@react-native-google-signin/google-signin"))["GoogleSignin"];
+      try {
+        ({ GoogleSignin } = await getGoogleSigninModule());
+      } catch (e) {
+        logOwnerGoogleError("loadGoogleSigninModule", e);
+        setError(
+          "Google Sign-In is not available in Expo Go. Use email login or run a development build.",
+        );
+        return;
+      }
+
+      GoogleSignin.configure({
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+        ...(typeof process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID === "string" &&
+        process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID.length > 0
+          ? { iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }
+          : {}),
+        offlineAccess: false,
+      });
+
       try {
         await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       } catch (e) {

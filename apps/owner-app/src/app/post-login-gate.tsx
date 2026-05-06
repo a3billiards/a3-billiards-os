@@ -22,20 +22,12 @@ export default function PostLoginGate() {
       return;
     }
 
-    if (!user.phoneVerified && user.phone) {
-      router.replace({
-        pathname: "/verify-phone",
-        params: { phone: user.phone },
-      });
-      return;
-    }
-
     if (!user.settingsPasscodeSet) {
       router.replace("/passcode-setup");
       return;
     }
 
-    router.replace("/(tabs)/slots");
+    router.replace("/(tabs)/home");
   }, [user, router]);
 
   return (

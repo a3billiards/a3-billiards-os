@@ -294,7 +294,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <Pressable
           onPress={() =>
-            router.canGoBack() ? router.back() : router.replace("/(tabs)/slots")
+            router.canGoBack() ? router.back() : router.replace("/(tabs)/home")
           }
           style={styles.backRow}
         >

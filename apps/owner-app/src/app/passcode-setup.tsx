@@ -107,11 +107,11 @@ export default function PasscodeSetupScreen() {
     setError(null);
     try {
       await setupPasscode({ passcode: code });
-      router.replace("/(tabs)/slots");
+      router.replace("/(tabs)/home");
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "PASSCODE_003") {
-        router.replace("/(tabs)/slots");
+        router.replace("/(tabs)/home");
         return;
       }
       setError(appError.message);

@@ -3,6 +3,7 @@
  */
 
 import { getAuthUserId } from "@convex-dev/auth/server";
+import bcrypt from "bcryptjs";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import {
@@ -10,9 +11,16 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
+import { dispatchWhatsAppOtp } from "./model/otp";
 import { throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
+const OTP_RATE_LIMIT_WINDOW_MS = Number(
+  process.env.OTP_RATE_LIMIT_WINDOW_MS ?? 60 * 60 * 1000,
+);
+const OTP_RATE_LIMIT_MAX_PER_WINDOW = Number(
+  process.env.OTP_RATE_LIMIT_MAX_PER_WINDOW ?? 5,
+);
 
 function randomSixDigitString(): string {
   const c = globalThis.crypto;
@@ -118,7 +126,6 @@ export const attemptVerify = internalMutation({
       );
     }
 
-    const bcrypt = await import("bcryptjs");
     const isValid = await bcrypt.compare(code, active.otpHash);
 
     if (!isValid) {
@@ -136,9 +143,7 @@ export const attemptVerify = internalMutation({
 
       await ctx.db.patch(active._id, { attempts: newAttempts });
       const remaining = 3 - newAttempts;
-      throw new Error(
-        `Incorrect code. ${remaining} attempt(s) remaining.`,
-      );
+      throw new Error(`OTP_002: Wrong OTP. ${remaining} attempt(s) remaining.`);
     }
 
     await ctx.db.patch(active._id, { used: true });
@@ -213,15 +218,14 @@ export const sendOtp = action({
 
     const count = await ctx.runMutation(internal.otp.countRecentDispatches, {
       phone,
-      windowMs: 60 * 60 * 1000,
+      windowMs: OTP_RATE_LIMIT_WINDOW_MS,
     });
-    if (count >= 5) {
+    if (count >= OTP_RATE_LIMIT_MAX_PER_WINDOW) {
       throw new Error(
         "OTP_003: Too many OTP requests. Please wait before requesting another code.",
       );
     }
 
-    const bcrypt = await import("bcryptjs");
     const rawCode = randomSixDigitString();
     const otpHash = await bcrypt.hash(rawCode, 10);
     const now = Date.now();
@@ -233,7 +237,6 @@ export const sendOtp = action({
     });
 
     try {
-      const { dispatchWhatsAppOtp } = await import("./model/otp");
       await dispatchWhatsAppOtp(phone, rawCode);
     } catch (e) {
       await ctx.runMutation(internal.otp.deleteOtpRecord, { recordId });
@@ -264,10 +267,18 @@ export const verifyOtp = action({
       );
     }
 
+    const authUserId = await getAuthUserId(ctx);
+    if (userId !== undefined) {
+      if (authUserId === null || authUserId !== userId) {
+        throw new Error("PERM_001: Cannot verify OTP for another account");
+      }
+    }
+    const effectiveUserId = userId ?? (authUserId ?? undefined);
+
     return await ctx.runMutation(internal.otp.attemptVerify, {
       phone,
       code: normalized,
-      userId,
+      userId: effectiveUserId,
     });
   },
 });
