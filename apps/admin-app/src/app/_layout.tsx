@@ -12,7 +12,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
+import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 try {
@@ -137,7 +137,7 @@ function AdminAuthShell(): React.JSX.Element {
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: colors.bg.primary },
+            contentStyle: { backgroundColor: glass.pageBgBottom },
             animation: "fade",
           }}
         />
@@ -183,7 +183,7 @@ function AdminAuthShell(): React.JSX.Element {
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: colors.bg.primary },
+            contentStyle: { backgroundColor: glass.pageBgBottom },
             animation: "fade",
           }}
         />
@@ -197,7 +197,7 @@ function AdminAuthShell(): React.JSX.Element {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: colors.bg.primary },
+          contentStyle: { backgroundColor: glass.pageBgBottom },
           animation: "fade",
         }}
       />
@@ -245,13 +245,13 @@ const configErrorStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   boot: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: glass.pageBgBottom,
     alignItems: "center",
     justifyContent: "center",
   },
   denied: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: glass.pageBgBottom,
     padding: layout.screenPadding,
     justifyContent: "center",
   },

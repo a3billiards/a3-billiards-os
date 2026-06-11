@@ -6,12 +6,12 @@
 export const colors = {
     // ─── Backgrounds ──────────────────────────────────────────
     bg: {
-      /** Main screen background */
-      primary:   "#0D1117",
+      /** Main screen background — aligned with `glass.pageBgFlat` (Figma liquid canvas). */
+      primary:   "#060912",
       /** Cards, modals, bottom sheets */
-      secondary: "#161B22",
+      secondary: "#121a28",
       /** Inputs, search bars */
-      tertiary:  "#21262D",
+      tertiary:  "#1a2436",
     },
    
     // ─── Text ─────────────────────────────────────────────────

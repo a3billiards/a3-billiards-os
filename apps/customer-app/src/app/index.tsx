@@ -3,7 +3,8 @@ import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { glass } from "@a3/ui/theme";
 
 export default function AuthGate() {
   const router = useRouter();
@@ -40,16 +41,18 @@ export default function AuthGate() {
   }, [isLoading, isAuthenticated, user, router]);
 
   return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color={colors.accent.green} />
-    </View>
+    <GlassPageBackground>
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color={glass.ctaBg} />
+      </View>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
   },

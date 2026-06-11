@@ -14,8 +14,10 @@ import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
 import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { ClubCard, type ClubSearchResult } from "@a3/ui/components";
-import { colors, spacing, typography, layout } from "@a3/ui/theme";
+import { ClubCard, type ClubSearchResult, GlassPageBackground } from "@a3/ui/components";
+import { colors, spacing, typography, layout, glass } from "@a3/ui/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { customerTabBarTotalInset } from "../theme/customerShell";
 
 function SkeletonCard(): React.JSX.Element {
   return (
@@ -32,6 +34,8 @@ function SkeletonCard(): React.JSX.Element {
 
 export default function DiscoverScreen(): React.JSX.Element {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const bottomPad = customerTabBarTotalInset(insets.bottom);
   const user = useQuery(api.users.getCurrentUser);
   const [draft, setDraft] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -159,16 +163,19 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   if (!isCustomer) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.center}>
-          <Text style={styles.muted}>Sign in to discover clubs.</Text>
-        </View>
-      </SafeAreaView>
+      <GlassPageBackground>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <View style={styles.center}>
+            <Text style={styles.muted}>Sign in to discover clubs.</Text>
+          </View>
+        </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <GlassPageBackground>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
       <Text style={styles.title}>Discover</Text>
       {loading ? (
         <View style={styles.pad}>
@@ -199,18 +206,19 @@ export default function DiscoverScreen(): React.JSX.Element {
         />
       )}
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: "transparent",
   },
   pad: { paddingHorizontal: layout.screenPadding },
   title: {
     ...typography.heading3,
-    color: colors.text.primary,
+    color: glass.textPrimary,
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing[2],
     paddingBottom: spacing[3],
@@ -222,8 +230,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: colors.bg.secondary,
-    borderRadius: 8,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
     padding: spacing[3],
     marginBottom: spacing[3],
   },
@@ -247,8 +257,10 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.bg.tertiary,
-    borderRadius: 8,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
+    borderRadius: 12,
     paddingHorizontal: spacing[3],
     minHeight: 44,
   },

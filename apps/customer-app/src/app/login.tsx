@@ -14,63 +14,151 @@ import { useRouter } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
 
-GoogleSignin.configure({
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-  ...(typeof process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID === "string" &&
-  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID.length > 0
-    ? { iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }
-    : {}),
-  offlineAccess: false,
-});
+type Mode = "phone" | "email";
+type PhoneStep = "enterPhone" | "enterCode";
 
 export default function CustomerLoginScreen() {
   const router = useRouter();
   const { signIn } = useAuthActions();
-  const resolveGoogle = useAction(api.googleAuthActions.resolveGoogleSignIn);
+  const sendLoginOtp = useAction(api.phoneOtp.sendLoginOtp);
 
+  const [mode, setMode] = useState<Mode>("phone");
+
+  // Phone+OTP state
+  const [phoneStep, setPhoneStep] = useState<PhoneStep>("enterPhone");
+  const [phone, setPhone] = useState("+91");
+  const [code, setCode] = useState("");
+  const [info, setInfo] = useState<string | null>(null);
+
+  // Email+password state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const codeRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
 
-  const canSubmitEmail =
-    email.trim().length > 0 && password.length >= 8 && !loading && !googleLoading;
+  const phoneValid = /^\+[1-9]\d{6,14}$/.test(phone.replace(/\s/g, ""));
+  const codeValid = /^\d{6}$/.test(code.replace(/\s/g, ""));
 
   const navigatePostLogin = useCallback(() => {
     router.replace("/post-login-gate");
   }, [router]);
 
+  // ───── Phone + OTP ─────
+  const handleSendOtp = useCallback(async () => {
+    if (!phoneValid || loading) return;
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      await sendLoginOtp({ phone: phone.replace(/\s/g, "") });
+      setPhoneStep("enterCode");
+      setInfo("OTP sent via WhatsApp.");
+      setTimeout(() => codeRef.current?.focus(), 50);
+    } catch (e) {
+      const appErr = parseConvexError(e as Error);
+      switch (appErr.code) {
+        case "AUTH_009":
+          setError(
+            "No account found for this phone. Please sign up first.",
+          );
+          break;
+        case "AUTH_002":
+          setError("This account is frozen. Contact support.");
+          break;
+        case "AUTH_006":
+          setError("This account is pending deletion.");
+          break;
+        case "OTP_003":
+          setError("Too many OTP requests. Please wait a few minutes.");
+          break;
+        case "OTP_005":
+          setError("Invalid phone number. Use country code, e.g. +91...");
+          break;
+        default:
+          setError(appErr.message ?? "Could not send OTP.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [phone, phoneValid, loading, sendLoginOtp]);
+
+  const handleVerifyOtp = useCallback(async () => {
+    if (!codeValid || loading) return;
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      const { signingIn } = await signIn("phoneOtp", {
+        phone: phone.replace(/\s/g, ""),
+        code: code.replace(/\s/g, ""),
+        flow: "signIn",
+      });
+      if (!signingIn) {
+        setError("Sign-in failed. Please try again.");
+        setLoading(false);
+        return;
+      }
+      navigatePostLogin();
+    } catch (e) {
+      const appErr = parseConvexError(e as Error);
+      switch (appErr.code) {
+        case "OTP_001":
+          setError(
+            "Too many failed attempts. Please request a new OTP in 5 minutes.",
+          );
+          break;
+        case "OTP_002":
+          setError(appErr.message ?? "Wrong or expired OTP.");
+          break;
+        case "AUTH_002":
+          setError("This account is frozen. Contact support.");
+          break;
+        case "AUTH_006":
+          setError("This account is pending deletion.");
+          break;
+        case "AUTH_009":
+          setError("No account found for this phone. Please sign up first.");
+          break;
+        default:
+          setError("Could not verify OTP. Please try again.");
+      }
+      setLoading(false);
+    }
+  }, [code, codeValid, phone, loading, signIn, navigatePostLogin]);
+
+  // ───── Email + password (fallback) ─────
+  const canSubmitEmail =
+    email.trim().length > 0 && password.length >= 8 && !loading;
+
   const handleEmailLogin = useCallback(async () => {
     if (!canSubmitEmail) return;
     setError(null);
     setLoading(true);
-
     try {
       const { signingIn } = await signIn("password", {
         email: email.trim().toLowerCase(),
         password,
         flow: "signIn",
       });
-
       if (!signingIn) {
         setError("Sign-in failed. Check your email and password.");
         setLoading(false);
         return;
       }
-
       navigatePostLogin();
     } catch (e) {
-      const appError = parseConvexError(e as Error);
-      if (appError.code === "AUTH_002") {
+      const appErr = parseConvexError(e as Error);
+      if (appErr.code === "AUTH_002") {
         setError("This account is frozen. Contact support.");
-      } else if (appError.code === "AUTH_006") {
+      } else if (appErr.code === "AUTH_006") {
         setError("This account is pending deletion.");
       } else {
         setError("Invalid email or password.");
@@ -79,64 +167,8 @@ export default function CustomerLoginScreen() {
     }
   }, [canSubmitEmail, email, password, signIn, navigatePostLogin]);
 
-  const handleGoogleLogin = useCallback(async () => {
-    if (loading || googleLoading) return;
-    setError(null);
-    setGoogleLoading(true);
-
-    try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const response = await GoogleSignin.signIn();
-
-      const idToken = response.data?.idToken;
-      if (!idToken) {
-        setError("Google sign-in cancelled or failed.");
-        setGoogleLoading(false);
-        return;
-      }
-
-      const result = await resolveGoogle({ idToken });
-
-      if (result.isNewUser) {
-        router.replace({
-          pathname: "/register",
-          params: {
-            googleId: result.pendingProfile.googleId,
-            googleEmail: result.pendingProfile.email ?? "",
-            googleName: result.pendingProfile.name,
-          },
-        });
-        setGoogleLoading(false);
-        return;
-      }
-
-      // Existing user — establish a real Convex Auth session via the A3Google provider.
-      const { signingIn } = await signIn("google", { idToken });
-      if (!signingIn) {
-        setError("Google sign-in failed. Please try again.");
-        setGoogleLoading(false);
-        return;
-      }
-
-      navigatePostLogin();
-    } catch (e) {
-      const appError = parseConvexError(e as Error);
-      if (appError.code === "AUTH_002") {
-        setError("This account is frozen. Contact support.");
-      } else if (appError.code === "AUTH_006") {
-        setError("This account is pending deletion.");
-      } else if (appError.code === "GOOGLE_AUTH_001") {
-        setError("Google authentication failed. Please try again.");
-      } else {
-        setError("Google sign-in failed. Please try again.");
-      }
-      setGoogleLoading(false);
-    }
-  }, [loading, googleLoading, signIn, resolveGoogle, navigatePostLogin, router]);
-
-  const busy = loading || googleLoading;
-
   return (
+    <GlassPageBackground>
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -146,92 +178,177 @@ export default function CustomerLoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.container}>
-          <Text style={styles.logo}>A3</Text>
+          <View style={styles.logoTile}>
+            <Text style={styles.logoText}>A3</Text>
+          </View>
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>
             Sign in to your A3 Billiards account
           </Text>
+          <LiquidGlassCard style={styles.formCard} padding={24}>
 
-          {/* ── Google Sign-In (PRD v23: no password field for Google) ── */}
+          {mode === "phone" ? (
+            <View style={styles.form}>
+              <Text style={styles.label}>Phone Number</Text>
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={(t) => {
+                  setPhone(t);
+                  if (phoneStep === "enterCode") setPhoneStep("enterPhone");
+                }}
+                placeholder="+91XXXXXXXXXX"
+                placeholderTextColor={colors.text.tertiary}
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+                editable={!loading}
+                accessibilityLabel="Phone number"
+              />
+              <Text style={styles.hint}>
+                E.164 format. We&apos;ll send a 6-digit OTP via WhatsApp.
+              </Text>
+
+              {phoneStep === "enterCode" ? (
+                <>
+                  <Text style={[styles.label, styles.fieldGap]}>OTP Code</Text>
+                  <TextInput
+                    ref={codeRef}
+                    style={styles.input}
+                    value={code}
+                    onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="6-digit code"
+                    placeholderTextColor={colors.text.tertiary}
+                    keyboardType="number-pad"
+                    returnKeyType="go"
+                    onSubmitEditing={handleVerifyOtp}
+                    editable={!loading}
+                    accessibilityLabel="OTP code"
+                  />
+                  <Pressable
+                    onPress={handleSendOtp}
+                    disabled={loading || !phoneValid}
+                    hitSlop={8}
+                    style={styles.resendRow}
+                  >
+                    <Text
+                      style={[
+                        styles.resendText,
+                        (loading || !phoneValid) && styles.disabledText,
+                      ]}
+                    >
+                      Resend OTP
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  (loading ||
+                    (phoneStep === "enterPhone" && !phoneValid) ||
+                    (phoneStep === "enterCode" && !codeValid)) &&
+                    styles.buttonDisabled,
+                  pressed && !loading && styles.pressed,
+                ]}
+                onPress={
+                  phoneStep === "enterPhone" ? handleSendOtp : handleVerifyOtp
+                }
+                disabled={
+                  loading ||
+                  (phoneStep === "enterPhone" && !phoneValid) ||
+                  (phoneStep === "enterCode" && !codeValid)
+                }
+                accessibilityRole="button"
+              >
+                {loading ? (
+                  <ActivityIndicator color={glass.ctaText} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {phoneStep === "enterPhone" ? "Send OTP" : "Verify & Sign In"}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            // ── Email + password fallback ──
+            <View style={styles.form}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor={colors.text.tertiary}
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                editable={!loading}
+                accessibilityLabel="Email address"
+              />
+              <Text style={[styles.label, styles.fieldGap]}>Password</Text>
+              <TextInput
+                ref={passwordRef}
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Enter your password"
+                placeholderTextColor={colors.text.tertiary}
+                secureTextEntry
+                textContentType="password"
+                returnKeyType="go"
+                onSubmitEditing={handleEmailLogin}
+                editable={!loading}
+                accessibilityLabel="Password"
+              />
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  !canSubmitEmail && styles.buttonDisabled,
+                  pressed && canSubmitEmail && styles.pressed,
+                ]}
+                onPress={handleEmailLogin}
+                disabled={!canSubmitEmail}
+                accessibilityRole="button"
+              >
+                {loading ? (
+                  <ActivityIndicator color={glass.ctaText} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Sign In</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
+
+          {/* ── Mode toggle ── */}
           <Pressable
-            style={({ pressed }) => [
-              styles.googleButton,
-              busy && styles.buttonDisabled,
-              pressed && !busy && styles.pressed,
-            ]}
-            onPress={handleGoogleLogin}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel="Continue with Google"
+            onPress={() => {
+              setMode((m) => (m === "phone" ? "email" : "phone"));
+              setError(null);
+              setInfo(null);
+              setPhoneStep("enterPhone");
+              setCode("");
+              setPassword("");
+            }}
+            disabled={loading}
+            hitSlop={8}
+            style={styles.toggleRow}
           >
-            {googleLoading ? (
-              <ActivityIndicator color={colors.text.primary} />
-            ) : (
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
-            )}
+            <Text style={styles.toggleText}>
+              {mode === "phone"
+                ? "Use email & password instead"
+                : "Use phone number & OTP instead"}
+            </Text>
           </Pressable>
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* ── Email + Password ── */}
-          <View style={styles.form}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={colors.text.tertiary}
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-              editable={!busy}
-              accessibilityLabel="Email address"
-            />
-
-            <Text style={[styles.label, { marginTop: spacing[4] }]}>
-              Password
-            </Text>
-            <TextInput
-              ref={passwordRef}
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor={colors.text.tertiary}
-              secureTextEntry
-              textContentType="password"
-              returnKeyType="go"
-              onSubmitEditing={handleEmailLogin}
-              editable={!busy}
-              accessibilityLabel="Password"
-            />
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                !canSubmitEmail && styles.buttonDisabled,
-                pressed && canSubmitEmail && styles.pressed,
-              ]}
-              onPress={handleEmailLogin}
-              disabled={!canSubmitEmail}
-              accessibilityRole="button"
-              accessibilityLabel="Sign in"
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.bg.primary} />
-              ) : (
-                <Text style={styles.primaryButtonText}>Sign In</Text>
-              )}
-            </Pressable>
-          </View>
+          {info !== null && (
+            <View style={styles.infoBox} accessibilityLiveRegion="polite">
+              <Text style={styles.infoText}>{info}</Text>
+            </View>
+          )}
 
           {error !== null && (
             <View
@@ -244,12 +361,13 @@ export default function CustomerLoginScreen() {
             </View>
           )}
 
-          {/* ── Register link ── */}
+          </LiquidGlassCard>
+
           <View style={styles.registerRow}>
             <Text style={styles.registerText}>Don{"'"}t have an account? </Text>
             <Pressable
               onPress={() => router.push("/register")}
-              disabled={busy}
+              disabled={loading}
               hitSlop={8}
               accessibilityRole="link"
             >
@@ -259,15 +377,17 @@ export default function CustomerLoginScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg.primary },
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing[8],
   },
   container: {
     alignItems: "center",
@@ -275,70 +395,69 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
   },
-  logo: {
-    ...typography.heading1,
-    fontSize: 48,
-    color: colors.accent.green,
-    letterSpacing: 4,
-    marginBottom: spacing[1],
+  logoTile: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[3],
+  },
+  logoText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: glass.textPrimary,
+    letterSpacing: 2,
   },
   title: {
     ...typography.heading2,
-    color: colors.text.primary,
+    color: glass.textPrimary,
     marginBottom: spacing[1],
   },
   subtitle: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     textAlign: "center",
-    marginBottom: spacing[8],
+    marginBottom: spacing[5],
   },
-  googleButton: {
-    width: "100%",
-    height: layout.buttonHeight,
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: layout.touchTarget,
-  },
-  googleButtonText: {
-    ...typography.buttonLarge,
-    color: colors.text.primary,
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    marginVertical: spacing[6],
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border.default },
-  dividerText: {
-    ...typography.labelSmall,
-    color: colors.text.secondary,
-    marginHorizontal: spacing[4],
-  },
+  formCard: { width: "100%" },
   form: { width: "100%" },
   label: {
     ...typography.label,
-    color: colors.text.secondary,
-    marginBottom: spacing[1.5],
+    color: glass.textMuted,
+    marginBottom: spacing[2],
   },
+  fieldGap: { marginTop: spacing[4] },
   input: {
     height: layout.inputHeight,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.inputBorder,
     paddingHorizontal: spacing[4],
     ...typography.body,
-    color: colors.text.primary,
+    color: glass.textPrimary,
   },
+  hint: {
+    ...typography.caption,
+    color: glass.textLabel,
+    marginTop: spacing[1],
+  },
+  resendRow: {
+    alignSelf: "flex-end",
+    marginTop: spacing[2],
+  },
+  resendText: {
+    ...typography.label,
+    color: "#86efac",
+  },
+  disabledText: { opacity: 0.45 },
   primaryButton: {
     height: layout.buttonHeight,
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -347,14 +466,39 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: glass.ctaText,
+    fontWeight: "700",
   },
-  buttonDisabled: { backgroundColor: colors.status.disabled },
+  buttonDisabled: { backgroundColor: colors.status.disabled, opacity: 0.7 },
   pressed: { opacity: 0.85 },
+  toggleRow: {
+    marginTop: spacing[6],
+    alignSelf: "center",
+  },
+  toggleText: {
+    ...typography.label,
+    color: "#86efac",
+  },
+  infoBox: {
+    backgroundColor: "rgba(67,160,71,0.14)",
+    borderColor: "rgba(67,160,71,0.4)",
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[4],
+    width: "100%",
+  },
+  infoText: {
+    ...typography.bodySmall,
+    color: "#86efac",
+  },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(244,67,54,0.12)",
+    borderColor: "rgba(244,67,54,0.4)",
+    borderWidth: 1,
     borderRadius: radius.md,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],
@@ -368,20 +512,21 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...typography.bodySmall,
-    color: colors.status.error,
+    color: "#fca5a5",
     flex: 1,
   },
   registerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing[8],
+    marginTop: spacing[6],
   },
   registerText: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
   },
   registerLink: {
     ...typography.label,
-    color: colors.accent.green,
+    color: "#86efac",
+    fontWeight: "700",
   },
 });

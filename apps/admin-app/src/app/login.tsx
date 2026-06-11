@@ -11,8 +11,10 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
+import { MaterialIcons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
   const { signIn } = useAuthActions();
@@ -73,102 +75,124 @@ export default function LoginScreen() {
   }, [canSubmit, email, password, signIn]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
+    <GlassPageBackground>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={styles.container}>
-          <Text style={styles.logo}>A3</Text>
-          <Text style={styles.title}>Admin Panel</Text>
-          <Text style={styles.subtitle}>
-            Sign in to manage your billiards network
-          </Text>
-
-          <View style={styles.form}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="admin@example.com"
-              placeholderTextColor={colors.text.tertiary}
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-              editable={!loading && !frozen}
-              accessibilityLabel="Email address"
-            />
-
-            <Text style={[styles.label, { marginTop: spacing[4] }]}>
-              Password
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.container}>
+            <View style={styles.logoTile}>
+              <Text style={styles.logoText}>A3</Text>
+            </View>
+            <Text style={styles.title}>Admin Panel</Text>
+            <Text style={styles.subtitle}>
+              Sign in to manage your billiards network
             </Text>
-            <TextInput
-              ref={passwordRef}
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor={colors.text.tertiary}
-              secureTextEntry
-              textContentType="password"
-              returnKeyType="go"
-              onSubmitEditing={handleLogin}
-              editable={!loading && !frozen}
-              accessibilityLabel="Password"
-            />
 
-            {error !== null && (
-              <View
-                style={styles.errorBox}
-                accessibilityRole="alert"
-                accessibilityLiveRegion="polite"
-              >
-                <Text style={styles.errorDot}>Error</Text>
-                <Text style={styles.errorText}>{error}</Text>
+            <LiquidGlassCard style={styles.form} padding={24}>
+              <Text style={styles.label}>Email</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons
+                  name="mail-outline"
+                  size={18}
+                  color={glass.textMuted}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="admin@example.com"
+                  placeholderTextColor="rgba(148,163,184,0.45)"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  editable={!loading && !frozen}
+                  accessibilityLabel="Email address"
+                />
               </View>
-            )}
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.button,
-                (!canSubmit || frozen) && styles.buttonDisabled,
-                pressed && canSubmit && !frozen && styles.buttonPressed,
-              ]}
-              onPress={handleLogin}
-              disabled={!canSubmit || frozen}
-              accessibilityRole="button"
-              accessibilityLabel="Sign in"
-              accessibilityState={{ disabled: !canSubmit || frozen }}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.bg.primary} />
-              ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
+              <Text style={[styles.label, { marginTop: spacing[4] }]}>
+                Password
+              </Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons
+                  name="lock-outline"
+                  size={18}
+                  color={glass.textMuted}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  ref={passwordRef}
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter your password"
+                  placeholderTextColor="rgba(148,163,184,0.45)"
+                  secureTextEntry
+                  textContentType="password"
+                  returnKeyType="go"
+                  onSubmitEditing={handleLogin}
+                  editable={!loading && !frozen}
+                  accessibilityLabel="Password"
+                />
+              </View>
+
+              {error !== null && (
+                <View
+                  style={styles.errorBox}
+                  accessibilityRole="alert"
+                  accessibilityLiveRegion="polite"
+                >
+                  <MaterialIcons
+                    name="error-outline"
+                    size={16}
+                    color={colors.status.error}
+                  />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
               )}
-            </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  (!canSubmit || frozen) && styles.buttonDisabled,
+                  pressed && canSubmit && !frozen && styles.buttonPressed,
+                ]}
+                onPress={handleLogin}
+                disabled={!canSubmit || frozen}
+                accessibilityRole="button"
+                accessibilityLabel="Sign in"
+                accessibilityState={{ disabled: !canSubmit || frozen }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text style={styles.buttonText}>Sign In</Text>
+                )}
+              </Pressable>
+            </LiquidGlassCard>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: colors.bg.primary,
-  },
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing[8],
   },
   container: {
     alignItems: "center",
@@ -176,64 +200,79 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
   },
-  logo: {
-    ...typography.heading1,
-    fontSize: 48,
-    color: colors.accent.green,
-    letterSpacing: 4,
-    marginBottom: spacing[1],
+  logoTile: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[3],
+  },
+  logoText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: glass.textPrimary,
+    letterSpacing: 2,
   },
   title: {
     ...typography.heading2,
-    color: colors.text.primary,
+    color: glass.textPrimary,
     marginBottom: spacing[1],
   },
   subtitle: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     textAlign: "center",
-    marginBottom: spacing[8],
+    marginBottom: spacing[6],
   },
   form: {
     width: "100%",
   },
   label: {
     ...typography.label,
-    color: colors.text.secondary,
-    marginBottom: spacing[1.5],
+    color: glass.textMuted,
+    marginBottom: spacing[2],
   },
-  input: {
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
     height: layout.inputHeight,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
-    paddingHorizontal: spacing[4],
+    borderColor: glass.cardBorder,
+    paddingHorizontal: spacing[3],
+  },
+  inputIcon: { marginRight: spacing[2] },
+  input: {
+    flex: 1,
+    height: "100%",
     ...typography.body,
-    color: colors.text.primary,
+    color: glass.textPrimary,
   },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing[2],
     backgroundColor: "rgba(244,67,54,0.12)",
+    borderColor: "rgba(244,67,54,0.4)",
+    borderWidth: 1,
     borderRadius: radius.md,
     paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
+    paddingHorizontal: spacing[3],
     marginTop: spacing[4],
-  },
-  errorDot: {
-    ...typography.labelSmall,
-    color: colors.status.error,
-    marginRight: spacing[2],
   },
   errorText: {
     ...typography.bodySmall,
-    color: colors.status.error,
+    color: "#fca5a5",
     flex: 1,
   },
   button: {
     height: layout.buttonHeight,
-    backgroundColor: colors.accent.green,
+    backgroundColor: "#bfdbfe",
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -243,11 +282,10 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     backgroundColor: colors.status.disabled,
   },
-  buttonPressed: {
-    opacity: 0.85,
-  },
+  buttonPressed: { opacity: 0.85 },
   buttonText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: "#0f172a",
+    fontWeight: "700",
   },
 });

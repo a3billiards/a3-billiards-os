@@ -4,23 +4,25 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, glass } from "@a3/ui/theme";
-import { adminShell } from "../theme/adminShell";
+import { customerShell } from "../theme/customerShell";
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
-  index: "dashboard",
-  users: "people",
-  complaints: "flag",
-  notifications: "notifications",
+  home: "home",
+  discover: "explore",
+  bookings: "event",
+  history: "history",
+  profile: "person",
 };
 
 const TAB_LABELS: Record<string, string> = {
-  index: "Dashboard",
-  users: "Users",
-  complaints: "Complaints",
-  notifications: "Notifications",
+  home: "Home",
+  discover: "Discover",
+  bookings: "Bookings",
+  history: "History",
+  profile: "Profile",
 };
 
-export default function AdminTabBar({
+export default function CustomerTabBar({
   state,
   descriptors,
   navigation,
@@ -36,9 +38,7 @@ export default function AdminTabBar({
       pointerEvents="box-none"
     >
       <View style={styles.pill}>
-        {/* Inset top highlight — the "liquid sheen" */}
         <View pointerEvents="none" style={styles.pillHighlight} />
-
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const label =
@@ -86,7 +86,7 @@ export default function AdminTabBar({
                 <MaterialIcons
                   name={iconName}
                   size={22}
-                  color={isFocused ? "#bfdbfe" : "rgba(148, 163, 184, 0.78)"}
+                  color={isFocused ? customerShell.accentGreenLight : "rgba(148, 163, 184, 0.78)"}
                 />
                 {badge ? (
                   <View style={styles.badge}>
@@ -98,7 +98,7 @@ export default function AdminTabBar({
                 style={[styles.tabLabel, isFocused && styles.tabLabelActive]}
                 numberOfLines={1}
               >
-                {label.toUpperCase()}
+                {label}
               </Text>
             </Pressable>
           );
@@ -122,8 +122,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    maxWidth: 420,
-    minHeight: adminShell.tabBarBody,
+    maxWidth: 460,
+    minHeight: customerShell.tabBarBody,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: glass.tabPillRadius,
@@ -149,6 +149,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 1,
     backgroundColor: glass.tabPillInnerHighlight,
+    zIndex: 1,
   },
   tab: {
     flex: 1,
@@ -159,14 +160,14 @@ const styles = StyleSheet.create({
   },
   iconWrap: {
     position: "relative",
-    width: 30,
-    height: 26,
+    width: 32,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
   },
   iconWrapActive: {
-    backgroundColor: "rgba(96, 165, 250, 0.12)",
+    backgroundColor: "rgba(134, 239, 172, 0.16)",
   },
   badge: {
     position: "absolute",
@@ -176,23 +177,23 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     paddingHorizontal: 4,
-    backgroundColor: colors.status.error,
+    backgroundColor: colors.accent.amberLight,
     alignItems: "center",
     justifyContent: "center",
   },
   badgeText: {
     fontSize: 9,
     fontWeight: "700",
-    color: colors.text.primary,
+    color: "#000",
   },
   tabLabel: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "600",
-    letterSpacing: 0.45,
-    color: "rgba(148, 163, 184, 0.7)",
+    letterSpacing: 0.3,
+    color: "rgba(148, 163, 184, 0.78)",
   },
   tabLabelActive: {
-    color: "#bfdbfe",
+    color: customerShell.accentGreenLight,
     fontWeight: "700",
   },
 });

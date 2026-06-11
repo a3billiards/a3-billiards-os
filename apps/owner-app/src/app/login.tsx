@@ -15,8 +15,9 @@ import { useRouter } from "expo-router";
 import { useAction } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
 
 /** Logs native / Convex errors for Google Sign-In (Metro + adb logcat). */
 function logOwnerGoogleError(context: string, err: unknown): void {
@@ -253,6 +254,7 @@ export default function OwnerLoginScreen() {
   const busy = loading || googleLoading;
 
   return (
+    <GlassPageBackground>
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -262,11 +264,14 @@ export default function OwnerLoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.container}>
-          <Text style={styles.logo}>A3</Text>
+          <View style={styles.logoTile}>
+            <Text style={styles.logoText}>A3</Text>
+          </View>
           <Text style={styles.title}>Owner Panel</Text>
           <Text style={styles.subtitle}>
             Manage your billiards club
           </Text>
+          <LiquidGlassCard style={styles.formCard} padding={24}>
 
           {/* ── Google Sign-In (PRD v23: no password field) ── */}
           <Pressable
@@ -362,21 +367,21 @@ export default function OwnerLoginScreen() {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
+          </LiquidGlassCard>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: colors.bg.primary,
-  },
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing[8],
   },
   container: {
     alignItems: "center",
@@ -384,79 +389,88 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
   },
-  logo: {
-    ...typography.heading1,
-    fontSize: 48,
-    color: colors.accent.green,
-    letterSpacing: 4,
-    marginBottom: spacing[1],
+  logoTile: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[3],
+  },
+  logoText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: glass.textPrimary,
+    letterSpacing: 2,
   },
   title: {
     ...typography.heading2,
-    color: colors.text.primary,
+    color: glass.textPrimary,
     marginBottom: spacing[1],
   },
   subtitle: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     textAlign: "center",
-    marginBottom: spacing[8],
+    marginBottom: spacing[5],
+  },
+  formCard: {
+    width: "100%",
   },
   googleButton: {
     width: "100%",
     height: layout.buttonHeight,
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
     alignItems: "center",
     justifyContent: "center",
     minHeight: layout.touchTarget,
   },
-  googleButtonPressed: {
-    opacity: 0.85,
-  },
+  googleButtonPressed: { opacity: 0.85 },
   googleButtonText: {
     ...typography.buttonLarge,
-    color: colors.text.primary,
+    color: glass.textPrimary,
   },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
     width: "100%",
-    marginVertical: spacing[6],
+    marginVertical: spacing[5],
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: colors.border.default,
+    backgroundColor: glass.cardBorder,
   },
   dividerText: {
     ...typography.labelSmall,
-    color: colors.text.secondary,
+    color: glass.textLabel,
     marginHorizontal: spacing[4],
   },
-  form: {
-    width: "100%",
-  },
+  form: { width: "100%" },
   label: {
     ...typography.label,
-    color: colors.text.secondary,
-    marginBottom: spacing[1.5],
+    color: glass.textMuted,
+    marginBottom: spacing[2],
   },
   input: {
     height: layout.inputHeight,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
     paddingHorizontal: spacing[4],
     ...typography.body,
-    color: colors.text.primary,
+    color: glass.textPrimary,
   },
   button: {
     height: layout.buttonHeight,
-    backgroundColor: colors.accent.green,
+    backgroundColor: "#86efac",
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -471,7 +485,8 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: "#052e16",
+    fontWeight: "700",
   },
   errorBox: {
     flexDirection: "row",

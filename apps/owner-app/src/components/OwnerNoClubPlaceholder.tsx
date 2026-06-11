@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet, Linking } from "react-native";
-import { colors, typography, spacing, layout } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, typography, spacing, layout, glass } from "@a3/ui/theme";
 
 const ONBOARDING_URL = "https://register.a3billiards.com";
 
@@ -8,33 +9,46 @@ const ONBOARDING_URL = "https://register.a3billiards.com";
  */
 export function OwnerNoClubPlaceholder() {
   return (
-    <View style={styles.root}>
-      <Text style={styles.title}>Complete venue setup</Text>
-      <Text style={styles.body}>
-        Your owner account is active, but no club is linked yet. Create your venue on
-        the onboarding site, then return to this app.
-      </Text>
-      <Pressable
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-        onPress={() => {
-          void Linking.openURL(ONBOARDING_URL);
-        }}
-        accessibilityRole="link"
-        accessibilityLabel="Open owner onboarding in browser"
-      >
-        <Text style={styles.buttonText}>Open onboarding</Text>
-      </Pressable>
-    </View>
+    <GlassPageBackground>
+      <View style={styles.root}>
+        <View style={styles.card}>
+          <Text style={styles.title}>Complete venue setup</Text>
+          <Text style={styles.body}>
+            Your owner account is active, but no club is linked yet. Create your venue on
+            the onboarding site, then return to this app.
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+            onPress={() => {
+              void Linking.openURL(ONBOARDING_URL);
+            }}
+            accessibilityRole="link"
+            accessibilityLabel="Open owner onboarding in browser"
+          >
+            <Text style={styles.buttonText}>Open onboarding</Text>
+          </Pressable>
+        </View>
+      </View>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: layout.screenPadding,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
+    padding: spacing[5],
   },
   title: {
     ...typography.heading2,
@@ -47,17 +61,17 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: "center",
     marginBottom: spacing[6],
-    maxWidth: 360,
   },
   button: {
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[6],
     borderRadius: 12,
   },
   buttonText: {
     ...typography.label,
-    color: colors.bg.primary,
+    color: glass.ctaText,
+    textAlign: "center",
   },
   pressed: { opacity: 0.88 },
 });

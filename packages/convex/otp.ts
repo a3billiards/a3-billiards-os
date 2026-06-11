@@ -126,7 +126,7 @@ export const attemptVerify = internalMutation({
       );
     }
 
-    const isValid = await bcrypt.compare(code, active.otpHash);
+    const isValid = bcrypt.compareSync(code, active.otpHash);
 
     if (!isValid) {
       const newAttempts = active.attempts + 1;
@@ -227,7 +227,7 @@ export const sendOtp = action({
     }
 
     const rawCode = randomSixDigitString();
-    const otpHash = await bcrypt.hash(rawCode, 10);
+    const otpHash = bcrypt.hashSync(rawCode, 10);
     const now = Date.now();
 
     const { recordId } = await ctx.runMutation(internal.otp.storeOtpRecord, {

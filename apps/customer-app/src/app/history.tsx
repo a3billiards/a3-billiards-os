@@ -13,7 +13,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import {
   computeBillBreakdown,
   formatCurrency,
@@ -301,7 +302,7 @@ function SessionCard({
         <View style={styles.breakdownPanel}>
           <View style={styles.divider} />
           {detailLoading || detail === undefined ? (
-            <ActivityIndicator color={colors.accent.green} style={{ marginVertical: spacing[3] }} />
+            <ActivityIndicator color={glass.ctaBg} style={{ marginVertical: spacing[3] }} />
           ) : detail === null ? (
             <Text style={styles.noteMuted}>
               Detailed breakdown unavailable.
@@ -511,6 +512,7 @@ export default function SessionHistoryScreen(): React.JSX.Element {
   }, [router]);
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Session History</Text>
@@ -572,11 +574,12 @@ export default function SessionHistoryScreen(): React.JSX.Element {
         </ScrollView>
       )}
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
+  safe: { flex: 1, backgroundColor: "transparent" },
   pad: { padding: layout.screenPadding, paddingBottom: spacing[10] },
   header: { paddingHorizontal: layout.screenPadding, paddingTop: spacing[2], paddingBottom: spacing[2] },
   title: { ...typography.heading3, color: colors.text.primary },
@@ -585,7 +588,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "flex-start",
     marginTop: spacing[2],
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[1],
     borderRadius: radius.full,
@@ -600,8 +605,10 @@ const styles = StyleSheet.create({
   emptyTitle: { ...typography.heading3, color: colors.text.primary },
   emptySub: { ...typography.bodySmall, color: colors.text.secondary, marginTop: spacing[2], textAlign: "center" },
   card: {
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
     marginBottom: spacing[3],
     overflow: "hidden",
   },
@@ -622,8 +629,8 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: "rgba(67, 160, 71, 0.2)" },
   pillPaid: { backgroundColor: "rgba(33, 150, 243, 0.2)" },
   pillCredit: { backgroundColor: "rgba(245, 127, 23, 0.2)" },
-  pillMuted: { backgroundColor: colors.bg.tertiary },
-  pillNeutral: { backgroundColor: colors.bg.tertiary },
+  pillMuted: { backgroundColor: glass.inputBg },
+  pillNeutral: { backgroundColor: glass.inputBg },
   pulseDot: {
     width: 6,
     height: 6,
@@ -643,14 +650,14 @@ const styles = StyleSheet.create({
   creditTag: { ...typography.caption, color: colors.accent.amber, fontWeight: "600" },
   payPill: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm, marginLeft: spacing[2] },
   payPillText: { ...typography.caption, fontWeight: "600" },
-  payCash: { backgroundColor: colors.bg.tertiary },
+  payCash: { backgroundColor: glass.inputBg },
   payUpi: { backgroundColor: "rgba(33, 150, 243, 0.2)" },
   payCard: { backgroundColor: "rgba(255, 193, 7, 0.15)" },
   payCredit: { backgroundColor: "rgba(245, 127, 23, 0.2)" },
-  payResolved: { backgroundColor: colors.bg.tertiary },
+  payResolved: { backgroundColor: glass.inputBg },
   chevron: { ...typography.caption, color: colors.text.secondary, marginLeft: spacing[1] },
   breakdownPanel: {
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: "rgba(15, 23, 42, 0.35)",
     paddingHorizontal: spacing[3],
     paddingBottom: spacing[3],
   },
@@ -688,14 +695,16 @@ const styles = StyleSheet.create({
   snackAmt: { ...typography.caption, color: colors.text.primary },
   skeletonCard: {
     flexDirection: "row",
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
     padding: spacing[3],
     minHeight: 96,
     gap: spacing[2],
   },
-  skeletonBar: { width: 4, borderRadius: 2, backgroundColor: colors.bg.tertiary },
-  skeletonLineLg: { height: 14, borderRadius: 4, backgroundColor: colors.bg.tertiary, width: "70%" },
-  skeletonLineMd: { height: 12, borderRadius: 4, backgroundColor: colors.bg.tertiary, width: "50%" },
-  skeletonLineSm: { height: 12, borderRadius: 4, backgroundColor: colors.bg.tertiary, width: "40%" },
+  skeletonBar: { width: 4, borderRadius: 2, backgroundColor: glass.inputBg },
+  skeletonLineLg: { height: 14, borderRadius: 4, backgroundColor: glass.inputBg, width: "70%" },
+  skeletonLineMd: { height: 12, borderRadius: 4, backgroundColor: glass.inputBg, width: "50%" },
+  skeletonLineSm: { height: 12, borderRadius: 4, backgroundColor: glass.inputBg, width: "40%" },
 });

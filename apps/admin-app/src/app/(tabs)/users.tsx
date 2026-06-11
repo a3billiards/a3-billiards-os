@@ -14,7 +14,8 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { adminTabBarTotalInset } from "../../theme/adminShell";
 
 type RoleFilter = "all" | "admin" | "owner" | "customer";
@@ -53,7 +54,7 @@ function RoleBadge({ role }: { role: UserRow["role"] }): React.JSX.Element {
       ? { label: "Admin", bg: colors.status.info, fg: colors.text.primary }
       : role === "owner"
         ? { label: "Owner", bg: colors.accent.amber, fg: colors.text.primary }
-        : { label: "Customer", bg: colors.bg.tertiary, fg: colors.text.secondary };
+        : { label: "Customer", bg: glass.inputBg, fg: colors.text.secondary };
   return (
     <View style={[styles.roleBadge, { backgroundColor: cfg.bg }]}>
       <Text style={[styles.roleBadgeText, { color: cfg.fg }]}>{cfg.label}</Text>
@@ -133,6 +134,7 @@ export default function UsersScreen(): React.JSX.Element {
     : null;
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Users</Text>
@@ -196,7 +198,7 @@ export default function UsersScreen(): React.JSX.Element {
             <RefreshControl
               refreshing={false}
               onRefresh={onRefresh}
-              tintColor={colors.accent.green}
+              tintColor={glass.ctaBg}
             />
           }
           onEndReached={loadMore}
@@ -212,7 +214,7 @@ export default function UsersScreen(): React.JSX.Element {
             page?.nextCursor ? (
               <ActivityIndicator
                 style={{ marginVertical: spacing[4] }}
-                color={colors.accent.green}
+                color={glass.ctaBg}
               />
             ) : null
           }
@@ -263,11 +265,12 @@ export default function UsersScreen(): React.JSX.Element {
         />
       )}
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
+  safe: { flex: 1, backgroundColor: "transparent" },
   header: { paddingHorizontal: layout.screenPadding, paddingBottom: spacing[2] },
   title: { ...typography.heading3, color: colors.text.primary },
   subtitle: { ...typography.caption, color: colors.text.secondary, marginTop: 4 },
@@ -284,7 +287,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
     minHeight: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
   },
   searchIcon: { marginRight: spacing[2] },
   searchInput: {
@@ -304,11 +309,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
     borderRadius: radius.sm,
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
   },
-  chipActive: { backgroundColor: colors.accent.green },
+  chipActive: { backgroundColor: glass.ctaBg, borderColor: glass.ctaBg },
   chipText: { ...typography.caption, color: colors.text.secondary },
-  chipTextActive: { color: colors.text.primary, fontWeight: "600" },
+  chipTextActive: { color: glass.ctaText, fontWeight: "600" },
   listContent: {
     paddingHorizontal: layout.screenPadding,
   },
@@ -316,7 +323,9 @@ const styles = StyleSheet.create({
   skeletonRow: {
     height: 72,
     borderRadius: radius.md,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
   },
   row: {
     flexDirection: "row",
@@ -324,13 +333,17 @@ const styles = StyleSheet.create({
     padding: spacing[3],
     marginBottom: spacing[2],
     borderRadius: radius.md,
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.iconTileBg,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacing[3],

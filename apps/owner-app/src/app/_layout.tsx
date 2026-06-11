@@ -18,7 +18,7 @@ import {
   Linking,
 } from "react-native";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography } from "@a3/ui/theme";
+import { colors, typography, glass } from "@a3/ui/theme";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // Keep splash screen visible until the auth gate decides where to route.
@@ -165,7 +165,7 @@ function OwnerSubscriptionShell() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: colors.bg.primary },
+          contentStyle: { backgroundColor: glass.pageBgBottom },
           animation: "fade",
         }}
       />
@@ -194,13 +194,13 @@ function RootLayout() {
 export default Sentry.wrap(RootLayout);
 
 const shellStyles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg.primary },
+  flex: { flex: 1, backgroundColor: glass.pageBgBottom },
 });
 
 const configErrorStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: glass.pageBgBottom,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,
@@ -223,7 +223,7 @@ const configErrorStyles = StyleSheet.create({
 const frozenStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: glass.pageBgBottom,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,

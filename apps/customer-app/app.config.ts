@@ -64,6 +64,14 @@ export default () => {
       "expo-secure-store",
       "@react-native-google-signin/google-signin",
       "@sentry/react-native/expo",
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/notification-icon.png",
+          color: "#43A047",
+          defaultChannel: "default",
+        },
+      ],
     ],
     experiments: {
       typedRoutes: false,

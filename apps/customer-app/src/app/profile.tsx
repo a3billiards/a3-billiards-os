@@ -17,7 +17,8 @@ import { useRouter } from "expo-router";
 import { useMutation, useAction, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
 function formatMemberSince(createdAt: number): string {
@@ -247,25 +248,30 @@ export default function ProfileScreen(): React.JSX.Element {
 
   if (user === undefined) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent.green} />
-        </View>
-      </SafeAreaView>
+      <GlassPageBackground>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <View style={styles.center}>
+            <ActivityIndicator color={glass.ctaBg} />
+          </View>
+        </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (user === null) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.center}>
-          <Text style={styles.muted}>Sign in to manage your profile.</Text>
-        </View>
-      </SafeAreaView>
+      <GlassPageBackground>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <View style={styles.center}>
+            <Text style={styles.muted}>Sign in to manage your profile.</Text>
+          </View>
+        </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={styles.screenTitle}>Profile</Text>
@@ -583,6 +589,7 @@ export default function ProfileScreen(): React.JSX.Element {
         </Pressable>
       </Modal>
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
@@ -627,7 +634,9 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.iconTileBg,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing[2],
@@ -643,8 +652,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   card: {
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
     overflow: "hidden",
   },
   row: {
@@ -673,7 +684,7 @@ const styles = StyleSheet.create({
   editGlyph: { fontSize: 16, color: colors.text.secondary },
   saveBtn: {
     marginTop: spacing[3],
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     paddingVertical: spacing[3],
     borderRadius: radius.md,
     alignItems: "center",
@@ -695,7 +706,9 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.tabPillBg,
+    borderTopWidth: 1,
+    borderTopColor: glass.tabPillBorder,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     padding: spacing[4],
@@ -713,7 +726,9 @@ const styles = StyleSheet.create({
   },
   warnText: { color: colors.accent.amber, ...typography.caption },
   input: {
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
     borderRadius: radius.md,
     padding: spacing[3],
     color: colors.text.primary,
@@ -731,7 +746,9 @@ const styles = StyleSheet.create({
   sheetPrimaryText: { color: "#fff", fontWeight: "600" },
   sheetSecondary: {
     flex: 1,
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
     paddingVertical: spacing[3],
     borderRadius: radius.md,
     alignItems: "center",

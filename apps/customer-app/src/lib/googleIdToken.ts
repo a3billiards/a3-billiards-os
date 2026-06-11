@@ -1,10 +1,22 @@
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
+async function getGoogleSignin() {
+  const mod = await import("@react-native-google-signin/google-signin");
+  return mod.GoogleSignin;
+}
 
 /**
  * Obtains a Google ID token for Convex Auth `signIn("google", { idToken })`.
- * Tries refresh tokens first, then silent sign-in, then interactive sign-in.
+ * Uses a lazy dynamic import so this module never crashes in Expo Go.
  */
 export async function resolveGoogleIdTokenForConvexAuth(): Promise<string> {
+  let GoogleSignin: Awaited<ReturnType<typeof getGoogleSignin>>;
+  try {
+    GoogleSignin = await getGoogleSignin();
+  } catch {
+    throw new Error(
+      "GOOGLE_AUTH_001: Google Sign-In is not available in Expo Go. Use email login or run a development build.",
+    );
+  }
+
   try {
     const refreshed = await GoogleSignin.getTokens();
     if (refreshed.idToken) return refreshed.idToken;

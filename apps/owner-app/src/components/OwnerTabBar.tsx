@@ -3,14 +3,14 @@ import { View, Text, Pressable, StyleSheet, Platform, ScrollView } from "react-n
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { colors } from "@a3/ui/theme";
+import { colors, glass } from "@a3/ui/theme";
 import { ownerShell } from "../theme/ownerShell";
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
-  home: "dashboard",
+  home: "home",
   slots: "view-module",
   snacks: "fastfood",
-  financials: "attach-money",
+  financials: "bar-chart",
   complaints: "report-problem",
   bookings: "event",
   settings: "settings",
@@ -37,13 +37,12 @@ export default function OwnerTabBar({
     <View
       style={[
         styles.outer,
-        {
-          paddingBottom: Math.max(insets.bottom, 10),
-        },
+        { paddingBottom: Math.max(insets.bottom, 10) },
       ]}
       pointerEvents="box-none"
     >
       <View style={styles.pill}>
+        <View pointerEvents="none" style={styles.pillHighlight} />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -73,10 +72,7 @@ export default function OwnerTabBar({
             };
 
             const onLongPress = () => {
-              navigation.emit({
-                type: "tabLongPress",
-                target: route.key,
-              });
+              navigation.emit({ type: "tabLongPress", target: route.key });
             };
 
             return (
@@ -90,11 +86,16 @@ export default function OwnerTabBar({
                 onLongPress={onLongPress}
                 style={styles.tab}
               >
-                <View style={styles.iconWrap}>
+                <View
+                  style={[
+                    styles.iconWrap,
+                    isFocused && styles.iconWrapActive,
+                  ]}
+                >
                   <MaterialIcons
                     name={iconName}
                     size={22}
-                    color={isFocused ? ownerShell.accentBlue : ownerShell.textMuted}
+                    color={isFocused ? "#7dd3fc" : "rgba(148, 163, 184, 0.78)"}
                   />
                   {badge ? (
                     <View style={styles.badge}>
@@ -106,7 +107,7 @@ export default function OwnerTabBar({
                   style={[styles.tabLabel, isFocused && styles.tabLabelActive]}
                   numberOfLines={1}
                 >
-                  {label.toUpperCase()}
+                  {label}
                 </Text>
               </Pressable>
             );
@@ -132,37 +133,51 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 420,
     minHeight: ownerShell.tabBarBody,
-    borderRadius: 9999,
+    borderRadius: glass.tabPillRadius,
     borderWidth: 1,
-    borderColor: "rgba(71, 85, 105, 0.45)",
-    backgroundColor: "rgba(26, 32, 44, 0.92)",
+    borderColor: glass.tabPillBorder,
+    backgroundColor: glass.tabPillBg,
     overflow: "hidden",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.45,
-        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.55,
+        shadowRadius: 20,
       },
-      android: { elevation: 12 },
+      android: { elevation: 16 },
       default: {},
     }),
+  },
+  pillHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: glass.tabPillInnerHighlight,
+    zIndex: 1,
   },
   scrollContent: {
     alignItems: "center",
     paddingHorizontal: 14,
+    gap: 4,
   },
   iconWrap: {
     position: "relative",
-    width: 28,
-    height: 24,
+    width: 32,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 12,
+  },
+  iconWrapActive: {
+    backgroundColor: "rgba(125, 211, 252, 0.14)",
   },
   badge: {
     position: "absolute",
-    right: -10,
-    top: -6,
+    right: -8,
+    top: -4,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
@@ -177,20 +192,21 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   tab: {
-    minWidth: 56,
+    minWidth: 60,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
+    gap: 3,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
   },
   tabLabel: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "600",
-    letterSpacing: 0.45,
-    color: ownerShell.textMuted,
+    letterSpacing: 0.3,
+    color: "rgba(148, 163, 184, 0.78)",
   },
   tabLabelActive: {
-    color: ownerShell.accentBlue,
+    color: "#7dd3fc",
+    fontWeight: "700",
   },
 });

@@ -7,7 +7,7 @@ import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
-import { colors, typography } from "@a3/ui/theme";
+import { colors, typography, glass } from "@a3/ui/theme";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 try {
@@ -79,7 +79,7 @@ function RootLayout() {
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: colors.bg.primary },
+            contentStyle: { backgroundColor: glass.pageBgBottom },
             animation: "fade",
           }}
         />
@@ -93,7 +93,7 @@ export default Sentry.wrap(RootLayout);
 const configErrorStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: glass.pageBgBottom,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,

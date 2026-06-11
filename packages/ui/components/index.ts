@@ -19,3 +19,6 @@ export { DateStrip }         from './DateStrip';
 export { OfflineScreen }     from './OfflineScreen';
 export { NetworkGuard }      from './NetworkGuard';
 export { AuthPasswordGate, type SignInMethod } from './AuthPasswordGate';
+export { LiquidGlassCard, type LiquidGlassCardProps } from './LiquidGlassCard';
+export { GlassPageBackground, type GlassPageBackgroundProps } from './GlassPageBackground';
+export { GlassIconTile, type GlassIconTileProps } from './GlassIconTile';

@@ -52,6 +52,8 @@ import type * as passwordProviderA3 from "../passwordProviderA3.js";
 import type * as passwordReset from "../passwordReset.js";
 import type * as passwordResetActions from "../passwordResetActions.js";
 import type * as paymentReceipts from "../paymentReceipts.js";
+import type * as phoneOtp from "../phoneOtp.js";
+import type * as phoneOtpProvider from "../phoneOtpProvider.js";
 import type * as rls from "../rls.js";
 import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
@@ -115,6 +117,8 @@ declare const fullApi: ApiFromModules<{
   passwordReset: typeof passwordReset;
   passwordResetActions: typeof passwordResetActions;
   paymentReceipts: typeof paymentReceipts;
+  phoneOtp: typeof phoneOtp;
+  phoneOtpProvider: typeof phoneOtpProvider;
   rls: typeof rls;
   seed: typeof seed;
   sessions: typeof sessions;

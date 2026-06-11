@@ -16,7 +16,8 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { MaterialIcons } from "@expo/vector-icons";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -101,33 +102,40 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
 
   if (!clubId) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <Unavailable onDiscover={() => router.replace("/discover")} />
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (profile === undefined) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.center}>
-          <ActivityIndicator color={colors.accent.green} />
+          <ActivityIndicator color={glass.ctaBg} />
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (profile === null) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <Unavailable onDiscover={() => router.replace("/discover")} />
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   const oh = profile.operatingHours;
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.topNav}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
@@ -288,6 +296,7 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
         )}
       </View>
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
@@ -303,18 +312,20 @@ function Unavailable({ onDiscover }: { onDiscover: () => void }): React.JSX.Elem
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
+  safe: { flex: 1, backgroundColor: "transparent" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing[6] },
   topNav: {
     paddingHorizontal: layout.screenPadding,
     paddingVertical: spacing[2],
   },
   backBtn: { alignSelf: "flex-start" },
-  backBtnText: { ...typography.body, color: colors.accent.green },
+  backBtnText: { ...typography.body, color: glass.ctaBg },
   scroll: { paddingBottom: spacing[4] },
   galleryPlaceholder: {
     height: GALLERY_H,
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.cardBg,
+    borderBottomWidth: 1,
+    borderBottomColor: glass.cardBorder,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -356,7 +367,9 @@ const styles = StyleSheet.create({
   closed: { ...typography.body, color: colors.text.secondary },
   amenityWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing[2] },
   amenityChip: {
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
     borderRadius: radius.full,
@@ -368,8 +381,10 @@ const styles = StyleSheet.create({
   specialBlock: {
     marginTop: spacing[3],
     padding: spacing[3],
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
   },
   specialLabel: { ...typography.label, color: colors.text.primary },
   specialRate: { ...typography.body, color: colors.accent.green, marginTop: spacing[1] },
@@ -377,13 +392,15 @@ const styles = StyleSheet.create({
   visitBox: {
     marginTop: spacing[6],
     padding: spacing[4],
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
   },
   visitText: { ...typography.body, color: colors.text.primary },
   visitLink: {
     ...typography.label,
-    color: colors.accent.green,
+    color: glass.ctaBg,
     marginTop: spacing[2],
   },
   footer: {
@@ -393,24 +410,26 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing[3],
-    backgroundColor: colors.bg.primary,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border.subtle,
+    backgroundColor: glass.tabPillBg,
+    borderTopWidth: 1,
+    borderTopColor: glass.tabPillBorder,
   },
   primaryCta: {
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     minHeight: layout.buttonHeight,
     borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
-  primaryCtaText: { ...typography.buttonLarge, color: "#0D1117" },
+  primaryCtaText: { ...typography.buttonLarge, color: glass.ctaText },
   disabledCta: {
     minHeight: layout.buttonHeight,
     borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
   },
   disabledCtaText: { ...typography.button, color: colors.text.secondary },
   unavailableTitle: {

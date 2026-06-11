@@ -2,8 +2,8 @@ import { View } from "react-native";
 import { Tabs } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
+import { glass } from "@a3/ui/theme";
 import AdminTabBar from "../../components/AdminTabBar";
-import { adminShell } from "../../theme/adminShell";
 
 export default function TabsLayout() {
   const user = useQuery(api.users.getCurrentUser, {});
@@ -16,7 +16,7 @@ export default function TabsLayout() {
   const openComplaints = dash?.openComplaints ?? 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: adminShell.bgScreen }}>
+    <View style={{ flex: 1, backgroundColor: glass.pageBgBottom }}>
       <Tabs
         tabBar={(props) => <AdminTabBar {...props} />}
         screenOptions={{

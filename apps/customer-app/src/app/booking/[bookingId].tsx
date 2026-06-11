@@ -13,7 +13,8 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, spacing, radius, typography, layout } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, spacing, radius, typography, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
 function to12h(hhmm: string): string {
@@ -89,26 +90,31 @@ export default function BookingDetailScreen() {
 
   if (!bookingId) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
           <Text style={styles.muted}>Booking not found.</Text>
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (detail === undefined) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <ActivityIndicator color={colors.accent.green} />
+          <ActivityIndicator color={glass.ctaBg} />
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (detail === null) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
           <Text style={styles.muted}>Booking not found.</Text>
@@ -117,6 +123,7 @@ export default function BookingDetailScreen() {
           </Pressable>
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
@@ -151,6 +158,7 @@ export default function BookingDetailScreen() {
   };
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.nav}>
         <Pressable onPress={() => router.back()} style={styles.navBtn}>
@@ -228,6 +236,7 @@ export default function BookingDetailScreen() {
         ) : null}
       </View>
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
@@ -241,15 +250,15 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
+  safe: { flex: 1, backgroundColor: "transparent" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing[6], gap: spacing[3] },
   muted: { ...typography.body, color: colors.text.secondary, textAlign: "center" },
   nav: {
     margin: spacing[4],
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: colors.bg.secondary,
+    borderColor: glass.cardBorder,
+    backgroundColor: glass.cardBg,
     paddingHorizontal: spacing[4],
     height: 72,
     flexDirection: "row",
@@ -265,16 +274,16 @@ const styles = StyleSheet.create({
     height: 192,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: colors.bg.secondary,
+    borderColor: glass.cardBorder,
+    backgroundColor: glass.cardBg,
   },
   heroFallback: {
     width: "100%",
     height: 192,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: colors.bg.secondary,
+    borderColor: glass.cardBorder,
+    backgroundColor: glass.cardBg,
   },
   tombstone: {
     borderWidth: 1,
@@ -294,12 +303,12 @@ const styles = StyleSheet.create({
   statusPillText: { ...typography.button, color: "#000000" },
   clubName: { ...typography.heading3, color: colors.text.primary },
   address: { ...typography.body, color: colors.text.secondary },
-  viewClub: { ...typography.button, color: colors.text.primary },
+  viewClub: { ...typography.button, color: glass.accentBlue },
   infoCard: {
-    borderRadius: 24,
+    borderRadius: glass.cardRadiusSmall,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: colors.bg.secondary,
+    borderColor: glass.cardBorder,
+    backgroundColor: glass.cardBg,
     padding: spacing[5],
     gap: spacing[2],
   },
@@ -314,7 +323,9 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     padding: spacing[4],
-    backgroundColor: colors.bg.primary,
+    backgroundColor: glass.tabPillBg,
+    borderTopWidth: 1,
+    borderTopColor: glass.tabPillBorder,
     gap: spacing[2],
   },
   cancelBtn: {
@@ -330,7 +341,8 @@ const styles = StyleSheet.create({
     minHeight: layout.buttonHeight,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.inputBorder,
+    backgroundColor: glass.inputBg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -338,10 +350,10 @@ const styles = StyleSheet.create({
   primaryBtn: {
     minHeight: layout.buttonHeight,
     borderRadius: radius.md,
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing[4],
   },
-  primaryBtnText: { ...typography.button, color: colors.bg.primary },
+  primaryBtnText: { ...typography.button, color: glass.ctaText },
 });

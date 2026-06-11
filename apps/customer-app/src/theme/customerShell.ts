@@ -1,9 +1,9 @@
 import { glass } from "@a3/ui/theme";
 
 /**
- * Admin app shell — extends shared `glass` tokens for app-specific sizing.
+ * Customer-app shell — brand green + shared liquid glass from Figma.
  */
-export const adminShell = {
+export const customerShell = {
   bgDeep: glass.pageBgBottom,
   bgScreen: glass.pageBgFlat,
   cardBg: glass.cardBg,
@@ -13,14 +13,15 @@ export const adminShell = {
   iconTileBorder: glass.iconTileBorder,
   textMuted: glass.textMuted,
   textLabel: glass.textLabel,
-  accentBlue: glass.accentBlueDeep,
-  chartLine: glass.chartLine,
+  accentGreen: glass.ctaBg,
+  accentGreenLight: "#86efac",
+  accentBlue: glass.accentBlue,
   trendPositive: glass.trendPositive,
   radiusHero: glass.cardRadius,
   radiusIcon: glass.iconTileRadius,
   tabBarBody: glass.tabPillBody,
 } as const;
 
-export function adminTabBarTotalInset(bottomSafeInset: number): number {
-  return adminShell.tabBarBody + Math.max(bottomSafeInset, 10) + 24;
+export function customerTabBarTotalInset(bottomSafeInset: number): number {
+  return customerShell.tabBarBody + Math.max(bottomSafeInset, 10) + 24;
 }

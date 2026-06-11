@@ -16,8 +16,9 @@ import { useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import Svg, { Path, Circle } from "react-native-svg";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
+import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { GlassPageBackground, LiquidGlassCard, GlassIconTile } from "@a3/ui/components";
 import { adminShell, adminTabBarTotalInset } from "../../theme/adminShell";
 
 type DashboardData = {
@@ -105,9 +106,7 @@ function LiveDot(): React.JSX.Element {
     <Animated.View
       style={[
         styles.liveDot,
-        {
-          transform: [{ scale }],
-        },
+        { transform: [{ scale }] },
       ]}
     />
   );
@@ -116,17 +115,29 @@ function LiveDot(): React.JSX.Element {
 function DecorativeRevenueChart(): React.JSX.Element {
   return (
     <View style={styles.chartWrap}>
-      <Svg width="100%" height={112} viewBox="0 0 320 112" preserveAspectRatio="none">
+      <Svg width="100%" height={140} viewBox="0 0 320 140" preserveAspectRatio="none">
         <Path
-          d="M 8 88 C 60 92, 100 72, 140 56 S 220 28, 312 18"
-          stroke={adminShell.chartLine}
+          d="M 8 110 C 60 114, 100 96, 140 78 S 220 36, 312 22"
+          stroke={glass.chartLine}
           strokeWidth={2.5}
           fill="none"
           strokeLinecap="round"
         />
-        <Circle cx={312} cy={18} r={4} fill={adminShell.chartLine} />
+        {/* Data points */}
+        <Circle cx={8} cy={110} r={3} fill={glass.chartLine} />
+        <Circle cx={70} cy={108} r={3} fill={glass.chartLine} />
+        <Circle cx={140} cy={78} r={3} fill={glass.chartLine} />
+        <Circle cx={210} cy={56} r={3} fill={glass.chartLine} />
+        <Circle cx={270} cy={40} r={3} fill={glass.chartLine} />
+        <Circle cx={312} cy={22} r={5} fill={glass.chartLine} />
       </Svg>
-      <Text style={styles.chartHint}>Activity curve (illustrative)</Text>
+      <View style={styles.chartLabelsRow}>
+        {["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"].map((m) => (
+          <Text key={m} style={styles.chartXLabel}>
+            {m}
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }
@@ -201,116 +212,121 @@ export default function DashboardScreen(): React.JSX.Element {
   const bottomPad = adminTabBarTotalInset(insets.bottom);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: spacing[2], paddingBottom: bottomPad },
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={adminShell.chartLine}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.heroCard}>
-          <View style={styles.heroTopRow}>
-            <View style={styles.heroTitles}>
-              <Text style={styles.heroTitle}>Admin Dashboard</Text>
-              <Text style={styles.heroSubtitle}>Platform Overview &amp; Analytics</Text>
-            </View>
-            <View style={styles.heroActions}>
+    <GlassPageBackground>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingTop: spacing[2], paddingBottom: bottomPad },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={glass.chartLine}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Hero card */}
+          <LiquidGlassCard style={styles.heroCard} padding={24}>
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroTitles}>
+                <Text style={styles.heroTitle}>Admin Dashboard</Text>
+                <Text style={styles.heroSubtitle}>Platform Overview &amp; Analytics</Text>
+              </View>
               <Pressable
                 onPress={onLogout}
                 hitSlop={12}
                 style={({ pressed }) => [styles.heroIconBtn, pressed && { opacity: 0.75 }]}
                 accessibilityLabel="Log out"
               >
-                <MaterialIcons name="logout" size={22} color={adminShell.chartLine} />
+                <MaterialIcons name="logout" size={20} color={glass.accentBlue} />
               </Pressable>
-              <View style={styles.heroIconBtn} pointerEvents="none">
-                <MaterialIcons name="settings" size={22} color={adminShell.textMuted} />
-              </View>
             </View>
-          </View>
-          {dash ? (
-            <Text style={styles.updated}>Updated {formatUpdated(dash.fetchedAt)}</Text>
-          ) : null}
-        </View>
-
-        <DashboardErrorBoundary
-          key={boundaryNonce}
-          onRetry={() => setBoundaryNonce((n) => n + 1)}
-        >
-          {!canQuery || dash === undefined ? (
-            <SkeletonGrid />
-          ) : (
-            <>
-              <View style={styles.grid}>
-                <GlassStatCard
-                  icon="people"
-                  value={formatInt(dash.totalUsers)}
-                  label="Total Users"
-                  onPress={() => router.push("/(tabs)/users")}
-                />
-                <GlassStatCard
-                  icon="business"
-                  value={formatInt(dash.activeClubs)}
-                  label="Active Clubs"
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/users",
-                      params: { role: "owner" },
-                    } as never)
-                  }
-                />
-                <GlassStatCard
-                  icon="play-circle-filled"
-                  value={formatInt(dash.activeSessions)}
-                  label="Active Sessions"
-                  valueColor={
-                    dash.activeSessions > 0 ? adminShell.trendPositive : colors.text.primary
-                  }
-                  trailing={dash.activeSessions > 0 ? <LiveDot /> : null}
-                />
-                <GlassStatCard
-                  icon="report-problem"
-                  value={formatInt(dash.openComplaints)}
-                  label="Open Complaints"
-                  valueColor={
-                    dash.openComplaints > 0 ? colors.status.error : colors.text.primary
-                  }
-                  onPress={() => router.push("/(tabs)/complaints")}
-                />
-                <GlassStatCard
-                  icon="pending-actions"
-                  value={formatInt(dash.pendingBookings)}
-                  label="Pending Bookings"
-                  valueColor={
-                    dash.pendingBookings > 0 ? colors.accent.amberLight : colors.text.primary
-                  }
-                />
+            {dash ? (
+              <View style={styles.updatedRow}>
+                <View style={styles.statusDot} />
+                <Text style={styles.updated}>Live · Updated {formatUpdated(dash.fetchedAt)}</Text>
               </View>
+            ) : null}
+          </LiquidGlassCard>
 
-              <View style={styles.revenueCard}>
-                <Text style={styles.revenueLabel}>Platform revenue (live)</Text>
-                <Text style={styles.revenueValue}>₹{formatInt(dash.revenue.allTime)}</Text>
-                <View style={styles.revenueRow}>
-                  <MaterialIcons name="trending-up" size={16} color={adminShell.trendPositive} />
-                  <Text style={styles.revenueTrend}>
-                    Today ₹{formatInt(dash.revenue.today)} · Multi-currency totals not converted
-                  </Text>
+          <DashboardErrorBoundary
+            key={boundaryNonce}
+            onRetry={() => setBoundaryNonce((n) => n + 1)}
+          >
+            {!canQuery || dash === undefined ? (
+              <SkeletonGrid />
+            ) : (
+              <>
+                <View style={styles.grid}>
+                  <GlassStatCard
+                    icon="people"
+                    value={formatInt(dash.totalUsers)}
+                    label="Total Users"
+                    onPress={() => router.push("/(tabs)/users")}
+                  />
+                  <GlassStatCard
+                    icon="business"
+                    value={formatInt(dash.activeClubs)}
+                    label="Active Clubs"
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(tabs)/users",
+                        params: { role: "owner" },
+                      } as never)
+                    }
+                  />
+                  <GlassStatCard
+                    icon="play-circle-filled"
+                    value={formatInt(dash.activeSessions)}
+                    label="Active Sessions"
+                    valueColor={
+                      dash.activeSessions > 0 ? glass.trendPositive : glass.textPrimary
+                    }
+                    trailing={dash.activeSessions > 0 ? <LiveDot /> : null}
+                  />
+                  <GlassStatCard
+                    icon="report-problem"
+                    value={formatInt(dash.openComplaints)}
+                    label="Open Complaints"
+                    valueColor={
+                      dash.openComplaints > 0 ? colors.status.error : glass.textPrimary
+                    }
+                    onPress={() => router.push("/(tabs)/complaints")}
+                  />
+                  <GlassStatCard
+                    icon="pending-actions"
+                    value={formatInt(dash.pendingBookings)}
+                    label="Pending Bookings"
+                    valueColor={
+                      dash.pendingBookings > 0 ? colors.accent.amberLight : glass.textPrimary
+                    }
+                  />
                 </View>
-                <DecorativeRevenueChart />
-              </View>
-            </>
-          )}
-        </DashboardErrorBoundary>
-      </ScrollView>
-    </SafeAreaView>
+
+                <LiquidGlassCard style={styles.revenueCard} padding={24}>
+                  <Text style={styles.revenueLabel}>Platform Revenue (Live)</Text>
+                  <Text style={styles.revenueValue}>₹{formatInt(dash.revenue.allTime)}</Text>
+                  <View style={styles.revenueRow}>
+                    <MaterialIcons
+                      name="trending-up"
+                      size={16}
+                      color={glass.trendPositive}
+                    />
+                    <Text style={styles.revenueTrend}>
+                      Today ₹{formatInt(dash.revenue.today)}
+                    </Text>
+                  </View>
+                  <DecorativeRevenueChart />
+                </LiquidGlassCard>
+              </>
+            )}
+          </DashboardErrorBoundary>
+        </ScrollView>
+      </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
@@ -326,45 +342,33 @@ function GlassStatCard(props: {
     icon,
     value,
     label,
-    valueColor = colors.text.primary,
+    valueColor = glass.textPrimary,
     trailing,
     onPress,
   } = props;
-  const Body = (
-    <View style={styles.statCard}>
-      <View style={styles.statIconTile}>
-        <MaterialIcons name={icon} size={20} color={colors.text.secondary} />
-      </View>
-      <View style={styles.valueRow}>
-        <Text style={[styles.statValue, { color: valueColor }]}>{value}</Text>
-        {trailing}
-      </View>
-      <Text style={styles.statLabel} numberOfLines={2}>
-        {label.toUpperCase()}
-      </Text>
+
+  return (
+    <View style={styles.statCellWrap}>
+      <LiquidGlassCard style={styles.statCard} onPress={onPress} padding={20}>
+        <GlassIconTile>
+          <MaterialIcons name={icon} size={20} color={glass.textMuted} />
+        </GlassIconTile>
+        <View style={styles.valueRow}>
+          <Text style={[styles.statValue, { color: valueColor }]}>{value}</Text>
+          {trailing}
+        </View>
+        <Text style={styles.statLabel} numberOfLines={2}>
+          {label.toUpperCase()}
+        </Text>
+      </LiquidGlassCard>
     </View>
   );
-  /** Cell wrapper width must be on the outer node — % width inside a shrink-wrapped Pressable collapses on RN. */
-  if (onPress) {
-    return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.statCellWrap,
-          pressed && { opacity: 0.92 },
-        ]}
-      >
-        {Body}
-      </Pressable>
-    );
-  }
-  return <View style={styles.statCellWrap}>{Body}</View>;
 }
 
 const GAP = 12;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: adminShell.bgScreen },
+  safe: { flex: 1 },
   scroll: {
     paddingHorizontal: layout.screenPadding,
   },
@@ -375,47 +379,47 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   heroTitles: { flex: 1, minWidth: 0 },
-  heroActions: { flexDirection: "row", alignItems: "center", gap: spacing[1] },
   heroIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: adminShell.cardBorder,
-    backgroundColor: adminShell.iconTileBg,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
     alignItems: "center",
     justifyContent: "center",
   },
   heroCard: {
-    borderRadius: adminShell.radiusHero,
-    borderWidth: 1,
-    borderColor: adminShell.cardBorder,
-    backgroundColor: adminShell.cardBg,
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[4],
     marginBottom: spacing[5],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.45,
-    shadowRadius: 15,
-    elevation: 8,
   },
   heroTitle: {
     fontSize: 24,
     fontWeight: "600",
-    color: colors.text.primary,
+    color: glass.textPrimary,
     letterSpacing: -0.3,
   },
   heroSubtitle: {
-    marginTop: spacing[2],
+    marginTop: spacing[1],
     fontSize: 14,
     lineHeight: 20,
-    color: adminShell.textMuted,
+    color: glass.textMuted,
+  },
+  updatedRow: {
+    marginTop: spacing[4],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: glass.trendPositive,
   },
   updated: {
-    marginTop: spacing[4],
-    ...typography.caption,
-    color: adminShell.textLabel,
+    fontSize: 12,
+    color: glass.textLabel,
+    letterSpacing: 0.4,
   },
   grid: {
     width: "100%",
@@ -431,95 +435,74 @@ const styles = StyleSheet.create({
   statCard: {
     width: "100%",
     alignSelf: "stretch",
-    borderRadius: adminShell.radiusHero,
-    borderWidth: 1,
-    borderColor: adminShell.cardBorder,
-    backgroundColor: adminShell.cardBg,
-    padding: spacing[4],
-    minHeight: 140,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
+    minHeight: 162,
   },
-  statIconTile: {
-    width: 40,
-    height: 40,
-    borderRadius: adminShell.radiusIcon,
-    backgroundColor: adminShell.iconTileBg,
-    borderWidth: 1,
-    borderColor: adminShell.iconTileBorder,
+  valueRow: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: spacing[2],
+    marginTop: spacing[4],
   },
-  valueRow: { flexDirection: "row", alignItems: "center", gap: spacing[2], marginTop: spacing[4] },
-  statValue: { fontSize: 24, fontWeight: "600", letterSpacing: -0.5 },
+  statValue: { fontSize: 26, fontWeight: "600", letterSpacing: -0.5 },
   statLabel: {
     marginTop: spacing[2],
     fontSize: 11,
     fontWeight: "500",
-    letterSpacing: 0.45,
-    color: adminShell.textLabel,
+    letterSpacing: 0.6,
+    color: glass.textLabel,
   },
   skeletonCard: {
     width: "100%",
-    minHeight: 140,
-    borderRadius: adminShell.radiusHero,
-    backgroundColor: adminShell.cardBg,
+    minHeight: 162,
+    borderRadius: glass.cardRadius,
+    backgroundColor: glass.cardBg,
     borderWidth: 1,
-    borderColor: adminShell.cardBorder,
+    borderColor: glass.cardBorder,
   },
   revenueCard: {
-    borderRadius: adminShell.radiusHero,
-    borderWidth: 1,
-    borderColor: adminShell.cardBorder,
-    backgroundColor: adminShell.cardBg,
-    padding: spacing[5],
     marginBottom: spacing[4],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.45,
-    shadowRadius: 15,
-    elevation: 8,
   },
   revenueLabel: {
-    fontSize: 12,
-    letterSpacing: 0.6,
-    color: adminShell.textLabel,
+    fontSize: 13,
+    letterSpacing: 0.7,
+    color: glass.textLabel,
     textTransform: "uppercase",
   },
   revenueValue: {
     marginTop: spacing[2],
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: "600",
-    color: colors.text.primary,
+    color: glass.textPrimary,
     letterSpacing: -0.5,
   },
   revenueRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
-    marginTop: spacing[3],
+    marginTop: spacing[2],
   },
   revenueTrend: {
     flex: 1,
     fontSize: 13,
-    color: adminShell.textMuted,
-    lineHeight: 18,
+    color: glass.trendPositive,
+    fontWeight: "600",
   },
   chartWrap: { marginTop: spacing[4] },
-  chartHint: {
-    marginTop: spacing[2],
-    fontSize: 11,
-    color: adminShell.textLabel,
-    fontStyle: "italic",
+  chartLabelsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    marginTop: 6,
+  },
+  chartXLabel: {
+    fontSize: 10,
+    color: glass.textLabel,
   },
   liveDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: adminShell.trendPositive,
+    backgroundColor: glass.trendPositive,
   },
   errorBanner: {
     marginBottom: spacing[3],

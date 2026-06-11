@@ -14,6 +14,12 @@ import { dispatchWhatsAppOtp } from "./model/otp";
 import { parseIndiaE164OrThrow, throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
+const OTP_RATE_LIMIT_WINDOW_MS = Number(
+  process.env.OTP_RATE_LIMIT_WINDOW_MS ?? 60 * 60 * 1000,
+);
+const OTP_RATE_LIMIT_MAX_PER_WINDOW = Number(
+  process.env.OTP_RATE_LIMIT_MAX_PER_WINDOW ?? 5,
+);
 
 function randomSixDigitString(): string {
   const c = globalThis.crypto;
@@ -64,16 +70,16 @@ export const ownerSendDeskCustomerRegistrationOtp = action({
 
     const count = await ctx.runMutation(internal.otp.countRecentDispatches, {
       phone: normalized,
-      windowMs: 60 * 60 * 1000,
+      windowMs: OTP_RATE_LIMIT_WINDOW_MS,
     });
-    if (count >= 5) {
+    if (count >= OTP_RATE_LIMIT_MAX_PER_WINDOW) {
       throw new Error(
         "OTP_003: Too many OTP requests. Please wait before requesting another code.",
       );
     }
 
     const rawCode = randomSixDigitString();
-    const otpHash = await bcrypt.hash(rawCode, 10);
+    const otpHash = bcrypt.hashSync(rawCode, 10);
     const now = Date.now();
 
     const { recordId } = await ctx.runMutation(internal.otp.storeOtpRecord, {

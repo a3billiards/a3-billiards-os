@@ -11,6 +11,7 @@ import {
   signInViaProvider,
 } from "@convex-dev/auth/server";
 import { Scrypt } from "lucia";
+import { internal } from "./_generated/api";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PasswordConfig = Record<string, any>;
@@ -43,6 +44,17 @@ export function A3Password(config: PasswordConfig = {}) {
           shouldLinkViaPhone: false,
         });
         ({ account, user } = created);
+        // Guard: if user is null the previous signup attempt left an orphaned
+        // authAccounts row (actions are non-transactional). Clean it up so the
+        // user can immediately retry with the same email.
+        if (!user) {
+          await ctx.runMutation(internal.users.deleteOrphanedAuthAccount, {
+            accountId: account._id,
+          });
+          throw new Error(
+            "SIGNUP_RETRY: A previous incomplete registration was cleaned up. Please tap Create Account again.",
+          );
+        }
       } else if (flow === "signIn") {
         if (secret === undefined) {
           throw new Error("Missing `password` param for `signIn` flow");
@@ -119,6 +131,7 @@ export function A3Password(config: PasswordConfig = {}) {
           params,
         });
       }
+      if (!user) throw new Error("AUTH_001: User record not found");
       return { userId: user._id };
     },
     crypto: {
@@ -143,7 +156,24 @@ function defaultProfile(params: Record<string, unknown>) {
       throw new Error("Invalid password");
     }
   }
+  // Include ALL non-optional users-table fields. On signUp the client passes
+  // name / age / consentGiven / phone as extra params so the user row is fully
+  // populated in the same atomic createAccount call — no separate createUser
+  // mutation needed, which avoids the "not authenticated" race condition.
+  const now = Date.now();
   return {
     email: params.email as string,
+    name: typeof params.name === "string" ? params.name.trim() : "",
+    age: typeof params.age === "number" ? params.age : 0,
+    phone: typeof params.phone === "string" ? params.phone : undefined,
+    phoneVerified: false,
+    fcmTokens: [] as string[],
+    settingsPasscodeSet: false,
+    complaints: [] as string[],
+    isFrozen: false,
+    role: "customer" as const,
+    consentGiven: params.consentGiven === true,
+    consentGivenAt: params.consentGiven === true ? now : undefined,
+    createdAt: now,
   };
 }

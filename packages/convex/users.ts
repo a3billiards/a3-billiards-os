@@ -399,6 +399,44 @@ export const adminUnfreezeUser = mutation({
   },
 });
 
+/**
+ * Save a push token (FCM or Expo) for the current authenticated user.
+ * Called on app launch after permissions are granted. De-duplicates automatically.
+ * Pass `remove: true` to unregister the token on logout / permission revoked.
+ */
+export const saveFcmToken = mutation({
+  args: { token: v.string(), remove: v.optional(v.boolean()) },
+  handler: async (ctx, { token, remove }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return;
+    const user = await ctx.db.get(userId);
+    if (!user) return;
+    const existing = user.fcmTokens ?? [];
+    if (remove) {
+      if (!existing.includes(token)) return;
+      await ctx.db.patch(userId, { fcmTokens: existing.filter((t) => t !== token) });
+    } else {
+      if (existing.includes(token)) return;
+      await ctx.db.patch(userId, { fcmTokens: [...existing, token] });
+    }
+  },
+});
+
+/**
+ * Deletes an orphaned authAccounts row (account exists but linked user was never created
+ * or was deleted). Called from the password provider when createAccount returns user=null.
+ */
+export const deleteOrphanedAuthAccount = internalMutation({
+  args: { accountId: v.id("authAccounts") },
+  handler: async (ctx, { accountId }) => {
+    const row = await ctx.db.get(accountId);
+    if (!row) return;
+    const linkedUser = row.userId ? await ctx.db.get(row.userId) : null;
+    if (linkedUser) return; // user exists — don't touch it
+    await ctx.db.delete(accountId);
+  },
+});
+
 /** Remove a stale FCM token from whichever user row still holds it (FCM UNREGISTERED). */
 // TODO: add a by_fcmToken index for O(1) lookup when user count grows
 export const removeStaleToken = internalMutation({

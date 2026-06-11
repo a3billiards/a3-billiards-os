@@ -12,6 +12,7 @@ export const ERROR_CODES = {
     AUTH_006: "Account pending deletion",
     AUTH_008: "No club found for owner account",
     AUTH_007: "Must be 18 or older",
+    AUTH_009: "No account found for this phone",
     MFA_001: "Not an admin",
     PASSCODE_001: "Invalid passcode",
     PASSCODE_002: "Passcode not configured",

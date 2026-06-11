@@ -13,11 +13,11 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import {
   useAction,
   useConvexAuth,
-  useMutation,
   useQuery,
 } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
 const PIN_LENGTH = 6;
@@ -38,7 +38,6 @@ export default function VerifyPhoneScreen() {
   const { isAuthenticated } = useConvexAuth();
   const sendOtp = useAction(api.otp.sendOtp);
   const verifyOtp = useAction(api.otp.verifyOtp);
-  const updateUser = useMutation(api.users.updateUser);
   const currentUser = useQuery(
     api.users.getCurrentUser,
     isAuthenticated ? {} : "skip",
@@ -174,9 +173,9 @@ export default function VerifyPhoneScreen() {
         userId: userIdForOtp,
       });
 
-      if (isAuthenticated) {
-        await updateUser({ phone });
-      }
+      // `verifyOtp` already persists `phone` (if missing) + `phoneVerified=true`
+      // on the user. Calling `updateUser({ phone })` here is redundant and
+      // hits PERM_001 because `phoneVerified` is now true on a customer.
 
       router.replace("/(tabs)/home");
     } catch (e) {
@@ -212,7 +211,6 @@ export default function VerifyPhoneScreen() {
     phone,
     verifyOtp,
     code,
-    updateUser,
     router,
     resetDigits,
     isAuthenticated,
@@ -268,6 +266,7 @@ export default function VerifyPhoneScreen() {
     mode === "input" || mode === "expired";
 
   return (
+    <GlassPageBackground>
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -320,7 +319,7 @@ export default function VerifyPhoneScreen() {
         {/* ── Sending spinner ── */}
         {mode === "sending" && (
           <View style={styles.sendingBox}>
-            <ActivityIndicator size="large" color={colors.accent.green} />
+            <ActivityIndicator size="large" color={glass.ctaBg} />
             <Text style={styles.sendingText}>
               Sending verification code…
             </Text>
@@ -359,7 +358,7 @@ export default function VerifyPhoneScreen() {
 
             {mode === "verifying" && (
               <ActivityIndicator
-                color={colors.accent.green}
+                color={glass.ctaBg}
                 style={{ marginTop: spacing[4] }}
               />
             )}
@@ -438,11 +437,12 @@ export default function VerifyPhoneScreen() {
         )}
       </View>
     </KeyboardAvoidingView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg.primary },
+  flex: { flex: 1, backgroundColor: "transparent" },
   container: {
     flex: 1,
     alignItems: "center",
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
   logo: {
     ...typography.heading1,
     fontSize: 48,
-    color: colors.accent.green,
+    color: glass.ctaBg,
     letterSpacing: 4,
     marginBottom: spacing[1],
   },
@@ -481,22 +481,24 @@ const styles = StyleSheet.create({
   codeBox: {
     width: 48,
     height: 56,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
     borderRadius: radius.md,
     borderWidth: 2,
-    borderColor: colors.border.default,
+    borderColor: glass.inputBorder,
     textAlign: "center",
     ...typography.monoLarge,
     color: colors.text.primary,
   },
-  codeBoxFilled: { borderColor: colors.accent.green },
+  codeBoxFilled: { borderColor: glass.inputBorderFocus },
   codeBoxError: { borderColor: colors.status.error },
 
   // ── Lock / rate limit / expired states ──
   lockBox: {
     alignItems: "center",
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.lg,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
     paddingVertical: spacing[8],
     paddingHorizontal: spacing[6],
     width: "100%",
@@ -558,13 +560,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
   },
   resendDisabled: { opacity: 0.5 },
-  resendText: { ...typography.label, color: colors.accent.green },
+  resendText: { ...typography.label, color: glass.ctaBg },
   resendTextDisabled: { color: colors.text.secondary },
 
   // ── Resend (prominent button for expired / post-lock) ──
   resendButtonPrimary: {
     height: layout.buttonHeight,
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -574,7 +576,7 @@ const styles = StyleSheet.create({
   },
   resendButtonPrimaryText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: glass.ctaText,
   },
   pressed: { opacity: 0.85 },
 

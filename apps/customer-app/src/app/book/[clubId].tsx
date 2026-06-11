@@ -19,8 +19,9 @@ import {
   DateStrip,
   TableTypePicker,
   TimeSlotGrid,
+  GlassPageBackground,
 } from "@a3/ui/components";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import {
   resolveBookingRatePerMin,
 } from "@a3/utils/bookingRate";
@@ -236,26 +237,31 @@ export default function BookClubScreen() {
 
   if (!clubIdParam) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <Text style={styles.errorText}>Missing club.</Text>
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (ctx === undefined) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <ActivityIndicator color={colors.accent.green} size="large" />
+          <ActivityIndicator color={glass.ctaBg} size="large" />
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (!ctx.bookingSettings.enabled) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.disabledWrap}>
           <Pressable style={styles.iconBtn} onPress={handleClose}>
@@ -269,6 +275,7 @@ export default function BookClubScreen() {
           </Pressable>
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
@@ -279,6 +286,7 @@ export default function BookClubScreen() {
 
   if (bookableTypes.length === 0) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Pressable style={styles.iconBtn} onPress={handleClose}>
@@ -294,10 +302,12 @@ export default function BookClubScreen() {
           </Pressable>
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Pressable style={styles.iconBtn} onPress={handleBack}>
@@ -514,7 +524,7 @@ export default function BookClubScreen() {
               disabled={submitting}
             >
               {submitting ? (
-                <ActivityIndicator color={colors.bg.primary} />
+                <ActivityIndicator color={glass.ctaText} />
               ) : (
                 <Text style={styles.primaryBtnText}>Confirm Booking</Text>
               )}
@@ -523,13 +533,14 @@ export default function BookClubScreen() {
         ) : null}
       </ScrollView>
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
 const DOT_GAP = 4;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
+  safe: { flex: 1, backgroundColor: "transparent" },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   errorText: { ...typography.body, color: colors.status.error },
   body: { flex: 1 },
@@ -574,10 +585,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.default,
   },
   dotActive: {
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     transform: [{ scale: 1.15 }],
   },
-  dotDone: { backgroundColor: colors.accent.green },
+  dotDone: { backgroundColor: glass.ctaBg },
   stepLine: {
     flex: 1,
     height: 2,
@@ -585,7 +596,7 @@ const styles = StyleSheet.create({
     marginHorizontal: DOT_GAP,
     maxWidth: 40,
   },
-  stepLineActive: { backgroundColor: colors.accent.green },
+  stepLineActive: { backgroundColor: glass.ctaBg },
   labelsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -616,7 +627,7 @@ const styles = StyleSheet.create({
     marginVertical: spacing[6],
   },
   textBtn: { alignSelf: "center", marginTop: spacing[4] },
-  textBtnLabel: { ...typography.label, color: colors.accent.green },
+  textBtnLabel: { ...typography.label, color: glass.ctaBg },
   review: { gap: spacing[3] },
   reviewHeading: {
     ...typography.heading3,
@@ -630,14 +641,14 @@ const styles = StyleSheet.create({
   durCard: {
     width: "47%",
     minHeight: 94,
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderRadius: glass.cardRadiusSmall,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
     padding: spacing[4],
   },
   durCardActive: {
-    borderColor: colors.accent.green,
+    borderColor: glass.inputBorderFocus,
     borderWidth: 2,
   },
   durChip: {
@@ -645,7 +656,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     textAlign: "center",
   },
-  durChipActive: { color: colors.accent.green },
+  durChipActive: { color: glass.ctaBg },
   durSub: {
     ...typography.bodySmall,
     color: colors.text.secondary,
@@ -666,11 +677,11 @@ const styles = StyleSheet.create({
     marginTop: spacing[2],
   },
   summaryCard: {
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderRadius: glass.cardRadiusSmall,
     padding: spacing[4],
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
   },
   summaryClub: {
     ...typography.heading4,
@@ -692,14 +703,14 @@ const styles = StyleSheet.create({
   },
   notesLabel: { ...typography.label, color: colors.text.secondary },
   notesInput: {
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
     borderRadius: radius.md,
     minHeight: 80,
     padding: spacing[3],
     color: colors.text.primary,
     ...typography.body,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.inputBorder,
   },
   counter: {
     ...typography.caption,
@@ -707,7 +718,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   primaryBtn: {
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     borderRadius: radius.md,
     minHeight: layout.buttonHeight,
     alignItems: "center",
@@ -717,6 +728,6 @@ const styles = StyleSheet.create({
   primaryBtnDisabled: { opacity: 0.7 },
   primaryBtnText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: glass.ctaText,
   },
 });

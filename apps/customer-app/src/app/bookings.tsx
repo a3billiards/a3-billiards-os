@@ -12,8 +12,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { api } from "@a3/convex/_generated/api";
-import { BookingCard } from "@a3/ui/components";
-import { colors, spacing, typography, radius, layout } from "@a3/ui/theme";
+import { BookingCard, GlassPageBackground } from "@a3/ui/components";
+import { colors, spacing, typography, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
 type Segment = "upcoming" | "history";
@@ -98,7 +98,17 @@ export default function MyBookingsScreen() {
             await cancelBooking({ bookingId: log.bookingId, clubId: log.clubId });
             Alert.alert("Booking cancelled");
           } catch (e) {
-            Alert.alert(parseConvexError(e as Error).message);
+            const raw = (e as Error).message ?? "";
+            if (raw.includes("BOOKING_005")) {
+              Alert.alert(
+                "Cancellation limit reached",
+                "You have reached the maximum of 3 cancellations at this club today. Please try again tomorrow.",
+              );
+            } else if (raw.includes("BOOKING_007")) {
+              Alert.alert("Already cancelled", "This booking has already been cancelled.");
+            } else {
+              Alert.alert("Could not cancel", parseConvexError(e as Error).message);
+            }
           } finally {
             setBusyId(null);
           }
@@ -110,6 +120,7 @@ export default function MyBookingsScreen() {
   const list = segment === "upcoming" ? sorted.upcoming : sorted.history;
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>My Bookings</Text>
@@ -135,7 +146,7 @@ export default function MyBookingsScreen() {
 
       {logs === undefined ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.accent.green} />
+          <ActivityIndicator color={glass.ctaBg} />
         </View>
       ) : list.length === 0 ? (
         <View style={styles.emptyWrap}>
@@ -194,25 +205,26 @@ export default function MyBookingsScreen() {
         </ScrollView>
       )}
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
+  safe: { flex: 1, backgroundColor: "transparent" },
   header: { paddingHorizontal: spacing[6], paddingTop: spacing[6], paddingBottom: spacing[3] },
   title: { fontSize: 24, lineHeight: 32, fontWeight: "300", color: colors.text.primary },
   segmented: {
     marginHorizontal: spacing[6],
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: colors.bg.secondary,
+    borderColor: glass.inputBorder,
+    backgroundColor: glass.inputBg,
     padding: spacing[1],
     flexDirection: "row",
     gap: spacing[1],
   },
   segBtn: { flex: 1, minHeight: 40, borderRadius: radius.lg, alignItems: "center", justifyContent: "center" },
-  segBtnActive: { backgroundColor: colors.bg.tertiary },
+  segBtnActive: { backgroundColor: glass.cardBg, borderWidth: 1, borderColor: glass.cardBorder },
   segText: { ...typography.labelSmall, color: colors.text.secondary },
   segTextActive: { color: colors.text.primary },
   list: { paddingHorizontal: spacing[6], paddingTop: spacing[4], paddingBottom: spacing[8], gap: spacing[3] },
@@ -222,7 +234,7 @@ const styles = StyleSheet.create({
   discoverBtn: {
     minHeight: layout.buttonHeight,
     borderRadius: radius.md,
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing[4],

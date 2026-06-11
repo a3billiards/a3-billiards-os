@@ -10,11 +10,11 @@ import {
   TextInput,
   Alert,
 } from "react-native";
-import { BookingCard, ComplaintBanner } from "@a3/ui/components";
+import { BookingCard, ComplaintBanner, GlassPageBackground } from "@a3/ui/components";
 import { useMutation, useQuery } from "convex/react";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { api } from "@a3/convex/_generated/api";
-import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
+import { colors, layout, radius, spacing, typography, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { computeBookingUnixTime, timeZoneAbbreviation } from "@a3/utils/timezone";
 import { useLocalSearchParams } from "expo-router";
@@ -159,10 +159,12 @@ export default function BookingsTab() {
 
   if (dashboard === undefined) {
     return (
+      <GlassPageBackground>
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.accent.green} />
+        <ActivityIndicator size="large" color={glass.ctaBg} />
         <Text style={styles.loadingText}>Loading bookings...</Text>
       </View>
+      </GlassPageBackground>
     );
   }
 
@@ -175,10 +177,12 @@ export default function BookingsTab() {
     (clubId && upcoming === undefined)
   ) {
     return (
+      <GlassPageBackground>
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.accent.green} />
+        <ActivityIndicator size="large" color={glass.ctaBg} />
         <Text style={styles.loadingText}>Loading bookings...</Text>
       </View>
+      </GlassPageBackground>
     );
   }
 
@@ -388,6 +392,7 @@ export default function BookingsTab() {
   };
 
   return (
+    <GlassPageBackground>
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>Bookings</Text>
@@ -546,6 +551,7 @@ export default function BookingsTab() {
         </View>
       </Modal>
     </View>
+    </GlassPageBackground>
   );
 }
 
@@ -554,10 +560,10 @@ const SCREEN_PAD = spacing[6];
 const CARD_LIST_GAP = spacing[3];
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg.primary },
+  screen: { flex: 1, backgroundColor: "transparent" },
   centered: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -583,10 +589,10 @@ const styles = StyleSheet.create({
   segmented: {
     marginHorizontal: SCREEN_PAD,
     marginBottom: spacing[3],
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.inputBg,
     borderRadius: FIGMA_BOOKINGS.segmentRadius,
     borderWidth: 1,
-    borderColor: FIGMA_BOOKINGS.segmentBorder,
+    borderColor: glass.inputBorder,
     padding: spacing[1],
     flexDirection: "row",
     gap: spacing[1],
@@ -598,7 +604,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  segBtnActive: { backgroundColor: colors.bg.tertiary },
+  segBtnActive: {
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+  },
   segText: {
     fontSize: typography.labelSmall.fontSize,
     lineHeight: typography.labelSmall.lineHeight,
@@ -618,8 +628,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipActive: {
-    borderColor: FIGMA_BOOKINGS.chipActiveBorder,
-    backgroundColor: FIGMA_BOOKINGS.chipActiveFill,
+    borderColor: glass.inputBorderFocus,
+    backgroundColor: "rgba(56, 189, 248, 0.22)",
   },
   chipText: {
     fontSize: 12,
@@ -627,12 +637,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.text.secondary,
   },
-  chipTextActive: { color: "#000000" },
+  chipTextActive: { color: glass.textPrimary },
   search: {
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: glass.inputBorder,
     color: colors.text.primary,
     ...typography.body,
     paddingHorizontal: spacing[3],
@@ -640,10 +650,10 @@ const styles = StyleSheet.create({
   },
   list: { paddingHorizontal: SCREEN_PAD, paddingBottom: spacing[8], gap: CARD_LIST_GAP },
   emptyWrap: {
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.cardBg,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
     padding: spacing[4],
   },
   emptyTitle: { ...typography.heading4, color: colors.text.primary, marginBottom: spacing[2] },
@@ -652,7 +662,8 @@ const styles = StyleSheet.create({
     minHeight: layout.touchTarget,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.inputBorder,
+    backgroundColor: glass.inputBg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -666,10 +677,10 @@ const styles = StyleSheet.create({
   complaintGateBackdrop: { justifyContent: "center" },
   complaintGateCard: { maxHeight: "88%" },
   modalCard: {
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.tabPillBg,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.tabPillBorder,
     padding: spacing[4],
     gap: spacing[2],
   },

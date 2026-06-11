@@ -13,11 +13,16 @@ import { useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
-import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
+import { layout, spacing, typography, glass } from "@a3/ui/theme";
+import {
+  GlassPageBackground,
+  LiquidGlassCard,
+  GlassIconTile,
+} from "@a3/ui/components";
 import { formatCurrency } from "@a3/utils/billing";
 import { getActiveRoleId } from "../../lib/activeRoleStorage";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
-import { ownerShell, ownerTabBarTotalInset } from "../../theme/ownerShell";
+import { ownerTabBarTotalInset } from "../../theme/ownerShell";
 
 type QuickTile = {
   href:
@@ -33,16 +38,18 @@ type QuickTile = {
 };
 
 const QUICK_TILES: QuickTile[] = [
-  { href: "/(tabs)/slots", label: "Slots", icon: "view-module", tint: colors.accent.green },
-  { href: "/(tabs)/bookings", label: "Bookings", icon: "event", tint: colors.status.info },
-  { href: "/(tabs)/snacks", label: "Snacks", icon: "fastfood", tint: colors.accent.amber },
-  { href: "/(tabs)/financials", label: "Financials", icon: "attach-money", tint: colors.accent.amberLight },
-  { href: "/(tabs)/complaints", label: "Complaints", icon: "report-problem", tint: colors.status.error },
-  { href: "/(tabs)/settings", label: "Settings", icon: "settings", tint: colors.text.secondary },
+  { href: "/(tabs)/slots", label: "Slots", icon: "view-module", tint: "#86efac" },
+  { href: "/(tabs)/bookings", label: "Bookings", icon: "event", tint: "#7dd3fc" },
+  { href: "/(tabs)/snacks", label: "Snacks", icon: "fastfood", tint: "#fbbf24" },
+  { href: "/(tabs)/financials", label: "Financials", icon: "bar-chart", tint: "#fde047" },
+  { href: "/(tabs)/complaints", label: "Complaints", icon: "report-problem", tint: "#fda4af" },
+  { href: "/(tabs)/settings", label: "Settings", icon: "settings", tint: glass.textMuted },
 ];
 
 export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
 
@@ -59,10 +66,12 @@ export default function HomeScreen(): React.JSX.Element {
 
   if (dashboard === undefined) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.accent.green} />
-        <Text style={styles.centerText}>Loading dashboard…</Text>
-      </View>
+      <GlassPageBackground>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={glass.accentBlue} />
+          <Text style={styles.centerText}>Loading dashboard…</Text>
+        </View>
+      </GlassPageBackground>
     );
   }
 
@@ -73,357 +82,462 @@ export default function HomeScreen(): React.JSX.Element {
   const summary = dashboard.bookingSummary;
   const showSummary = dashboard.bookingSettingsEnabled;
 
-  const todayLabel = new Date().toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  });
-  
-  const insets = useSafeAreaInsets();
-  const bottomPad = ownerTabBarTotalInset(insets.bottom);
-
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: spacing[2], paddingBottom: bottomPad },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Owner Dashboard</Text>
-          <Text style={styles.heroSubtitle}>{todayLabel}</Text>
-        </View>
-
-        <View style={styles.grid}>
-          <View style={styles.statCellWrapFull}>
-            <View style={styles.statCard}>
-              <View style={styles.valueRow}>
-                <Text style={styles.statHeroValue}>
-                  {stats === undefined
-                    ? "—"
-                    : formatCurrency(stats.todayRevenue, stats.currency)}
-                </Text>
+    <GlassPageBackground>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingTop: spacing[2], paddingBottom: bottomPad },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header row — Home title + notifications + Owner pill */}
+          <View style={styles.headerRow}>
+            <Text style={styles.headerTitle}>Home</Text>
+            <View style={styles.headerActions}>
+              <Pressable
+                hitSlop={10}
+                style={styles.bellBtn}
+                onPress={() => router.push("/(tabs)/complaints")}
+                accessibilityLabel="Notifications"
+              >
+                <MaterialIcons
+                  name="notifications-none"
+                  size={20}
+                  color={glass.textMuted}
+                />
+                <View style={styles.bellDot} />
+              </Pressable>
+              <View style={styles.ownerPill}>
+                <MaterialIcons name="security" size={14} color="#7dd3fc" />
+                <Text style={styles.ownerPillText}>Owner</Text>
               </View>
-              <Text style={styles.statLabel}>TODAY'S REVENUE</Text>
-              <Text style={styles.statSub}>
+            </View>
+          </View>
+
+          {/* Today's Total Revenue hero */}
+          <LiquidGlassCard style={styles.revenueHero} padding={24}>
+            <View style={styles.revenueLabelRow}>
+              <MaterialIcons name="trending-up" size={14} color="#7dd3fc" />
+              <Text style={styles.revenueLabel}>TODAY'S TOTAL REVENUE</Text>
+            </View>
+            <View style={styles.revenueValueRow}>
+              <Text style={styles.currency}>₹</Text>
+              <Text style={styles.revenueValue}>
                 {stats === undefined
-                  ? "Loading…"
-                  : `${stats.completedToday} session${stats.completedToday === 1 ? "" : "s"} completed`}
+                  ? "—"
+                  : formatCurrency(stats.todayRevenue, stats.currency).replace(
+                      /^[^\d]+/,
+                      "",
+                    )}
               </Text>
             </View>
-          </View>
-        </View>
-
-        <View style={styles.grid}>
-          <View style={styles.statCellWrap}>
-            <View style={styles.statCard}>
-              <View style={styles.statIconTile}>
-                <MaterialIcons
-                  name="play-circle-outline"
-                  size={20}
-                  color={ownerShell.trendPositive}
-                />
-              </View>
-              <View style={styles.valueRow}>
-                <Text style={styles.statValue}>
-                  {stats === undefined ? "—" : stats.activeSessions}
-                </Text>
-              </View>
-              <Text style={styles.statLabel} numberOfLines={2}>ACTIVE SESSIONS</Text>
+            <View style={styles.revenueSubRow}>
+              <Text style={styles.revenueSubMuted}>
+                {stats === undefined
+                  ? "Loading…"
+                  : `${stats.completedToday} session${stats.completedToday === 1 ? "" : "s"} today`}
+              </Text>
+              <View style={styles.revenueSubDot} />
+              <Text style={styles.revenueSubAccent}>Cash basis</Text>
             </View>
-          </View>
-          <View style={styles.statCellWrap}>
-            <View style={styles.statCard}>
-              <View style={styles.statIconTile}>
-                <MaterialIcons
-                  name="view-module"
-                  size={20}
-                  color={colors.status.info}
-                />
-              </View>
-              <View style={styles.valueRow}>
+          </LiquidGlassCard>
+
+          {/* Active Tables / Sessions Today */}
+          <View style={styles.gridTwo}>
+            <View style={styles.statCellWrap}>
+              <LiquidGlassCard style={styles.statCard} padding={20}>
+                <GlassIconTile>
+                  <MaterialIcons name="view-module" size={20} color="#7dd3fc" />
+                </GlassIconTile>
                 <Text style={styles.statValue}>
                   {stats === undefined ? "—" : stats.activeTables}
                 </Text>
-              </View>
-              <Text style={styles.statLabel} numberOfLines={2}>ACTIVE TABLES</Text>
+                <Text style={styles.statLabel}>Active Tables</Text>
+              </LiquidGlassCard>
+            </View>
+            <View style={styles.statCellWrap}>
+              <LiquidGlassCard style={styles.statCard} padding={20}>
+                <GlassIconTile>
+                  <MaterialIcons
+                    name="play-circle-outline"
+                    size={20}
+                    color="#86efac"
+                  />
+                </GlassIconTile>
+                <Text style={[styles.statValue, { color: "#86efac" }]}>
+                  {stats === undefined ? "—" : stats.activeSessions}
+                </Text>
+                <Text style={styles.statLabel}>Sessions Today</Text>
+              </LiquidGlassCard>
             </View>
           </View>
-        </View>
 
-        {showSummary ? (
-          <>
-            <Text style={styles.sectionTitle}>Bookings today</Text>
-            <View style={styles.grid}>
-              <View style={styles.statCellWrapThird}>
-                <Pressable
-                  onPress={() => router.push("/(tabs)/bookings?segment=pending")}
-                  style={({ pressed }) => [
-                    styles.summaryCard,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.summaryValue}>{summary.pending}</Text>
-                  <Text style={styles.summaryLabel} numberOfLines={1}>PENDING</Text>
-                </Pressable>
-              </View>
-              <View style={styles.statCellWrapThird}>
-                <Pressable
-                  onPress={() => router.push("/(tabs)/bookings?segment=upcoming")}
-                  style={({ pressed }) => [
-                    styles.summaryCard,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.summaryValue}>{summary.confirmedToday}</Text>
-                  <Text style={styles.summaryLabel} numberOfLines={1}>CONFIRMED</Text>
-                </Pressable>
-              </View>
-              <View style={styles.statCellWrapThird}>
-                <Pressable
-                  onPress={() => router.push("/(tabs)/bookings?segment=history")}
-                  style={({ pressed }) => [
-                    styles.summaryCard,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.summaryValue}>{summary.completedToday}</Text>
-                  <Text style={styles.summaryLabel} numberOfLines={1}>COMPLETED</Text>
-                </Pressable>
-              </View>
-            </View>
-          </>
-        ) : (
-          <View style={styles.bookingsDisabled}>
-            <MaterialIcons name="event-busy" size={20} color={colors.text.secondary} />
-            <Text style={styles.bookingsDisabledText}>
-              Online booking is disabled. Enable it in Settings to track booking
-              activity here.
-            </Text>
-          </View>
-        )}
-
-        <Text style={styles.sectionTitle}>Quick access</Text>
-        <View style={styles.grid}>
-          {QUICK_TILES.map((t) => (
-            <View key={t.href} style={styles.statCellWrap}>
+          {/* Quick Access */}
+          <Text style={styles.sectionTitle}>Quick Access</Text>
+          <View style={styles.quickRow}>
+            {QUICK_TILES.slice(0, 4).map((t) => (
               <Pressable
+                key={t.href}
                 onPress={() => router.push(t.href)}
                 style={({ pressed }) => [
-                  styles.tileCard,
-                  pressed && styles.pressed,
+                  styles.quickTile,
+                  pressed && { opacity: 0.85 },
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${t.label}`}
               >
-                <View style={styles.statIconTile}>
+                <View style={styles.quickIcon}>
                   <MaterialIcons name={t.icon} size={20} color={t.tint} />
                 </View>
-                <Text style={styles.tileLabel}>{t.label}</Text>
+                <Text style={styles.quickLabel}>{t.label}</Text>
               </Pressable>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+            ))}
+          </View>
+
+          {/* Bookings summary (if enabled) */}
+          {showSummary ? (
+            <>
+              <Text style={styles.sectionTitle}>Bookings Today</Text>
+              <View style={styles.gridThree}>
+                <View style={styles.statCellWrapThird}>
+                  <LiquidGlassCard
+                    style={styles.summaryCard}
+                    padding={14}
+                    onPress={() =>
+                      router.push("/(tabs)/bookings?segment=pending")
+                    }
+                  >
+                    <Text style={[styles.summaryValue, { color: "#fbbf24" }]}>
+                      {summary.pending}
+                    </Text>
+                    <Text style={styles.summaryLabel}>Pending</Text>
+                  </LiquidGlassCard>
+                </View>
+                <View style={styles.statCellWrapThird}>
+                  <LiquidGlassCard
+                    style={styles.summaryCard}
+                    padding={14}
+                    onPress={() =>
+                      router.push("/(tabs)/bookings?segment=upcoming")
+                    }
+                  >
+                    <Text style={[styles.summaryValue, { color: "#86efac" }]}>
+                      {summary.confirmedToday}
+                    </Text>
+                    <Text style={styles.summaryLabel}>Confirmed</Text>
+                  </LiquidGlassCard>
+                </View>
+                <View style={styles.statCellWrapThird}>
+                  <LiquidGlassCard
+                    style={styles.summaryCard}
+                    padding={14}
+                    onPress={() =>
+                      router.push("/(tabs)/bookings?segment=history")
+                    }
+                  >
+                    <Text style={[styles.summaryValue, { color: "#7dd3fc" }]}>
+                      {summary.completedToday}
+                    </Text>
+                    <Text style={styles.summaryLabel}>Completed</Text>
+                  </LiquidGlassCard>
+                </View>
+              </View>
+            </>
+          ) : (
+            <LiquidGlassCard style={styles.bookingsDisabled} padding={16}>
+              <MaterialIcons
+                name="event-busy"
+                size={20}
+                color={glass.textMuted}
+              />
+              <Text style={styles.bookingsDisabledText}>
+                Online booking is disabled. Enable it in Settings to track
+                booking activity here.
+              </Text>
+            </LiquidGlassCard>
+          )}
+
+          {/* Active Sessions */}
+          {stats?.activeSessions && stats.activeSessions > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>Active Sessions</Text>
+              <LiquidGlassCard
+                style={styles.activeSessionCard}
+                padding={18}
+                onPress={() => router.push("/(tabs)/slots")}
+              >
+                <View style={styles.activeRow}>
+                  <View style={styles.activeLeft}>
+                    <View style={styles.liveDot} />
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text style={styles.activeTitle}>
+                        {stats.activeSessions} active session
+                        {stats.activeSessions === 1 ? "" : "s"}
+                      </Text>
+                      <Text style={styles.activeSub}>Tap to view tables</Text>
+                    </View>
+                  </View>
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={20}
+                    color={glass.textMuted}
+                  />
+                </View>
+              </LiquidGlassCard>
+            </>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
-const GAP = 12;
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: ownerShell.bgScreen,
-  },
+  safe: { flex: 1 },
   scroll: {
     paddingHorizontal: layout.screenPadding,
   },
   center: {
     flex: 1,
-    backgroundColor: ownerShell.bgScreen,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: layout.screenPadding,
   },
   centerText: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     marginTop: spacing[3],
   },
-  heroCard: {
-    borderRadius: ownerShell.radiusHero,
-    borderWidth: 1,
-    borderColor: ownerShell.cardBorder,
-    backgroundColor: ownerShell.cardBg,
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[4],
-    marginBottom: spacing[5],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.45,
-    shadowRadius: 15,
-    elevation: 8,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: spacing[2],
+    paddingBottom: spacing[4],
   },
-  heroTitle: {
+  headerTitle: {
     fontSize: 24,
     fontWeight: "600",
-    color: colors.text.primary,
+    color: glass.textPrimary,
     letterSpacing: -0.3,
   },
-  heroSubtitle: {
-    marginTop: spacing[2],
-    fontSize: 14,
-    lineHeight: 20,
-    color: ownerShell.textMuted,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    letterSpacing: 0.6,
-    color: ownerShell.textLabel,
-    textTransform: "uppercase",
-    marginTop: spacing[3],
-    marginBottom: spacing[3],
-  },
-  grid: {
-    width: "100%",
+  headerActions: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: spacing[5],
+    alignItems: "center",
+    gap: spacing[2],
   },
-  statCellWrapFull: {
-    width: "100%",
-    marginBottom: GAP,
-  },
-  statCellWrap: {
-    width: "48%",
-    marginBottom: GAP,
-  },
-  statCellWrapThird: {
-    width: "31%",
-    marginBottom: GAP,
-  },
-  statCard: {
-    width: "100%",
-    alignSelf: "stretch",
-    borderRadius: ownerShell.radiusHero,
-    borderWidth: 1,
-    borderColor: ownerShell.cardBorder,
-    backgroundColor: ownerShell.cardBg,
-    padding: spacing[4],
-    minHeight: 140,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  statIconTile: {
+  bellBtn: {
     width: 40,
     height: 40,
-    borderRadius: ownerShell.radiusIcon,
-    backgroundColor: ownerShell.iconTileBg,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: ownerShell.iconTileBorder,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
-  valueRow: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    gap: spacing[2], 
-    marginTop: spacing[4] 
+  bellDot: {
+    position: "absolute",
+    top: 8,
+    right: 9,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: glass.trendPositive,
+    borderWidth: 1,
+    borderColor: glass.pageBgBottom,
   },
-  statHeroValue: {
-    fontSize: 30,
+  ownerPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(125, 211, 252, 0.4)",
+    backgroundColor: "rgba(125, 211, 252, 0.1)",
+  },
+  ownerPillText: {
+    fontSize: 12,
     fontWeight: "600",
-    color: ownerShell.trendPositive,
-    letterSpacing: -0.5,
+    color: "#7dd3fc",
+    letterSpacing: 0.2,
+  },
+  revenueHero: {
+    marginBottom: spacing[4],
+  },
+  revenueLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+  },
+  revenueLabel: {
+    fontSize: 11,
+    color: glass.textLabel,
+    letterSpacing: 0.7,
+    fontWeight: "600",
+  },
+  revenueValueRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginTop: spacing[2],
+  },
+  currency: {
+    fontSize: 24,
+    color: glass.textMuted,
+    fontWeight: "500",
+    marginRight: 4,
+    marginBottom: 4,
+  },
+  revenueValue: {
+    fontSize: 38,
+    color: glass.textPrimary,
+    fontWeight: "700",
+    letterSpacing: -1,
+  },
+  revenueSubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    marginTop: spacing[3],
+  },
+  revenueSubMuted: { fontSize: 12, color: glass.textMuted },
+  revenueSubDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: glass.textLabel,
+  },
+  revenueSubAccent: {
+    fontSize: 12,
+    color: "#7dd3fc",
+    fontWeight: "600",
+  },
+  gridTwo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: spacing[4],
+  },
+  gridThree: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: spacing[4],
+  },
+  statCellWrap: { width: "48.5%" },
+  statCellWrapThird: { width: "31.5%" },
+  statCard: {
+    width: "100%",
+    minHeight: 150,
   },
   statValue: {
-    fontSize: 24, 
-    fontWeight: "600", 
-    color: colors.text.primary,
+    fontSize: 30,
+    fontWeight: "700",
+    color: glass.textPrimary,
     letterSpacing: -0.5,
+    marginTop: spacing[4],
   },
   statLabel: {
     marginTop: spacing[2],
-    fontSize: 11,
+    fontSize: 13,
+    color: glass.textMuted,
     fontWeight: "500",
-    letterSpacing: 0.45,
-    color: ownerShell.textLabel,
   },
-  statSub: {
-    ...typography.bodySmall,
-    color: ownerShell.textMuted,
-    marginTop: spacing[1],
+  sectionTitle: {
+    fontSize: 12,
+    letterSpacing: 0.7,
+    color: glass.textLabel,
+    textTransform: "uppercase",
+    fontWeight: "600",
+    marginTop: spacing[3],
+    marginBottom: spacing[3],
+  },
+  quickRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: spacing[5],
+  },
+  quickTile: {
+    width: "23%",
+    alignItems: "center",
+    gap: 8,
+  },
+  quickIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickLabel: {
+    fontSize: 12,
+    color: glass.textMuted,
+    fontWeight: "500",
   },
   summaryCard: {
     width: "100%",
-    alignSelf: "stretch",
-    borderRadius: ownerShell.radiusIcon,
-    borderWidth: 1,
-    borderColor: ownerShell.cardBorder,
-    backgroundColor: ownerShell.cardBg,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[2],
+    minHeight: 78,
     alignItems: "center",
-    minHeight: layout.touchTarget,
+    justifyContent: "center",
   },
   summaryValue: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: ownerShell.trendPositive,
+    fontSize: 22,
+    fontWeight: "700",
+    color: glass.textPrimary,
   },
   summaryLabel: {
-    fontSize: 9,
-    fontWeight: "500",
-    letterSpacing: 0.45,
-    color: ownerShell.textLabel,
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    color: glass.textLabel,
     textAlign: "center",
-    marginTop: spacing[1],
+    marginTop: 4,
+    textTransform: "uppercase",
   },
   bookingsDisabled: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
-    backgroundColor: ownerShell.cardBg,
-    borderRadius: ownerShell.radiusHero,
-    borderWidth: 1,
-    borderColor: ownerShell.cardBorder,
-    padding: spacing[4],
     marginBottom: spacing[5],
   },
   bookingsDisabledText: {
     ...typography.bodySmall,
-    color: ownerShell.textMuted,
+    color: glass.textMuted,
     flex: 1,
   },
-  tileCard: {
-    width: "100%",
-    alignSelf: "stretch",
-    borderRadius: ownerShell.radiusHero,
-    borderWidth: 1,
-    borderColor: ownerShell.cardBorder,
-    backgroundColor: ownerShell.cardBg,
-    padding: spacing[4],
-    minHeight: 110,
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: spacing[3],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
+  activeSessionCard: {
+    marginBottom: spacing[3],
   },
-  tileLabel: {
-    fontSize: 13,
+  activeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  activeLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  liveDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: glass.trendPositive,
+  },
+  activeTitle: {
+    fontSize: 15,
+    color: glass.textPrimary,
     fontWeight: "600",
-    color: colors.text.primary,
   },
-  pressed: { opacity: 0.85 },
+  activeSub: {
+    marginTop: 2,
+    fontSize: 12,
+    color: glass.textMuted,
+  },
 });

@@ -15,7 +15,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
 const MIN_LEN = 8;
@@ -175,36 +176,43 @@ export default function ChangePasswordScreen(): React.JSX.Element {
 
   if (user === undefined) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.center}>
-          <ActivityIndicator color={colors.accent.green} />
+          <ActivityIndicator color={glass.ctaBg} />
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (user === null) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.center}>
           <Text style={styles.muted}>Sign in to change your password.</Text>
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (user.googleId != null && user.googleId !== "") {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.center}>
-          <ActivityIndicator color={colors.accent.green} />
+          <ActivityIndicator color={glass.ctaBg} />
         </View>
         {toast ? <ToastBar state={toast} /> : null}
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <KeyboardAvoidingView
         style={styles.flex}
@@ -327,6 +335,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
 
       {toast ? <ToastBar state={toast} /> : null}
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
@@ -352,7 +361,7 @@ function ToastBar({ state }: { state: NonNullable<ToastState> }): React.JSX.Elem
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
+  safe: { flex: 1, backgroundColor: "transparent" },
   flex: { flex: 1 },
   pad: { paddingHorizontal: layout.screenPadding, paddingBottom: spacing[10] },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
@@ -372,11 +381,11 @@ const styles = StyleSheet.create({
   backChevron: {
     fontSize: 28,
     lineHeight: 32,
-    color: colors.accent.green,
+    color: glass.ctaBg,
   },
   backLabel: {
     ...typography.body,
-    color: colors.accent.green,
+    color: glass.ctaBg,
     fontWeight: "600",
   },
   headerTitle: {
@@ -397,7 +406,9 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
     borderRadius: radius.md,
     paddingHorizontal: spacing[2],
     marginTop: spacing[1],
@@ -417,7 +428,7 @@ const styles = StyleSheet.create({
   },
   primary: {
     marginTop: spacing[4],
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     paddingVertical: spacing[3],
     borderRadius: radius.md,
     alignItems: "center",

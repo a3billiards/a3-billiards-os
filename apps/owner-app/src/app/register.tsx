@@ -15,8 +15,9 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
 import { resolveGoogleIdTokenForConvexAuth } from "../lib/googleIdToken";
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
@@ -204,6 +205,7 @@ export default function OwnerRegisterScreen() {
   }
 
   return (
+    <GlassPageBackground>
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -213,12 +215,15 @@ export default function OwnerRegisterScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.container}>
-          <Text style={styles.logo}>A3</Text>
+          <View style={styles.logoTile}>
+            <Text style={styles.logoText}>A3</Text>
+          </View>
           <Text style={styles.title}>Create Owner Account</Text>
           <Text style={styles.subtitle}>
             Complete your profile to access the owner panel
           </Text>
 
+          <LiquidGlassCard style={styles.formCard} padding={20}>
           <View style={styles.form}>
             <Text style={styles.label}>Full Name</Text>
             <TextInput
@@ -350,6 +355,7 @@ export default function OwnerRegisterScreen() {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
+          </LiquidGlassCard>
 
           <View style={styles.loginRow}>
             <Text style={styles.loginText}>Already have an account? </Text>
@@ -365,11 +371,12 @@ export default function OwnerRegisterScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg.primary },
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
@@ -382,45 +389,56 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
   },
-  logo: {
-    ...typography.heading1,
-    fontSize: 48,
-    color: colors.accent.green,
-    letterSpacing: 4,
-    marginBottom: spacing[1],
+  logoTile: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[3],
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: glass.textPrimary,
+    letterSpacing: 2,
   },
   title: {
     ...typography.heading2,
-    color: colors.text.primary,
+    color: glass.textPrimary,
     marginBottom: spacing[1],
   },
   subtitle: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     textAlign: "center",
-    marginBottom: spacing[8],
+    marginBottom: spacing[5],
   },
+  formCard: { width: "100%" },
   form: { width: "100%" },
   label: {
     ...typography.label,
-    color: colors.text.secondary,
-    marginBottom: spacing[1.5],
+    color: glass.textMuted,
+    marginBottom: spacing[2],
   },
   fieldGap: { marginTop: spacing[4] },
   input: {
     height: layout.inputHeight,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
     paddingHorizontal: spacing[4],
     ...typography.body,
-    color: colors.text.primary,
+    color: glass.textPrimary,
   },
   inputDisabled: { opacity: 0.6 },
   hint: {
     ...typography.bodySmall,
-    color: colors.text.tertiary,
+    color: glass.textLabel,
     marginTop: spacing[1],
   },
   consentRow: {
@@ -434,36 +452,36 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: radius.xs,
     borderWidth: 2,
-    borderColor: colors.border.default,
-    backgroundColor: colors.bg.tertiary,
+    borderColor: glass.cardBorder,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacing[3],
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: colors.accent.green,
-    borderColor: colors.accent.green,
+    backgroundColor: "#86efac",
+    borderColor: "#86efac",
   },
   checkmark: {
-    color: colors.bg.primary,
+    color: "#052e16",
     fontSize: 16,
     fontWeight: "700",
     lineHeight: 20,
   },
   consentText: {
     ...typography.bodySmall,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     flex: 1,
     paddingTop: 2,
   },
   consentLink: {
-    color: colors.accent.green,
+    color: "#86efac",
     textDecorationLine: "underline",
   },
   primaryButton: {
     height: layout.buttonHeight,
-    backgroundColor: colors.accent.green,
+    backgroundColor: "#86efac",
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -472,14 +490,17 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: "#052e16",
+    fontWeight: "700",
   },
-  buttonDisabled: { backgroundColor: colors.status.disabled },
+  buttonDisabled: { backgroundColor: colors.status.disabled, opacity: 0.7 },
   pressed: { opacity: 0.85 },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(244,67,54,0.12)",
+    borderColor: "rgba(244,67,54,0.4)",
+    borderWidth: 1,
     borderRadius: radius.md,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],
@@ -493,20 +514,21 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...typography.bodySmall,
-    color: colors.status.error,
+    color: "#fca5a5",
     flex: 1,
   },
   loginRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing[8],
+    marginTop: spacing[6],
   },
   loginText: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
   },
   loginLink: {
     ...typography.label,
-    color: colors.accent.green,
+    color: "#86efac",
+    fontWeight: "700",
   },
 });
