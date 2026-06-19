@@ -55,7 +55,7 @@ export const registerOwnerAccount = action({
   handler: async (
     ctx,
     { email, password, name, age, phone, consentGiven },
-  ): Promise<{ userId: string }> => {
+  ): Promise<{ userId: string; verificationSent: true }> => {
     if (!consentGiven) {
       throw new Error("AUTH_005: Consent not given");
     }
@@ -75,7 +75,12 @@ export const registerOwnerAccount = action({
         consentGiven,
       },
     );
-    return { userId: String(userId) };
+
+    await ctx.runAction(api.ownerEmailVerificationActions.sendOwnerEmailVerificationCode, {
+      email: email.trim().toLowerCase(),
+    });
+
+    return { userId: String(userId), verificationSent: true as const };
   },
 });
 

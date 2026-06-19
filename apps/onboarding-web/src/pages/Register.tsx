@@ -26,6 +26,8 @@ function loadRazorpayScript(): Promise<void> {
 
 type Step = 1 | 2 | 3 | 4;
 
+type RegistrationPhase = "account" | "verify-email";
+
 type SubscriptionPlanRow = {
   id: "monthly" | "yearly";
   label: string;
@@ -34,19 +36,17 @@ type SubscriptionPlanRow = {
   currency: string;
 };
 
-const PHONE_COUNTRY_CODES = [
-  { label: "India (+91)", value: "+91" },
-  { label: "USA (+1)", value: "+1" },
-  { label: "KSA (+966)", value: "+966" },
-  { label: "UAE (+971)", value: "+971" },
-  { label: "UK (+44)", value: "+44" },
-] as const;
+const PHONE_COUNTRY_CODE = "+91";
 
 export default function Register() {
   const [searchParams] = useSearchParams();
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const { signIn } = useAuthActions();
   const registerOwner = useAction(api.onboardingWebActions.registerOwnerAccount);
+  const sendVerificationCode = useAction(
+    api.ownerEmailVerificationActions.sendOwnerEmailVerificationCode,
+  );
+  const verifyEmailCode = useAction(api.ownerEmailVerificationActions.verifyOwnerEmailCode);
   const geocode = useAction(api.onboardingWebActions.geocodeClubAddress);
   const createOrder = useAction(api.onboardingWebActions.createRazorpayOrder);
   const applyCoupon = useAction(api.onboardingWebActions.applyCouponFreeAccess);
@@ -55,6 +55,9 @@ export default function Register() {
   const plans = useQuery(api.onboardingWeb.listSubscriptionPlans);
 
   const [step, setStep] = useState<Step>(1);
+  const [registrationPhase, setRegistrationPhase] =
+    useState<RegistrationPhase>("account");
+  const [verificationCode, setVerificationCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,7 +66,7 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
-  const [phoneCountryCode, setPhoneCountryCode] = useState("+91");
+  const [phoneCountryCode] = useState(PHONE_COUNTRY_CODE);
   const [phoneLocal, setPhoneLocal] = useState("");
   const [consent, setConsent] = useState(false);
 
@@ -81,21 +84,30 @@ export default function Register() {
   const [couponCode, setCouponCode] = useState("");
   const [postSignInPending, setPostSignInPending] = useState(false);
   const canUseProtectedOnboarding =
-    !authLoading && isAuthenticated && status?.loggedIn === true;
+    !authLoading &&
+    isAuthenticated &&
+    status?.loggedIn === true &&
+    status.emailVerified === true;
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated && status?.loggedIn && status.hasClub) {
+    if (authLoading || !isAuthenticated || !status?.loggedIn) return;
+
+    if (status.hasClub) {
       setStep(4);
+      return;
     }
-  }, [authLoading, isAuthenticated, status]);
 
-  useEffect(() => {
-    if (!postSignInPending) return;
-    if (!authLoading && isAuthenticated && status?.loggedIn) {
-      setPostSignInPending(false);
-      setStep(2);
+    if (!status.emailVerified) {
+      setStep(1);
+      setRegistrationPhase("verify-email");
+      if (status.email) setEmail(status.email);
+      return;
     }
-  }, [postSignInPending, authLoading, isAuthenticated, status]);
+
+    if (postSignInPending) setPostSignInPending(false);
+    setRegistrationPhase("account");
+    setStep(2);
+  }, [authLoading, isAuthenticated, status, postSignInPending]);
 
   useEffect(() => {
     const plan = searchParams.get("plan");
@@ -136,18 +148,9 @@ export default function Register() {
         phone: fullPhone,
         consentGiven: true,
       });
-      const { signingIn } = await signIn("password", {
-        email: email.trim().toLowerCase(),
-        password,
-        flow: "signIn",
-      });
-      if (!signingIn) {
-        setError("Account created but sign-in failed. Try logging in from Renew.");
-        setBusy(false);
-        return;
-      }
       captureEvent("onboarding_owner_registered");
-      setPostSignInPending(true);
+      setRegistrationPhase("verify-email");
+      setVerificationCode("");
     } catch (e) {
       setError(parseConvexError(e as Error).message);
     } finally {
@@ -163,8 +166,51 @@ export default function Register() {
     phoneCountryCode,
     phoneLocal,
     registerOwner,
-    signIn,
   ]);
+
+  const handleVerifyEmail = useCallback(async () => {
+    setError(null);
+    const normalizedCode = verificationCode.replace(/\s/g, "");
+    if (!/^\d{6}$/.test(normalizedCode)) {
+      setError("Enter the 6-digit code from your email.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await verifyEmailCode({
+        email: email.trim().toLowerCase(),
+        code: normalizedCode,
+      });
+      const { signingIn } = await signIn("password", {
+        email: email.trim().toLowerCase(),
+        password,
+        flow: "signIn",
+      });
+      if (!signingIn) {
+        setError("Email verified but sign-in failed. Try logging in.");
+        return;
+      }
+      captureEvent("onboarding_owner_email_verified");
+      setPostSignInPending(true);
+    } catch (e) {
+      setError(parseConvexError(e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [verificationCode, email, password, verifyEmailCode, signIn]);
+
+  const handleResendVerification = useCallback(async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await sendVerificationCode({ email: email.trim().toLowerCase() });
+      captureEvent("onboarding_owner_verification_resent");
+    } catch (e) {
+      setError(parseConvexError(e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [email, sendVerificationCode]);
 
   const handleGeocode = useCallback(async () => {
     setError(null);
@@ -327,7 +373,7 @@ export default function Register() {
 
       {error ? <div className="error-banner">{error}</div> : null}
 
-      {step === 1 && (
+      {step === 1 && registrationPhase === "account" && (
         <>
           <h2>Owner account</h2>
           <label htmlFor="email">Email</label>
@@ -372,26 +418,13 @@ export default function Register() {
             </div>
             <div>
               <label htmlFor="phone">Mobile (optional)</label>
-              <div style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 8 }}>
-                <select
-                  id="phoneCountry"
-                  value={phoneCountryCode}
-                  onChange={(e) => setPhoneCountryCode(e.target.value)}
-                >
-                  {PHONE_COUNTRY_CODES.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  id="phone"
-                  value={phoneLocal}
-                  inputMode="numeric"
-                  placeholder="Mobile number"
-                  onChange={(e) => setPhoneLocal(e.target.value)}
-                />
-              </div>
+              <input
+                id="phone"
+                value={phoneLocal}
+                inputMode="numeric"
+                placeholder="+91 mobile number"
+                onChange={(e) => setPhoneLocal(e.target.value)}
+              />
             </div>
           </div>
           <div className="consent-row">
@@ -418,11 +451,47 @@ export default function Register() {
             </label>
           </div>
           <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void handleStep1()}>
-            {busy || postSignInPending ? "Please wait…" : "Continue"}
+            {busy ? "Please wait…" : "Continue"}
+          </button>
+        </>
+      )}
+
+      {step === 1 && registrationPhase === "verify-email" && (
+        <>
+          <h2>Verify your email</h2>
+          <p className="muted">
+            We sent a 6-digit code to <strong>{email.trim().toLowerCase()}</strong>. Enter it below
+            to continue.
+          </p>
+          <label htmlFor="verificationCode">Verification code</label>
+          <input
+            id="verificationCode"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={verificationCode}
+            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          />
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || verificationCode.length !== 6}
+            onClick={() => void handleVerifyEmail()}
+          >
+            {busy || postSignInPending ? "Please wait…" : "Verify and continue"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() => void handleResendVerification()}
+            style={{ marginLeft: 10 }}
+          >
+            Resend code
           </button>
           {postSignInPending ? (
             <p className="muted" style={{ marginTop: 10 }}>
-              Finalizing secure session…
+              Signing you in…
             </p>
           ) : null}
         </>
@@ -444,25 +513,16 @@ export default function Register() {
             value={address}
             onChange={(e) => setAddress(e.target.value)}
           />
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div className="inline-actions">
             <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void handleGeocode()}>
-              {busy ? "Geocoding…" : "Geocode address"}
+              {busy ? "Geocoding…" : "Pin on map (optional)"}
             </button>
-            {lat === null && (
-              <span className="muted" style={{ fontSize: "0.85rem" }}>
-                Optional — or just continue without it
-              </span>
-            )}
           </div>
           {lat !== null && lng !== null ? (
             <p className="muted" style={{ marginTop: 8 }}>
-              ✓ Location pinned: {lat.toFixed(5)}, {lng.toFixed(5)}
+              Location: {lat.toFixed(5)}, {lng.toFixed(5)}
             </p>
-          ) : (
-            <p className="muted" style={{ marginTop: 8 }}>
-              Geocoding pins your club on the map for discovery. You can skip this and continue.
-            </p>
-          )}
+          ) : null}
           <div className="row">
             <div>
               <label htmlFor="currency">Currency</label>
@@ -515,7 +575,7 @@ export default function Register() {
           </button>
           {!canUseProtectedOnboarding ? (
             <p className="muted" style={{ marginTop: 10 }}>
-              Finalizing secure session…
+              Sign in required…
             </p>
           ) : null}
           <button
@@ -554,8 +614,7 @@ export default function Register() {
             ))}
           </div>
           <p className="muted">
-            After payment, Razorpay confirms in the background (usually within seconds). This page will advance
-            automatically when your club is created.
+            Payment confirms in the background. This page advances when your club is created.
           </p>
           <button
             type="button"
@@ -566,13 +625,13 @@ export default function Register() {
             Pay with Razorpay
           </button>
           <div style={{ marginTop: 16 }}>
-            <label htmlFor="couponCode">Coupon code (testing)</label>
+            <label htmlFor="couponCode">Coupon (testing)</label>
             <div className="row" style={{ gridTemplateColumns: "1fr auto" }}>
               <input
                 id="couponCode"
                 value={couponCode}
                 onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                placeholder="Enter coupon (e.g. A3A3A3)"
+                placeholder="A3A3A3"
                 disabled={busy || paymentPending}
               />
               <button
@@ -586,16 +645,13 @@ export default function Register() {
                 }
                 onClick={() => void handleCoupon()}
               >
-                Apply coupon
+                Apply
               </button>
             </div>
-            <p className="muted" style={{ marginTop: 8 }}>
-              For testing only: coupon <strong>A3A3A3</strong> grants selected plan without Razorpay.
-            </p>
           </div>
           {paymentPending && !status?.hasClub ? (
             <p className="muted" style={{ marginTop: 16 }}>
-              Waiting for payment confirmation… You can keep this tab open.
+              Waiting for confirmation…
             </p>
           ) : null}
           <button
@@ -613,11 +669,8 @@ export default function Register() {
       {step === 4 && (
         <>
           <div className="success-banner">
-            Your club is live on A3 Billiards OS. Open the Owner App and sign in with the same email and password.
+            Your club is live. Sign in to the Owner App with the same email and password.
           </div>
-          <p className="muted">
-            Download links: use your internal distribution / app store listing for &quot;A3 Owner&quot;.
-          </p>
         </>
       )}
     </div>

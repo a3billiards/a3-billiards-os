@@ -14,6 +14,9 @@ export const OTP_SEND_LIMIT_PER_UTC_HOUR = 5;
 /** Max MFA code emails per rolling hour per admin email (sliding window). */
 export const MFA_SEND_LIMIT_PER_SLIDING_HOUR = 5;
 
+/** Max owner email verification sends per rolling hour per email (sliding window). */
+export const OWNER_EMAIL_VERIFY_SEND_LIMIT_PER_SLIDING_HOUR = 5;
+
 function utcHourStartMs(now: number): number {
   return Math.floor(now / HOUR_MS) * HOUR_MS;
 }
@@ -69,6 +72,31 @@ export async function checkMfaSendSlidingWindowPerEmail(
   if (recent.length >= MFA_SEND_LIMIT_PER_SLIDING_HOUR) {
     throw new Error(
       "RATE_001: MFA code generation rate limit exceeded — try again later",
+    );
+  }
+}
+
+/**
+ * Sliding window: owner email verification sends in the last rolling hour.
+ * Exceeding the limit → RATE_001.
+ */
+export async function checkOwnerEmailVerificationSendSlidingWindowPerEmail(
+  ctx: QueryCtx | MutationCtx,
+  emailNormalized: string,
+  now: number = Date.now(),
+): Promise<void> {
+  const cutoff = now - HOUR_MS;
+
+  const recent = await ctx.db
+    .query("ownerEmailVerificationCodes")
+    .withIndex("by_email_normalized_createdAt", (q) =>
+      q.eq("emailNormalized", emailNormalized).gt("createdAt", cutoff),
+    )
+    .collect();
+
+  if (recent.length >= OWNER_EMAIL_VERIFY_SEND_LIMIT_PER_SLIDING_HOUR) {
+    throw new Error(
+      "RATE_001: Verification email rate limit exceeded — try again later",
     );
   }
 }

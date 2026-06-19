@@ -65,6 +65,13 @@ export const insertDeskRegisteredCustomer = internalMutation({
       createdAt: now,
     });
 
+    await ctx.db.insert("authAccounts", {
+      userId,
+      provider: "phoneOtp",
+      providerAccountId: normalized,
+      secret: "",
+    });
+
     return { userId };
   },
 });

@@ -11,6 +11,7 @@ import InvoiceDetail from "./pages/InvoiceDetail";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import DPDP from "./pages/DPDP";
+import VerifyEmail from "./pages/VerifyEmail";
 
 function ErrorFallback() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/invoice/:id" element={<InvoiceDetail />} />
           <Route path="/renew" element={<Renew />} />

@@ -189,6 +189,24 @@ export const sendMfaEmail = internalAction({
   },
 });
 
+export const sendOwnerEmailVerificationEmail = internalAction({
+  args: { email: v.string(), code: v.string() },
+  handler: async (_ctx, { email, code }) => {
+    const { render } = await import("@react-email/render");
+    const { OwnerEmailVerification } = await import(
+      "../../emails/templates/OwnerEmailVerification"
+    );
+    const html = await render(OwnerEmailVerification({ code }));
+    const text = `Your A3 Billiards owner email verification code: ${code}. Expires in 10 minutes.`;
+    await sendEmail({
+      to: email,
+      subject: "Verify your A3 Billiards owner email",
+      html,
+      text,
+    });
+  },
+});
+
 export const sendCustomerWelcomeEmail = internalAction({
   args: { email: v.string() },
   handler: async (_ctx, { email }) => {

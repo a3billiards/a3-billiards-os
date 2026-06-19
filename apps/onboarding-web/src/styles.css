@@ -50,6 +50,8 @@ a {
 .site-brand {
   font-weight: 700;
   font-size: 1.15rem;
+  color: var(--text);
+  text-decoration: none;
 }
 
 .nav-links {
@@ -81,6 +83,50 @@ a {
 .nav-logout:hover {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.site-footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.site-footer nav {
+  display: flex;
+  gap: 16px;
+}
+
+.site-footer nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.site-footer nav a:hover {
+  color: var(--accent);
+}
+
+.site-footer p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .card {

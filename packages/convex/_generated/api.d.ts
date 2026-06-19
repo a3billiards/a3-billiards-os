@@ -44,6 +44,8 @@ import type * as otp from "../otp.js";
 import type * as ownerAccountActions from "../ownerAccountActions.js";
 import type * as ownerDeskCustomerMutations from "../ownerDeskCustomerMutations.js";
 import type * as ownerDeskCustomerRegistration from "../ownerDeskCustomerRegistration.js";
+import type * as ownerEmailVerification from "../ownerEmailVerification.js";
+import type * as ownerEmailVerificationActions from "../ownerEmailVerificationActions.js";
 import type * as ownerSessionActions from "../ownerSessionActions.js";
 import type * as ownerSessions from "../ownerSessions.js";
 import type * as passcode from "../passcode.js";
@@ -109,6 +111,8 @@ declare const fullApi: ApiFromModules<{
   ownerAccountActions: typeof ownerAccountActions;
   ownerDeskCustomerMutations: typeof ownerDeskCustomerMutations;
   ownerDeskCustomerRegistration: typeof ownerDeskCustomerRegistration;
+  ownerEmailVerification: typeof ownerEmailVerification;
+  ownerEmailVerificationActions: typeof ownerEmailVerificationActions;
   ownerSessionActions: typeof ownerSessionActions;
   ownerSessions: typeof ownerSessions;
   passcode: typeof passcode;

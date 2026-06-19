@@ -135,6 +135,10 @@ export default function OwnerLoginScreen() {
         setError("This account is frozen. Contact support.");
       } else if (appError.code === "AUTH_006") {
         setError("This account is pending deletion.");
+      } else if (appError.code === "AUTH_009") {
+        setError(
+          "Verify your owner email on register.a3billiards.com before signing in here.",
+        );
       } else if (
         appError.code === "AUTH_001" ||
         appError.code === "UNKNOWN"
@@ -269,7 +273,7 @@ export default function OwnerLoginScreen() {
           </View>
           <Text style={styles.title}>Owner Panel</Text>
           <Text style={styles.subtitle}>
-            Manage your billiards club
+            Sign in with the same email and password from owner onboarding
           </Text>
           <LiquidGlassCard style={styles.formCard} padding={24}>
 

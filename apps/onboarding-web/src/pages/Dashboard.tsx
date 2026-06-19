@@ -51,9 +51,8 @@ export default function Dashboard() {
   return (
     <div className="card">
       <h1>Owner dashboard</h1>
-      <p className="muted">Subscription visibility and renewal.</p>
 
-      <h2>Subscription status</h2>
+      <h2>Subscription</h2>
       <div className="plan-card">
         <p style={{ margin: 0 }}>
           Status: <strong>{statusText}</strong>

@@ -139,6 +139,18 @@ export const getMyOnboardingStatus = query({
       return { loggedIn: false as const };
     }
 
+    const emailNormalized = (user.email ?? "").trim().toLowerCase();
+    let emailVerified = false;
+    if (emailNormalized.length > 0) {
+      const passwordAccount = await ctx.db
+        .query("authAccounts")
+        .withIndex("providerAndAccountId", (q) =>
+          q.eq("provider", "password").eq("providerAccountId", emailNormalized),
+        )
+        .unique();
+      emailVerified = Boolean(passwordAccount?.emailVerified);
+    }
+
     const club = await ctx.db
       .query("clubs")
       .withIndex("by_owner", (q) => q.eq("ownerId", userId))
@@ -153,6 +165,7 @@ export const getMyOnboardingStatus = query({
       loggedIn: true as const,
       email: user.email ?? null,
       name: user.name,
+      emailVerified,
       hasClub: club !== null,
       clubId: club?._id ?? null,
       subscriptionStatus: club?.subscriptionStatus ?? null,
@@ -269,7 +282,18 @@ export const insertOwnerAccountForWeb = internalMutation({
         consentGiven: true,
         consentGivenAt: Date.now(),
       });
-      await ctx.db.patch(passwordAccount._id, { secret: passwordHash });
+      const staleCodes = await ctx.db
+        .query("ownerEmailVerificationCodes")
+        .withIndex("by_owner", (q) => q.eq("ownerId", dupEmail._id))
+        .filter((q) => q.eq(q.field("used"), false))
+        .collect();
+      for (const row of staleCodes) {
+        await ctx.db.patch(row._id, { used: true });
+      }
+      await ctx.db.patch(passwordAccount._id, {
+        secret: passwordHash,
+        emailVerified: undefined,
+      });
       return { userId: dupEmail._id };
     }
 

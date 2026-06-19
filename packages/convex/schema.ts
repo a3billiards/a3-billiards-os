@@ -319,6 +319,19 @@ export default defineSchema({
     .index("by_admin", ["adminId"])              // storeMfaCode + checkMfaCode lookup
     .index("by_email_normalized_createdAt", ["emailNormalized", "createdAt"]),
 
+  // ── ownerEmailVerificationCodes ────────────────────────────────────────────
+  // bcrypt-hashed 6-digit codes for owner onboarding email verification. 10-minute expiry.
+  ownerEmailVerificationCodes: defineTable({
+    ownerId: v.id("users"),
+    emailNormalized: v.string(),
+    codeHash: v.string(),
+    expiresAt: v.number(),
+    used: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_email_normalized_createdAt", ["emailNormalized", "createdAt"]),
+
   // ── adminAuditLog ──────────────────────────────────────────────────────────
   // Immutable audit trail for sensitive admin actions. DPDP Act 2023 compliance.
   // Actions: phone_update, admin_profile_edit, user_freeze, user_unfreeze, password_reset,

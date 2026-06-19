@@ -73,6 +73,11 @@ export function A3Password(config: PasswordConfig = {}) {
         if (user.deletionRequestedAt !== undefined) {
           throw new Error("AUTH_006: Account pending deletion");
         }
+        if (user.role === "owner" && !account.emailVerified) {
+          throw new Error(
+            "AUTH_009: Email not verified — enter the code we sent to your inbox",
+          );
+        }
       } else if (flow === "reset") {
         if (!config.reset) {
           throw new Error(`Password reset is not enabled for ${provider}`);

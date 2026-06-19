@@ -8,8 +8,9 @@ export default function Login() {
   const nav = useNavigate();
   const [params] = useSearchParams();
   const returnUrl = params.get("returnUrl") || "/dashboard";
+  const emailFromQuery = params.get("email") ?? "";
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(emailFromQuery);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -30,7 +31,12 @@ export default function Login() {
       }
       nav(returnUrl, { replace: true });
     } catch (e) {
-      setError(parseConvexError(e as Error).message);
+      const message = parseConvexError(e as Error).message;
+      if (message.includes("AUTH_009")) {
+        setError("Verify your email before signing in.");
+      } else {
+        setError(message);
+      }
     } finally {
       setBusy(false);
     }
@@ -39,7 +45,7 @@ export default function Login() {
   return (
     <div className="card">
       <h1>Owner login</h1>
-      <p className="muted">Sign in to manage your subscription and invoices.</p>
+      <p className="muted">Sign in to manage your subscription.</p>
       {error ? <div className="error-banner">{error}</div> : null}
       <label htmlFor="loginEmail">Email</label>
       <input
@@ -71,6 +77,10 @@ export default function Login() {
       </button>
       <p className="muted" style={{ marginTop: 12 }}>
         <Link to="/forgot-password">Forgot password?</Link>
+        {" · "}
+        <Link to={`/verify-email${email ? `?email=${encodeURIComponent(email.trim().toLowerCase())}` : ""}`}>
+          Verify email
+        </Link>
       </p>
     </div>
   );

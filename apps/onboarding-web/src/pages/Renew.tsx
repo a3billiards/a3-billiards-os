@@ -260,13 +260,13 @@ export default function Renew() {
             Pay with Razorpay
           </button>
           <div style={{ marginTop: 16 }}>
-            <label htmlFor="renewCouponCode">Coupon code (testing)</label>
+            <label htmlFor="renewCouponCode">Coupon (testing)</label>
             <div className="row" style={{ gridTemplateColumns: "1fr auto" }}>
               <input
                 id="renewCouponCode"
                 value={couponCode}
                 onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                placeholder="Enter coupon (e.g. A3A3A3)"
+                placeholder="A3A3A3"
                 disabled={payBusy || paymentPending}
               />
               <button
@@ -275,13 +275,13 @@ export default function Renew() {
                 disabled={payBusy || paymentPending || couponCode.trim().length === 0}
                 onClick={() => void handleCoupon()}
               >
-                Apply coupon
+                Apply
               </button>
             </div>
           </div>
           {paymentPending ? (
             <p className="muted" style={{ marginTop: 16 }}>
-              Waiting for payment confirmation… keep this tab open.
+              Waiting for confirmation…
             </p>
           ) : null}
         </>
