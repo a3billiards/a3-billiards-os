@@ -4,7 +4,8 @@
   "packageManager": "pnpm@9.15.9",
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
+    "start": "expo start --dev-client --tunnel",
+    "start:lan": "expo start --dev-client --lan",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
@@ -24,8 +25,9 @@
     "expo-constants": "~55.0.14",
     "expo-dev-client": "~55.0.27",
     "expo-font": "~55.0.6",
-    "expo-image-picker": "~17.0.10",
+    "expo-image-picker": "~55.0.18",
     "expo-linking": "~55.0.13",
+    "expo-notifications": "~55.0.10",
     "expo-router": "~55.0.12",
     "expo-secure-store": "~55.0.13",
     "expo-splash-screen": "~55.0.18",
@@ -43,6 +45,7 @@
     "typescript": "^5.4.0"
   },
   "devDependencies": {
+    "@expo/ngrok": "^4.1.0",
     "@types/react": "~19.2.10",
     "eslint": "^9.18.0",
     "eslint-config-expo": "^55.0.0"
@@ -51,7 +54,6 @@
     "install": {
       "exclude": [
         "@react-native-community/datetimepicker",
-        "expo-image-picker",
         "react-native-maps"
       ]
     }
