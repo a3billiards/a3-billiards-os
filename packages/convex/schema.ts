@@ -8,8 +8,8 @@
 //     users, complaints, adminNotifications, passwordResetTokens,
 //     adminMfaCodes, adminAuditLog, otpRecords, sessionLogs,
 //     bookingLogs, paymentReceipts, onboardingClubDrafts, dataExportRequests
-//   Club DB (9 tables):
-//     clubs, tables, sessions, bookings, snacks, staffRoles,
+//   Club DB (10 tables):
+//     clubs, tables, sessions, bookings, snacks, staffRoles, clubDocuments,
 //     cancellationCounts, customerBookingStats, sessions_archive
 //
 // AUDIT ROUND 1 FIXES (12 issues):
@@ -223,13 +223,19 @@ export default defineSchema({
                                                   // Checked by: booking submission, session start, data export.
                                                   // Login blocked immediately when set.
     ownerDataExportRequestedAt: v.optional(v.number()), // Unix ms. Rate-limits owner data export requests (24h).
-    /** Set when admin completes email MFA; cleared when a new MFA code is issued (login flow). */
+    /** Set when admin completes email MFA; cleared on login / sign-out (not on code resend). */
     adminMfaVerifiedAt: v.optional(v.number()),
+    /** Bootstrap / platform super admin — same MFA rules; used for promotion policy later. */
+    isSuperAdmin: v.optional(v.boolean()),
     deletionCancelToken: v.optional(v.string()),  // SHA-256 hashed token for email cancellation link. Single-use.
     consentGiven: v.boolean(),                    // Explicit Privacy Policy/ToS consent checkbox.
                                                   // Required true before account creation (server-enforced).
                                                   // Always true for legacy accounts bootstrapped before this field.
     consentGivenAt: v.optional(v.number()),       // Unix ms when consent was given. Null for pre-consent accounts.
+    /** Customer only: "app" = self-registered in customer app; "desk" = owner pool-side registration. */
+    customerRegisteredVia: v.optional(
+      v.union(v.literal("app"), v.literal("desk")),
+    ),
     createdAt: v.number(),                        // Unix ms.
   })
     .index("by_phone", ["phone"])                 // Phone duplicate detection, OTP flow, customer lookup
@@ -345,7 +351,8 @@ export default defineSchema({
     notes: v.optional(v.string()),                 // Optional context or reason (e.g. force-end reason, max 300 chars).
     createdAt: v.number(),                        // Unix ms.
   })
-    .index("by_admin", ["adminId"]),              // Audit log filtering by admin
+    .index("by_admin", ["adminId"])              // Audit log filtering by admin
+    .index("by_createdAt", ["createdAt"]),
     // Intentionally no by_targetUserId — admin dashboard filters by admin, not target
 
   // ── otpRecords ─────────────────────────────────────────────────────────────
@@ -702,6 +709,19 @@ export default defineSchema({
     // FIX #7: Every snack menu load queries all snacks for a club
     .index("by_club", ["clubId"]),
 
+  // ── clubDocuments ──────────────────────────────────────────────────────────
+  // Owner/staff document vault — scanned club paperwork (licenses, GST, etc.).
+  // Hard delete only; no customer exposure.
+  clubDocuments: defineTable({
+    clubId: v.id("clubs"),
+    label: v.string(),
+    imageFileId: v.id("_storage"),
+    contentType: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    uploadedBy: v.id("users"),
+    createdAt: v.number(),
+  }).index("by_club", ["clubId"]),
+
   // ── staffRoles ─────────────────────────────────────────────────────────────
   // Named roles for staff operating the owner's shared device.
   // Staff don't have individual logins — owner selects active role via 6-digit passcode.
@@ -710,7 +730,7 @@ export default defineSchema({
   staffRoles: defineTable({
     clubId: v.id("clubs"),                        // Parent club.
     name: v.string(),                             // e.g. 'Cashier', 'Manager', 'Supervisor'.
-    allowedTabs: v.array(v.string()),             // Valid: 'slots' | 'snacks' | 'financials' | 'complaints' | 'bookings'.
+    allowedTabs: v.array(v.string()),             // Valid: 'slots' | 'snacks' | 'financials' | 'complaints' | 'bookings' | 'documents'.
                                                   // Must have at least one. Empty array rejected with STAFF_001.
     allowedTableIds: v.optional(v.array(v.id("tables"))), // Null = access to all tables.
                                                   // Server enforces: approval/session start rejects if table outside set.

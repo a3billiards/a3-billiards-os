@@ -343,6 +343,25 @@ export const startWalkInSession = mutation({
       tableLockExpiry: undefined,
     });
 
+    if (sessionCustomerId !== undefined) {
+      await ctx.db.insert("sessionLogs", {
+        sessionId,
+        customerId: sessionCustomerId,
+        clubId: owner.clubId,
+        clubName: club.name,
+        tableLabel: table.label,
+        startTime: now,
+        endTime: undefined,
+        billTotal: undefined,
+        currency,
+        paymentStatus: "pending",
+        paymentMethod: undefined,
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
     return { sessionId, hasUpcomingBooking: false as const };
   },
 });

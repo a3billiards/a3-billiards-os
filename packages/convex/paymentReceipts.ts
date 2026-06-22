@@ -171,7 +171,7 @@ export const processOnboardingPayment = internalMutation({
       timezone: draft.timezone,
       createdAt: now,
       specialRates: [],
-      isDiscoverable: false,
+      isDiscoverable: true,
       location: draft.location,
       bookingSettings: {
         enabled: false,

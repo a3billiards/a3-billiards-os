@@ -4,10 +4,12 @@ import { useRouter } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors } from "@a3/ui/theme";
+import { usePushRegistration } from "../lib/usePushRegistration";
 
 export default function PostLoginGate() {
   const router = useRouter();
   const user = useQuery(api.users.getCurrentUser);
+  usePushRegistration();
 
   useEffect(() => {
     if (user === undefined) return;

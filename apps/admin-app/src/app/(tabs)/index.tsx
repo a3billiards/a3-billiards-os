@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import Svg, { Path, Circle } from "react-native-svg";
@@ -20,6 +19,7 @@ import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme
 import { parseConvexError } from "@a3/ui/errors";
 import { GlassPageBackground, LiquidGlassCard, GlassIconTile } from "@a3/ui/components";
 import { adminShell, adminTabBarTotalInset } from "../../theme/adminShell";
+import { useAdminAuth } from "../../lib/adminAuth";
 
 type DashboardData = {
   totalUsers: number;
@@ -183,7 +183,7 @@ class DashboardErrorBoundary extends Component<
 export default function DashboardScreen(): React.JSX.Element {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signOut } = useAuthActions();
+  const { signOutAdmin } = useAdminAuth();
   const user = useQuery(api.users.getCurrentUser, {});
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -204,9 +204,8 @@ export default function DashboardScreen(): React.JSX.Element {
   }, []);
 
   const onLogout = useCallback(async () => {
-    await signOut();
-    router.replace("/login");
-  }, [router, signOut]);
+    await signOutAdmin();
+  }, [signOutAdmin]);
 
   const dash = data ?? undefined;
   const bottomPad = adminTabBarTotalInset(insets.bottom);
@@ -286,6 +285,7 @@ export default function DashboardScreen(): React.JSX.Element {
                       dash.activeSessions > 0 ? glass.trendPositive : glass.textPrimary
                     }
                     trailing={dash.activeSessions > 0 ? <LiveDot /> : null}
+                    onPress={() => router.push("/sessions")}
                   />
                   <GlassStatCard
                     icon="report-problem"
@@ -303,6 +303,7 @@ export default function DashboardScreen(): React.JSX.Element {
                     valueColor={
                       dash.pendingBookings > 0 ? colors.accent.amberLight : glass.textPrimary
                     }
+                    onPress={() => router.push("/bookings")}
                   />
                 </View>
 

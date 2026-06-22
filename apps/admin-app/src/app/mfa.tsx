@@ -6,13 +6,12 @@ import {
   Pressable,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useAction, useConvexAuth } from "convex/react";
+import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
 const CODE_LENGTH = 6;
@@ -22,6 +21,7 @@ export default function MfaScreen() {
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const verifyMfa = useAction(api.mfaActions.verifyMfaCode);
   const generateMfa = useAction(api.mfaActions.generateMfaCode);
+  const user = useQuery(api.users.getCurrentUser, isAuthenticated ? {} : "skip");
 
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(""));
   const [loading, setLoading] = useState(false);
@@ -30,9 +30,19 @@ export default function MfaScreen() {
   const [error, setError] = useState<string | null>(null);
   const [frozen, setFrozen] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [verifiedWaiting, setVerifiedWaiting] = useState(false);
 
   const inputs = useRef<(TextInput | null)[]>([]);
   const initialSentRef = useRef(false);
+  const verifyInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      initialSentRef.current = false;
+      verifyInFlightRef.current = false;
+      setVerifiedWaiting(false);
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -50,7 +60,7 @@ export default function MfaScreen() {
     initialSentRef.current = true;
     setSendingInitial(true);
     setError(null);
-    generateMfa()
+    generateMfa({})
       .then(() => {
         setResendCooldown(60);
       })
@@ -58,7 +68,9 @@ export default function MfaScreen() {
         initialSentRef.current = false;
         const appError = parseConvexError(e as Error);
         if (appError.code === "RATE_001") {
-          setError("Code send rate limit reached. Please wait and tap Re-send code.");
+          setError(
+            "Too many codes sent this hour. Check your inbox for the latest 6-digit code, or wait up to 60 minutes and try Re-send.",
+          );
         } else if (appError.code === "AUTH_002") {
           setFrozen(true);
           setError("This account is frozen. Contact support.");
@@ -121,13 +133,14 @@ export default function MfaScreen() {
   const isComplete = code.length === CODE_LENGTH && /^\d{6}$/.test(code);
 
   const handleVerify = useCallback(async () => {
-    if (!isComplete || loading || frozen) return;
+    if (!isComplete || loading || frozen || verifyInFlightRef.current) return;
+    verifyInFlightRef.current = true;
     setError(null);
     setLoading(true);
 
     try {
       await verifyMfa({ code });
-      router.replace("/(tabs)");
+      setVerifiedWaiting(true);
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
@@ -144,8 +157,9 @@ export default function MfaScreen() {
       inputs.current[0]?.focus();
     } finally {
       setLoading(false);
+      verifyInFlightRef.current = false;
     }
-  }, [isComplete, loading, frozen, code, verifyMfa, router]);
+  }, [isComplete, loading, frozen, code, verifyMfa]);
 
   useEffect(() => {
     if (isComplete && !loading && !frozen) {
@@ -153,20 +167,28 @@ export default function MfaScreen() {
     }
   }, [isComplete, loading, frozen, handleVerify]);
 
+  useEffect(() => {
+    if (user?.adminMfaVerifiedAt) {
+      router.replace("/(tabs)");
+    }
+  }, [user?.adminMfaVerifiedAt, router]);
+
   const handleResend = useCallback(async () => {
     if (resending || resendCooldown > 0 || frozen) return;
     setResending(true);
     setError(null);
 
     try {
-      await generateMfa();
+      await generateMfa({ forceResend: true });
       setResendCooldown(60);
       setDigits(Array(CODE_LENGTH).fill(""));
       inputs.current[0]?.focus();
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "RATE_001") {
-        setError("Code send rate limit reached. Please wait.");
+        setError(
+          "Send limit reached. Use the latest code from your email, or wait up to 60 minutes.",
+        );
       } else {
         setError(appError.message);
       }
@@ -176,10 +198,7 @@ export default function MfaScreen() {
   }, [resending, resendCooldown, frozen, generateMfa]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAvoidingView style={styles.flex} {...iosKeyboardAvoidingProps}>
       <View style={styles.container}>
         <Text style={styles.logo}>A3</Text>
         <Text style={styles.title}>Verification Code</Text>
@@ -217,7 +236,7 @@ export default function MfaScreen() {
           ))}
         </View>
 
-        {(loading || sendingInitial) && (
+        {(loading || sendingInitial || verifiedWaiting) && (
           <ActivityIndicator
             color={colors.accent.green}
             style={{ marginTop: spacing[4] }}

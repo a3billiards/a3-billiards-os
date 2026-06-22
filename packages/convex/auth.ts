@@ -49,6 +49,11 @@ export const { auth, signIn, signOut, store } = convexAuth({
       }
 
       const now = Date.now();
+      const registeredVia =
+        profile.customerRegisteredVia === "app" ||
+        profile.customerRegisteredVia === "desk"
+          ? profile.customerRegisteredVia
+          : undefined;
       const userId = await ctx.db.insert("users", {
         email: email ?? undefined,
         name: typeof profile.name === "string" ? profile.name.trim() : "",
@@ -60,6 +65,9 @@ export const { auth, signIn, signOut, store } = convexAuth({
         complaints: [],
         isFrozen: false,
         role: "customer",
+        ...(registeredVia !== undefined
+          ? { customerRegisteredVia: registeredVia }
+          : {}),
         consentGiven: profile.consentGiven === true,
         consentGivenAt:
           profile.consentGiven === true

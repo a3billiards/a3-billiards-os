@@ -29,6 +29,14 @@ function formatShortDate(ymd: string): string {
   }).format(dt);
 }
 
+function formatComplaintDate(ms: number): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(ms));
+}
+
 function countdownLabel(startMs: number): string {
   const diff = Math.max(0, startMs - Date.now());
   const minutes = Math.floor(diff / 60_000);
@@ -53,6 +61,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const bottomPad = customerTabBarTotalInset(insets.bottom);
   const user = useQuery(api.users.getCurrentUser);
+  const myComplaints = useQuery(api.complaints.getMyActiveComplaints);
   const next = useQuery(
     api.bookings.getNextConfirmedBooking,
     user?._id ? { customerId: user._id } : "skip",
@@ -62,7 +71,7 @@ export default function HomeScreen() {
     user?._id ? { customerId: user._id } : "skip",
   );
 
-  const isFlagged = (user?.complaints?.length ?? 0) > 0;
+  const complaints = myComplaints?.complaints ?? [];
   const greetingTime = (() => {
     const h = new Date().getHours();
     if (h < 12) return "Good morning";
@@ -98,10 +107,10 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          {/* Complaint alert banner */}
-          {isFlagged ? (
+          {/* Complaint details — customer sees exact reason */}
+          {complaints.length > 0 ? (
             <LiquidGlassCard style={styles.alertCard} padding={14}>
-              <View style={styles.alertRow}>
+              <View style={styles.alertHeader}>
                 <View style={styles.alertIconWrap}>
                   <MaterialIcons
                     name="warning"
@@ -109,11 +118,25 @@ export default function HomeScreen() {
                     color={colors.accent.amber}
                   />
                 </View>
-                <Text style={styles.alertText}>
-                  Your account has been flagged by a club. Contact support if
-                  this is a mistake.
+                <Text style={styles.alertTitle}>
+                  Your account has been flagged
                 </Text>
               </View>
+              <Text style={styles.alertIntro}>
+                A club reported the following. Contact support if you believe
+                this is a mistake.
+              </Text>
+              {complaints.map((c) => (
+                <View key={c._id} style={styles.complaintBox}>
+                  <Text style={styles.complaintType}>{c.typeLabel}</Text>
+                  <Text style={styles.complaintMeta}>
+                    Filed by {c.clubName} · {formatComplaintDate(c.createdAt)}
+                  </Text>
+                  {c.description.trim().length > 0 ? (
+                    <Text style={styles.complaintDesc}>{c.description}</Text>
+                  ) : null}
+                </View>
+              ))}
             </LiquidGlassCard>
           ) : null}
 
@@ -283,10 +306,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
     borderColor: "rgba(245, 158, 11, 0.5)",
   },
-  alertRow: {
+  alertHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: spacing[2],
+    marginBottom: spacing[2],
   },
   alertIconWrap: {
     width: 28,
@@ -298,10 +322,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  alertText: {
-    ...typography.bodySmall,
+  alertTitle: {
+    ...typography.label,
     color: "#fde68a",
+    fontWeight: "700",
     flex: 1,
+  },
+  alertIntro: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing[3],
+    lineHeight: 20,
+  },
+  complaintBox: {
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.25)",
+    padding: spacing[3],
+    marginBottom: spacing[2],
+  },
+  complaintType: {
+    ...typography.label,
+    color: colors.accent.amber,
+    fontWeight: "700",
+  },
+  complaintMeta: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: spacing[1],
+  },
+  complaintDesc: {
+    ...typography.bodySmall,
+    color: glass.textPrimary,
+    marginTop: spacing[2],
     lineHeight: 20,
   },
   nextCard: {

@@ -12,7 +12,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { OwnerViewer } from "./model/viewer";
-import { requireOwner, requireViewer } from "./model/viewer";
+import { requireAdminWithMfa, requireCustomer, requireOwner, requireViewer } from "./model/viewer";
 import { parseIndiaE164OrThrow } from "./model/phoneRegistration";
 
 export type complaintType =
@@ -45,11 +45,7 @@ function typeLabel(t: complaintType): string {
 const AUTH_001 = "AUTH_001: Not authorized.";
 
 async function requireAdminViewer(ctx: QueryCtx | MutationCtx) {
-  const viewer = await requireViewer(ctx);
-  if (viewer.role !== "admin") {
-    throw new Error(AUTH_001);
-  }
-  return viewer;
+  return requireAdminWithMfa(ctx);
 }
 
 /** Owner must own `clubId`; optional staff role must belong to club and pass tab + file gate. */
@@ -438,11 +434,43 @@ export const getCustomerActiveComplaints = query({
           _id: c._id,
           type: c.type as complaintType,
           typeLabel: typeLabel(c.type),
+          description: c.description,
           clubName: club?.name ?? "[Deleted Club]",
           createdAt: c.createdAt,
         };
       }),
     );
+    return {
+      hasComplaints: complaints.length > 0,
+      complaints,
+    };
+  },
+});
+
+/** Active complaints for the signed-in customer (reason + filing club). */
+export const getMyActiveComplaints = query({
+  args: {},
+  handler: async (ctx) => {
+    const customer = requireCustomer(await requireViewer(ctx));
+    const rows = await ctx.db
+      .query("complaints")
+      .withIndex("by_userId", (q) => q.eq("userId", customer.userId))
+      .collect();
+    const active = activeComplaintsForUser(rows);
+    const complaints = await Promise.all(
+      active.map(async (c) => {
+        const club = await ctx.db.get(c.reportedByClubId);
+        return {
+          _id: c._id,
+          type: c.type as complaintType,
+          typeLabel: typeLabel(c.type),
+          description: c.description,
+          clubName: club?.name ?? "Unknown club",
+          createdAt: c.createdAt,
+        };
+      }),
+    );
+    complaints.sort((a, b) => b.createdAt - a.createdAt);
     return {
       hasComplaints: complaints.length > 0,
       complaints,

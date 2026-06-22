@@ -4,9 +4,12 @@
   "packageManager": "pnpm@9.15.9",
   "main": "expo-router/entry",
   "scripts": {
+    "prestart": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/stop-expo-dev.ps1",
     "start": "expo start --dev-client --tunnel",
     "start:lan": "expo start --dev-client --lan",
+    "preandroid": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/guard-no-spaces-in-path.ps1",
     "android": "expo run:android",
+    "android:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/build-owner-android-windows.ps1",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
@@ -24,6 +27,8 @@
     "expo": "~55.0.15",
     "expo-constants": "~55.0.14",
     "expo-dev-client": "~55.0.27",
+    "expo-document-picker": "~55.0.0",
+    "expo-file-system": "~55.0.16",
     "expo-font": "~55.0.6",
     "expo-image-picker": "~55.0.18",
     "expo-linking": "~55.0.13",

@@ -129,16 +129,30 @@ export const sendAdminBroadcast = action({
       };
     }
 
-    const { sentCount, failedCount } = await ctx.runAction(
-      internal.notifications.sendAdminBroadcastPush,
-      {
-        notificationId,
-        title,
-        body,
-        tokenMap,
-      },
-    );
-
-    return { notificationId, recipientCount, sentCount, failedCount };
+    try {
+      const { sentCount, failedCount } = await ctx.runAction(
+        internal.notifications.sendAdminBroadcastPush,
+        {
+          notificationId,
+          title,
+          body,
+          tokenMap,
+        },
+      );
+      return { notificationId, recipientCount, sentCount, failedCount };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (
+        msg.includes("Missing FIREBASE") ||
+        msg.includes("Failed to obtain FCM") ||
+        msg.includes("Unexpected token") ||
+        msg.includes("JSON")
+      ) {
+        throw new Error(
+          "PUSH_001: Push is not configured on the server. Set FIREBASE_PROJECT_ID and FIREBASE_SERVICE_ACCOUNT_JSON in the Convex dashboard Environment Variables.",
+        );
+      }
+      throw e;
+    }
   },
 });

@@ -1,13 +1,14 @@
 "use node";
 
 /**
- * FCM HTTP v1 (OAuth2, per-token sends) + Resend HTML emails (@react-email).
+ * FCM via firebase-admin + Resend HTML emails (@react-email).
  * Secrets: FIREBASE_PROJECT_ID, FIREBASE_SERVICE_ACCOUNT_JSON, RESEND_API_KEY.
- *
- * // TODO: cache the FCM access token in memory for its ~1-hour lifetime to avoid redundant OAuth requests
  */
 
 import { v } from "convex/values";
+import type { ServiceAccount } from "firebase-admin/app";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 
@@ -20,17 +21,43 @@ function requireEnv(name: string): string {
   return val;
 }
 
-async function getFcmAccessToken(): Promise<string> {
-  const { GoogleAuth } = await import("google-auth-library");
+function parseServiceAccount(): ServiceAccount {
   const raw = requireEnv("FIREBASE_SERVICE_ACCOUNT_JSON");
-  const auth = new GoogleAuth({
-    credentials: JSON.parse(raw) as Record<string, unknown>,
-    scopes: ["https://www.googleapis.com/auth/firebase.messaging"],
+  try {
+    return JSON.parse(raw) as ServiceAccount;
+  } catch {
+    throw new Error(
+      "DATA_001: FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON — paste the full service account file as one line",
+    );
+  }
+}
+
+function ensureFirebaseAdmin(): void {
+  if (getApps().length > 0) return;
+  const credentials = parseServiceAccount();
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID ??
+    (credentials as ServiceAccount & { project_id?: string }).projectId ??
+    (credentials as ServiceAccount & { project_id?: string }).project_id;
+  initializeApp({
+    credential: cert(credentials),
+    ...(typeof projectId === "string" && projectId.length > 0
+      ? { projectId }
+      : {}),
   });
-  const client = await auth.getClient();
-  const { token } = await client.getAccessToken();
-  if (!token) throw new Error("DATA_001: Failed to obtain FCM access token");
-  return token;
+}
+
+function isStaleFcmError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return (
+    code === "messaging/registration-token-not-registered" ||
+    code === "messaging/invalid-registration-token" ||
+    code === "messaging/invalid-argument"
+  );
+}
+
+function isExpoPushToken(token: string): boolean {
+  return token.startsWith("ExponentPushToken[");
 }
 
 function stringifyData(
@@ -42,23 +69,6 @@ function stringifyData(
   );
 }
 
-function shouldRemoveStaleToken(errJson: unknown): boolean {
-  const s = JSON.stringify(errJson);
-  if (s.includes("UNREGISTERED")) return true;
-  if (s.includes("INVALID_ARGUMENT") && /Registration|token|Token/i.test(s)) {
-    return true;
-  }
-  try {
-    const o = errJson as {
-      error?: { details?: { errorCode?: string }[] };
-    };
-    const details = o?.error?.details ?? [];
-    return details.some((d) => d?.errorCode === "UNREGISTERED");
-  } catch {
-    return false;
-  }
-}
-
 export const sendFcmNotification = internalAction({
   args: {
     tokens: v.array(v.string()),
@@ -67,41 +77,28 @@ export const sendFcmNotification = internalAction({
     data: v.optional(v.record(v.string(), v.string())),
   },
   handler: async (ctx, { tokens, title, body, data }) => {
-    const accessToken = await getFcmAccessToken();
-    const projectId = requireEnv("FIREBASE_PROJECT_ID");
+    ensureFirebaseAdmin();
+    const messaging = getMessaging();
     const stringData = stringifyData(data);
     const results: Record<string, "sent" | "failed"> = {};
 
     for (const token of tokens) {
-      try {
-        const res = await fetch(
-          `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              message: {
-                token,
-                notification: { title, body },
-                ...(stringData ? { data: stringData } : {}),
-              },
-            }),
-          },
-        );
-        if (res.ok) {
-          results[token] = "sent";
-        } else {
-          results[token] = "failed";
-          const errJson: unknown = await res.json().catch(() => ({}));
-          if (shouldRemoveStaleToken(errJson)) {
-            await ctx.runMutation(internal.users.removeStaleToken, { token });
-          }
-        }
-      } catch {
+      if (isExpoPushToken(token)) {
         results[token] = "failed";
+        continue;
+      }
+      try {
+        await messaging.send({
+          token,
+          notification: { title, body },
+          ...(stringData ? { data: stringData } : {}),
+        });
+        results[token] = "sent";
+      } catch (e) {
+        results[token] = "failed";
+        if (isStaleFcmError(e)) {
+          await ctx.runMutation(internal.users.removeStaleToken, { token });
+        }
       }
     }
     return results;
@@ -332,17 +329,17 @@ export const sendRenewalConfirmationEmail = internalAction({
 });
 
 export const sendDataExportEmailWithJson = internalAction({
-  args: { email: v.string(), json: v.string() },
-  handler: async (_ctx, { email, json }) => {
+  args: { email: v.string(), json: v.string(), readableText: v.string() },
+  handler: async (_ctx, { email, json, readableText }) => {
     const { render } = await import("@react-email/render");
     const { DataExport } = await import("../../emails/templates/DataExport");
-    const html = await render(DataExport({ attached: true }));
+    const html = await render(DataExport({ attached: true, summary: readableText }));
     const b64 = Buffer.from(json, "utf8").toString("base64");
     await sendEmail({
       to: email,
       subject: "Your A3 Billiards OS data export is ready",
       html,
-      text: "Your A3 Billiards OS data export is attached as JSON.",
+      text: `${readableText}\n\n---\n\nFull machine-readable export attached as a3-export.json.`,
       attachments: [{ filename: "a3-export.json", content: b64 }],
     });
   },

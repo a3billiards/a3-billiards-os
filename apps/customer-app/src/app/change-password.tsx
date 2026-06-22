@@ -7,15 +7,13 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { GlassPageBackground } from "@a3/ui/components";
+import { GlassPageBackground, KeyboardFormScroll } from "@a3/ui/components";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
@@ -214,16 +212,11 @@ export default function ChangePasswordScreen(): React.JSX.Element {
   return (
     <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <KeyboardFormScroll
+        contentContainerStyle={styles.pad}
+        showsVerticalScrollIndicator={false}
         keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
       >
-        <ScrollView
-          contentContainerStyle={styles.pad}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           <View style={styles.headerRow}>
             <Pressable
               style={styles.backHit}
@@ -330,8 +323,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
           )}
 
           <View style={{ height: spacing[12] }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardFormScroll>
 
       {toast ? <ToastBar state={toast} /> : null}
     </SafeAreaView>

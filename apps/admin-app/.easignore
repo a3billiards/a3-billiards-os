@@ -1,0 +1,12 @@
+# EAS upload exclusions for admin-app (overrides repo .gitignore).
+
+node_modules/
+.git/
+.expo/
+dist/
+web-build/
+android/
+ios/
+*.jks
+.env*.local
+.DS_Store

@@ -128,6 +128,96 @@ export const insertOwnerUserWithPassword = internalMutation({
   },
 });
 
+/** Ensures an admin user exists with email+password auth (idempotent password reset). */
+export const insertAdminUserWithPassword = internalMutation({
+  args: {
+    email: v.string(),
+    passwordHash: v.string(),
+    name: v.string(),
+    isSuperAdmin: v.optional(v.boolean()),
+  },
+  handler: async (
+    ctx,
+    { email, passwordHash, name, isSuperAdmin },
+  ): Promise<{
+    status: "created" | "already_exists" | "password_reset" | "role_upgraded";
+    userId: Id<"users">;
+  }> => {
+    const normalized = email.trim().toLowerCase();
+    const now = Date.now();
+
+    let user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", normalized))
+      .unique();
+
+    let status: "created" | "already_exists" | "password_reset" | "role_upgraded";
+
+    if (user) {
+      const patch: Record<string, unknown> = {};
+      if (user.role !== "admin") {
+        patch.role = "admin";
+        status = "role_upgraded";
+      } else {
+        status = "already_exists";
+      }
+      if (name.trim().length > 0 && user.name !== name.trim()) {
+        patch.name = name.trim();
+      }
+      if (isSuperAdmin === true) {
+        patch.isSuperAdmin = true;
+      }
+      if (Object.keys(patch).length > 0) {
+        await ctx.db.patch(user._id, patch);
+      }
+    } else {
+      const userId = await ctx.db.insert("users", {
+        email: normalized,
+        name: name.trim() || "Admin",
+        age: 18,
+        phoneVerified: false,
+        role: "admin",
+        isSuperAdmin: isSuperAdmin === true,
+        isFrozen: false,
+        settingsPasscodeSet: false,
+        complaints: [],
+        fcmTokens: [],
+        consentGiven: true,
+        consentGivenAt: now,
+        createdAt: now,
+      });
+      user = await ctx.db.get(userId);
+      if (!user) throw new Error("Failed to insert admin user");
+      status = "created";
+    }
+
+    const existingAccount = await ctx.db
+      .query("authAccounts")
+      .withIndex("providerAndAccountId", (q) =>
+        q.eq("provider", "password").eq("providerAccountId", normalized),
+      )
+      .unique();
+
+    if (existingAccount) {
+      if (existingAccount.userId !== user._id) {
+        throw new Error("Existing password account linked to a different user");
+      }
+      await ctx.db.patch(existingAccount._id, { secret: passwordHash });
+      if (status === "already_exists") status = "password_reset";
+    } else {
+      await ctx.db.insert("authAccounts", {
+        userId: user._id,
+        provider: "password",
+        providerAccountId: normalized,
+        secret: passwordHash,
+      });
+      if (status === "already_exists") status = "password_reset";
+    }
+
+    return { status, userId: user._id };
+  },
+});
+
 /**
  * Creates (or idempotently resets password on) an owner user with
  * email+password auth. Password is hashed with Scrypt — the same algorithm
@@ -163,6 +253,54 @@ export const seedOwnerUser = internalAction({
       userId: result.userId,
       email: email.trim().toLowerCase(),
     };
+  },
+});
+
+/** Creates or updates admin email+password auth (for admin app login). */
+export const seedAdminUser = internalAction({
+  args: {
+    email: v.string(),
+    password: v.string(),
+    name: v.optional(v.string()),
+    isSuperAdmin: v.optional(v.boolean()),
+  },
+  handler: async (
+    ctx,
+    { email, password, name, isSuperAdmin },
+  ): Promise<{
+    status: "created" | "already_exists" | "password_reset" | "role_upgraded";
+    userId: Id<"users">;
+    email: string;
+  }> => {
+    if (password.length < 8) {
+      throw new Error("Password must be at least 8 characters");
+    }
+
+    const passwordHash = await new Scrypt().hash(password);
+    const result = await ctx.runMutation(internal.seed.insertAdminUserWithPassword, {
+      email,
+      passwordHash,
+      name: name?.trim() || "Admin",
+      isSuperAdmin,
+    });
+
+    return {
+      status: result.status,
+      userId: result.userId,
+      email: email.trim().toLowerCase(),
+    };
+  },
+});
+
+/** Clears admin MFA code rows (rate-limit reset) for dev/support. */
+export const seedClearAdminMfaRateLimit = internalAction({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const result = await ctx.runMutation(
+      internal.mfa.internalClearMfaCodesForEmail,
+      { email },
+    );
+    return { email: email.trim().toLowerCase(), ...result };
   },
 });
 
@@ -206,7 +344,7 @@ export const insertMinimalTestClubForOwner = internalMutation({
       timezone: "Asia/Kolkata",
       createdAt: now,
       specialRates: [],
-      isDiscoverable: false,
+      isDiscoverable: true,
       bookingSettings: {
         enabled: false,
         maxAdvanceDays: 7,

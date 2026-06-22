@@ -70,6 +70,12 @@ export async function checkMfaSendSlidingWindowPerEmail(
     .collect();
 
   if (recent.length >= MFA_SEND_LIMIT_PER_SLIDING_HOUR) {
+    const hasUnusedActive = recent.some(
+      (r) => !r.used && r.expiresAt > now,
+    );
+    if (hasUnusedActive) {
+      return;
+    }
     throw new Error(
       "RATE_001: MFA code generation rate limit exceeded — try again later",
     );

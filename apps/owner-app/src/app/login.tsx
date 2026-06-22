@@ -5,9 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
   Alert,
 } from "react-native";
@@ -17,7 +14,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
 
 /** Logs native / Convex errors for Google Sign-In (Metro + adb logcat). */
 function logOwnerGoogleError(context: string, err: unknown): void {
@@ -243,6 +240,10 @@ export default function OwnerLoginScreen() {
         setError(
           "This Google account is not registered as an owner. Use the customer app or complete owner onboarding.",
         );
+      } else if (appError.code === "DATA_002") {
+        setError(
+          "This Google account conflicts with your onboarding login. Sign in with email and password instead.",
+        );
       } else if (appError.code === "GOOGLE_AUTH_001") {
         setError("Google authentication failed. Please try again.");
       } else if (appError.code !== "UNKNOWN") {
@@ -259,14 +260,7 @@ export default function OwnerLoginScreen() {
 
   return (
     <GlassPageBackground>
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+    <KeyboardFormScroll contentContainerStyle={styles.scroll}>
         <View style={styles.container}>
           <View style={styles.logoTile}>
             <Text style={styles.logoText}>A3</Text>
@@ -373,8 +367,7 @@ export default function OwnerLoginScreen() {
           )}
           </LiquidGlassCard>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
     </GlassPageBackground>
   );
 }

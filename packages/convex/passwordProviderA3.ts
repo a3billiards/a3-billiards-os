@@ -23,7 +23,7 @@ export function A3Password(config: PasswordConfig = {}) {
     authorize: async (params, ctx) => {
       const profile =
         config.profile?.(params, ctx) ?? defaultProfile(params);
-      const email = String(profile.email ?? "").trim();
+      const email = String(profile.email ?? "").trim().toLowerCase();
       if (!email) {
         throw new Error("Missing email");
       }
@@ -59,12 +59,40 @@ export function A3Password(config: PasswordConfig = {}) {
         if (secret === undefined) {
           throw new Error("Missing `password` param for `signIn` flow");
         }
-        const retrieved = await retrieveAccount(ctx, {
-          provider,
-          account: { id: email, secret: String(secret) },
-        });
+
+        let retrieved;
+        try {
+          retrieved = await retrieveAccount(ctx, {
+            provider,
+            account: { id: email, secret: String(secret) },
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes("InvalidAccountId")) {
+            const diag = await ctx.runQuery(
+              internal.adminAuth.diagnoseAdminPasswordLogin,
+              { email },
+            );
+            if (diag.ok === false && diag.reason === "no_password_account") {
+              throw new Error(
+                "AUTH_010: No password login for this admin account. Set a password via seed or password reset.",
+              );
+            }
+            if (diag.ok === false && diag.reason === "wrong_user_link") {
+              throw new Error(
+                "DATA_002: Password login for this email is linked to a different user",
+              );
+            }
+            throw new Error("AUTH_001: Invalid credentials");
+          }
+          if (msg.includes("InvalidSecret")) {
+            throw new Error("AUTH_001: Invalid credentials");
+          }
+          throw e;
+        }
+
         if (retrieved === null) {
-          throw new Error("Invalid credentials");
+          throw new Error("AUTH_001: Invalid credentials");
         }
         ({ account, user } = retrieved);
         if (user.isFrozen) {
@@ -77,6 +105,11 @@ export function A3Password(config: PasswordConfig = {}) {
           throw new Error(
             "AUTH_009: Email not verified — enter the code we sent to your inbox",
           );
+        }
+        if (user.role === "admin") {
+          await ctx.runMutation(internal.mfa.internalClearAdminMfaOnPasswordSignIn, {
+            userId: user._id,
+          });
         }
       } else if (flow === "reset") {
         if (!config.reset) {

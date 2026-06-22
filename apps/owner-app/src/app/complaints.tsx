@@ -19,7 +19,8 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { getActiveRoleId } from "../lib/activeRoleStorage";
+import { useStaffRole, staffRoleQueryId } from "../lib/StaffRoleContext";
+import { TabAccessDenied } from "../components/TabAccessDenied";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ownerTabBarTotalInset } from "../theme/ownerShell";
@@ -114,21 +115,17 @@ export default function ComplaintsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
 
-  const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
-  useEffect(() => {
-    void getActiveRoleId().then((v) => {
-      if (v) setRoleId(v as Id<"staffRoles">);
-    });
-  }, []);
+  const { roleId, canAccessTab } = useStaffRole();
+  const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
 
   const access = useQuery(
     api.complaints.getComplaintsTabAccess,
-    clubId ? { clubId, roleId } : "skip",
+    clubId && roleId !== undefined ? { clubId, roleId: queryRoleId } : "skip",
   );
 
   const list = useQuery(
     api.complaints.getClubComplaints,
-    clubId ? { clubId, roleId } : "skip",
+    clubId && roleId !== undefined ? { clubId, roleId: queryRoleId } : "skip",
   );
 
   const [segment, setSegment] = useState<"active" | "retracted">("active");
@@ -159,7 +156,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
   const recentSessions = useQuery(
     api.complaints.getRecentCustomerSessionsForComplaint,
     clubId && selectedUserId && linkSession
-      ? { clubId, customerId: selectedUserId, roleId }
+      ? { clubId, customerId: selectedUserId, roleId: queryRoleId }
       : "skip",
   );
 
@@ -219,7 +216,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
         type: complaintType,
         description: d,
         sessionId: linkSession ? selectedSessionId : undefined,
-        roleId,
+        roleId: queryRoleId,
       });
       closeFile();
       Alert.alert("Done", `Complaint filed against ${selectedName}.`);
@@ -235,7 +232,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
     details,
     linkSession,
     selectedSessionId,
-    roleId,
+    queryRoleId,
     fileComplaint,
     closeFile,
     selectedName,
@@ -253,7 +250,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
       await retractComplaint({
         complaintId: retractTarget._id,
         dismissalReason: reason.length > 0 ? reason : undefined,
-        roleId,
+        roleId: queryRoleId,
       });
       setRetractTarget(null);
       setRetractReason("");
@@ -263,7 +260,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
     } finally {
       setSubmitting(false);
     }
-  }, [retractTarget, retractReason, roleId, retractComplaint]);
+  }, [retractTarget, retractReason, queryRoleId, retractComplaint]);
 
   if (dashboard === undefined) {
     return (
@@ -279,6 +276,10 @@ export default function ComplaintsScreen(): React.JSX.Element {
         <OwnerNoClubPlaceholder />
       </SafeAreaView>
     );
+  }
+
+  if (roleId !== undefined && !canAccessTab("complaints")) {
+    return <TabAccessDenied tabLabel="Complaints" />;
   }
 
   if (access === undefined) {

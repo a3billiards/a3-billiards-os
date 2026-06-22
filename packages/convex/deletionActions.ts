@@ -173,9 +173,54 @@ export const generateAndSendDataExport = internalAction({
 
     const json = JSON.stringify(exportData, null, 2);
 
+    const readableLines = [
+      "A3 Billiards OS — Personal Data Export",
+      `Exported: ${exportData.exportedAt}`,
+      "",
+      "Account",
+      `  Name: ${exportData.name ?? "—"}`,
+      `  Email: ${exportData.email ?? "—"}`,
+      `  Phone: ${exportData.phone ?? "—"}`,
+      `  Role: ${exportData.role}`,
+      `  Age: ${exportData.age ?? "—"}`,
+      `  Account created: ${exportData.accountCreatedAt}`,
+      "",
+      "Session history",
+      `  Total sessions: ${exportData.sessionHistory.totalSessions}`,
+      `  Last session date: ${exportData.sessionHistory.lastSessionDate ?? "—"}`,
+      "",
+      "Booking history",
+      `  Total bookings: ${exportData.bookingHistory.totalBookings}`,
+      ...Object.entries(exportData.bookingHistory.byStatus).map(
+        ([status, count]) => `  ${status}: ${count}`,
+      ),
+      "",
+      `Complaints filed: ${exportData.complaintCount}`,
+    ];
+
+    if (clubBlock) {
+      readableLines.push(
+        "",
+        "Club (owner)",
+        `  Name: ${clubBlock.clubName}`,
+        `  Subscription: ${clubBlock.subscriptionStatus}`,
+        clubBlock.subscriptionExpiresAt
+          ? `  Expires: ${new Date(clubBlock.subscriptionExpiresAt).toISOString()}`
+          : "  Expires: —",
+      );
+    }
+
+    readableLines.push("", exportData.note);
+    const readableText = readableLines.join("\n");
+
     await ctx.runAction(internal.notificationsFcm.sendDataExportEmailWithJson, {
       email: user.email,
       json,
+      readableText,
+    });
+
+    await ctx.runMutation(internal.deletion.markOwnerDataExportCompleted, {
+      userId,
     });
 
     return { sent: true as const };

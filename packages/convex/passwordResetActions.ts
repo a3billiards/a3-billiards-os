@@ -8,6 +8,7 @@ import {
 } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { createHash, randomUUID } from "crypto";
+import { Scrypt } from "lucia";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 
@@ -130,13 +131,24 @@ export const resetPassword = action({
       { userId },
     );
     if (!accountId) {
-      throw new Error("PASSWORD_002: No password login for this account");
+      const email = await ctx.runQuery(internal.adminAuth.getUserEmailForPassword, {
+        userId,
+      });
+      if (!email) {
+        throw new Error("PASSWORD_002: No password login for this account");
+      }
+      const passwordHash = await new Scrypt().hash(newPassword);
+      await ctx.runMutation(internal.adminAuth.insertPasswordAccountForUser, {
+        userId,
+        email,
+        passwordHash,
+      });
+    } else {
+      await modifyAccountCredentials(ctx, {
+        provider: PASSWORD_PROVIDER,
+        account: { id: accountId, secret: newPassword },
+      });
     }
-
-    await modifyAccountCredentials(ctx, {
-      provider: PASSWORD_PROVIDER,
-      account: { id: accountId, secret: newPassword },
-    });
 
     await invalidateSessions(ctx, { userId });
 
@@ -170,7 +182,7 @@ export const changePassword = action({
     );
     if (!accountId) {
       throw new Error(
-        "Your account uses Google Sign-In. Password management is handled by Google.",
+        "No login password set. Set one from Profile or sign in with WhatsApp OTP.",
       );
     }
 

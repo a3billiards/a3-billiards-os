@@ -1,0 +1,16 @@
+# EAS upload exclusions for owner-app (overrides repo .gitignore).
+# owner-google-services.json is gitignored but MUST be uploaded for Android native builds.
+
+node_modules/
+.git/
+.expo/
+dist/
+web-build/
+android/
+ios/
+*.jks
+.env*.local
+.DS_Store
+
+# Include Firebase config (gitignored — paths relative to monorepo git root)
+!apps/owner-app/owner-google-services.json

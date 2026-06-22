@@ -1,0 +1,30 @@
+# Monorepo EAS upload rules (overrides .gitignore for local `eas build` uploads).
+# Copy of .gitignore exclusions, then force-include gitignored Firebase configs per app.
+
+.env
+.env.local
+.env.*
+node_modules/
+.pnpm-store/
+.expo/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+.convex/
+android/
+ios/
+*.keystore
+google-services.json
+GoogleService-Info.plist
+firebase-service-account.json
+.cursor/mcp.json
+admin-google-services.json
+customer-google-services.json
+owner-google-services.json
+GoogleServiceInfo.plist
+
+# Firebase client configs (gitignored secrets — must be present locally before `eas build`)
+!apps/owner-app/owner-google-services.json
+!apps/customer-app/customer-google-services.json
+!apps/admin-app/admin-google-services.json

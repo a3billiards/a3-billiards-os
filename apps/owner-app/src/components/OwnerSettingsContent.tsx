@@ -25,19 +25,37 @@ import type { Doc, Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { getActiveRoleId, setActiveRoleId } from "../lib/activeRoleStorage";
+import { useStaffRole } from "../lib/StaffRoleContext";
+import { OwnerModePasscodeGate } from "./OwnerModePasscodeGate";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ownerTabBarTotalInset } from "../theme/ownerShell";
+import { uploadLocalFileToConvexStorage } from "../lib/uploadConvexStorage";
 
 const RENEW_URL = "https://renew.a3billiards.com";
 const PREDEFINED_AMENITIES = ["AC", "Parking", "Cafe", "WiFi", "Lounge", "Restrooms"] as const;
+const PREDEFINED_AMENITY_SET = new Set<string>(PREDEFINED_AMENITIES);
+const MAX_AMENITY_LENGTH = 40;
+const MAX_AMENITIES = 20;
+
+function isPredefinedAmenity(value: string): boolean {
+  return PREDEFINED_AMENITY_SET.has(value);
+}
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-const TAB_ORDER = ["slots", "snacks", "financials", "complaints", "bookings"] as const;
+const TAB_ORDER = [
+  "slots",
+  "snacks",
+  "financials",
+  "complaints",
+  "bookings",
+  "documents",
+] as const;
 const TAB_LABEL: Record<(typeof TAB_ORDER)[number], string> = {
   slots: "Slots",
   snacks: "Snacks",
   financials: "Financials",
   complaints: "Complaints",
   bookings: "Bookings",
+  documents: "Documents",
 };
 const SLOT_CHIPS: { min: number; label: string }[] = [
   { min: 30, label: "30 min" },
@@ -79,9 +97,14 @@ function dayAbbrevList(days: number[]): string {
     .join(", ");
 }
 
-export default function OwnerSettingsContent(): React.JSX.Element {
+export default function OwnerSettingsContent({
+  onStaffRoleHandoff,
+}: {
+  onStaffRoleHandoff?: () => void;
+}): React.JSX.Element {
   const router = useRouter();
   const { signOut } = useAuthActions();
+  const { refreshRole } = useStaffRole();
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const user = useQuery(api.users.getCurrentUser);
@@ -103,6 +126,27 @@ export default function OwnerSettingsContent(): React.JSX.Element {
   );
 
   const requestDataExport = useAction(api.ownerAccountActions.requestOwnerDataExport);
+
+  const handleSignOut = useCallback(() => {
+    Alert.alert("Log out", "Sign out of the owner app?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            try {
+              await setActiveRoleId(null);
+              await signOut();
+            } catch {
+              /* ignore */
+            }
+            router.replace("/login");
+          })();
+        },
+      },
+    ]);
+  }, [router, signOut]);
 
   const addTable = useMutation(api.slots.addTable);
   const renameTable = useMutation(api.slots.renameTable);
@@ -212,6 +256,7 @@ export default function OwnerSettingsContent(): React.JSX.Element {
     | null
   >(null);
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  const [ownerPasscodeOpen, setOwnerPasscodeOpen] = useState(false);
   const [rName, setRName] = useState("");
   const [rTabs, setRTabs] = useState<string[]>(["slots"]);
   const [rAllTables, setRAllTables] = useState(true);
@@ -309,6 +354,31 @@ export default function OwnerSettingsContent(): React.JSX.Element {
     return { ...c, latitudeDelta: 0.02, longitudeDelta: 0.02 };
   }, [markerCoord]);
 
+  const customAmenitiesInDraft = useMemo(
+    () => amenitiesDraft.filter((a) => !isPredefinedAmenity(a)),
+    [amenitiesDraft],
+  );
+
+  const addCustomAmenityToDraft = useCallback(() => {
+    const trimmed = customAmenity.trim();
+    if (!trimmed) return;
+    if (trimmed.length > MAX_AMENITY_LENGTH) {
+      Alert.alert("Too long", `Amenity name must be ${MAX_AMENITY_LENGTH} characters or less.`);
+      return;
+    }
+    const lower = trimmed.toLowerCase();
+    if (amenitiesDraft.some((a) => a.toLowerCase() === lower)) {
+      Alert.alert("Already added", "That amenity is already in your list.");
+      return;
+    }
+    if (amenitiesDraft.length >= MAX_AMENITIES) {
+      Alert.alert("Limit reached", `You can add up to ${MAX_AMENITIES} amenities.`);
+      return;
+    }
+    setAmenitiesDraft((prev) => [...prev, trimmed]);
+    setCustomAmenity("");
+  }, [amenitiesDraft, customAmenity]);
+
   const toggleAccordion = (k: AccordionKey) =>
     setOpen((o) => ({ ...o, [k]: !o[k] }));
 
@@ -321,26 +391,31 @@ export default function OwnerSettingsContent(): React.JSX.Element {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       quality: 0.9,
     });
     if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
     setPhotoBusy(true);
     try {
       const uploadUrl = await generateUploadUrl();
-      const resp = await fetch(result.assets[0].uri);
-      const blob = await resp.blob();
-      const upload = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": blob.type || "image/jpeg" },
-        body: blob,
-      });
-      if (!upload.ok) throw new Error("Upload failed");
-      const storageId = (await upload.text()).trim();
-      await uploadClubPhoto({ clubId: club.clubId, storageId: storageId as Id<"_storage"> });
+      const storageId = await uploadLocalFileToConvexStorage(
+        uploadUrl,
+        asset.uri,
+        asset.mimeType,
+      );
+      await uploadClubPhoto({ clubId: club.clubId, storageId });
     } catch (e) {
-      Alert.alert(parseConvexError(e as Error).message);
+      const msg = parseConvexError(e as Error).message;
+      if (msg.includes("launchImageLibraryAsync") || msg.includes("ImageLoader")) {
+        Alert.alert(
+          "Photo picker unavailable",
+          "Install the latest development build of the owner app to upload club photos. Run: eas build --profile development --platform android",
+        );
+      } else {
+        Alert.alert(msg);
+      }
     } finally {
       setPhotoBusy(false);
     }
@@ -499,14 +574,24 @@ export default function OwnerSettingsContent(): React.JSX.Element {
 
   const pickRole = async (roleId: Id<"staffRoles"> | null) => {
     if (!club) return;
+    if (roleId === null) {
+      if (activeRoleId) {
+        setOwnerPasscodeOpen(true);
+      } else {
+        setRolePickerOpen(false);
+      }
+      return;
+    }
     try {
       await setActiveRoleMutation({
         clubId: club.clubId,
-        roleId: roleId ?? undefined,
+        roleId,
       });
       await setActiveRoleId(roleId);
       setActiveRoleIdState(roleId);
       setRolePickerOpen(false);
+      refreshRole();
+      onStaffRoleHandoff?.();
     } catch (e) {
       Alert.alert(parseConvexError(e as Error).message);
     }
@@ -876,7 +961,7 @@ export default function OwnerSettingsContent(): React.JSX.Element {
                       style={styles.smallGhost}
                       onPress={() => void pickRole(null)}
                     >
-                      <Text style={styles.smallGhostText}>Exit to Owner Mode</Text>
+                      <Text style={styles.smallGhostText}>Switch to Owner Mode…</Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -1272,6 +1357,26 @@ export default function OwnerSettingsContent(): React.JSX.Element {
                   );
                 })}
               </View>
+              {customAmenitiesInDraft.length > 0 ? (
+                <>
+                  <Text style={styles.label}>Custom amenities</Text>
+                  <View style={styles.chipWrap}>
+                    {customAmenitiesInDraft.map((a) => (
+                      <Pressable
+                        key={a}
+                        disabled={frozen}
+                        onPress={() => setAmenitiesDraft((p) => p.filter((x) => x !== a))}
+                        style={[styles.chip, styles.chipOn]}
+                      >
+                        <Text style={[styles.chipText, styles.chipTextOn]}>
+                          {a}
+                          <Text style={styles.chipRemoveMark}> ×</Text>
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              ) : null}
               <View style={styles.rowInput}>
                 <TextInput
                   style={[styles.input, { flex: 1 }]}
@@ -1280,16 +1385,14 @@ export default function OwnerSettingsContent(): React.JSX.Element {
                   placeholder="Custom amenity"
                   placeholderTextColor={colors.text.tertiary}
                   editable={!frozen}
+                  maxLength={MAX_AMENITY_LENGTH}
+                  returnKeyType="done"
+                  onSubmitEditing={addCustomAmenityToDraft}
                 />
                 <Pressable
                   style={styles.secondaryBtn}
-                  disabled={frozen}
-                  onPress={() => {
-                    const t = customAmenity.trim();
-                    if (!t) return;
-                    setAmenitiesDraft((p) => (p.includes(t) ? p : [...p, t]));
-                    setCustomAmenity("");
-                  }}
+                  disabled={frozen || customAmenity.trim().length === 0}
+                  onPress={addCustomAmenityToDraft}
                 >
                   <Text style={styles.secondaryBtnText}>Add</Text>
                 </Pressable>
@@ -1438,6 +1541,11 @@ export default function OwnerSettingsContent(): React.JSX.Element {
                 {!user.email ? (
                   <Text style={styles.tableMeta}>Add email first</Text>
                 ) : null}
+              </Pressable>
+
+              <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
+                <MaterialIcons name="logout" size={20} color={colors.text.primary} />
+                <Text style={styles.signOutText}>Log out</Text>
               </Pressable>
 
               <Pressable
@@ -1753,7 +1861,7 @@ export default function OwnerSettingsContent(): React.JSX.Element {
               selecting.
             </Text>
             <Pressable style={styles.rowLink} onPress={() => void pickRole(null)}>
-              <Text style={styles.linkText}>Owner Mode (Unrestricted)</Text>
+              <Text style={styles.linkText}>Owner Mode (passcode required)</Text>
             </Pressable>
             {roles?.map((role) => (
               <Pressable key={role._id} style={styles.rowLink} onPress={() => void pickRole(role._id)}>
@@ -1771,6 +1879,17 @@ export default function OwnerSettingsContent(): React.JSX.Element {
           </View>
         </View>
       </Modal>
+
+      <OwnerModePasscodeGate
+        visible={ownerPasscodeOpen}
+        clubId={club?.clubId}
+        onCancel={() => setOwnerPasscodeOpen(false)}
+        onSuccess={() => {
+          setOwnerPasscodeOpen(false);
+          setActiveRoleIdState(null);
+          setRolePickerOpen(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1902,6 +2021,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border.subtle,
   },
   chipOn: { borderColor: colors.accent.amberLight, backgroundColor: "rgba(255, 193, 7, 0.12)" },
+  chipRemoveMark: { fontWeight: "700" },
   chipText: { ...typography.caption, color: colors.text.primary },
   chipTextOn: { color: colors.accent.amberLight, fontWeight: "700" },
   errCard: {
@@ -1929,6 +2049,19 @@ const styles = StyleSheet.create({
   },
   rowDisabled: { opacity: 0.45 },
   linkText: { ...typography.body, color: colors.text.primary },
+  signOutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[2],
+    marginTop: spacing[5],
+    paddingVertical: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    backgroundColor: colors.bg.tertiary,
+  },
+  signOutText: { ...typography.label, color: colors.text.primary },
   destructiveBox: {
     marginTop: spacing[4],
     padding: spacing[3],

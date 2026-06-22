@@ -56,12 +56,26 @@ function MissingConfigScreen() {
 function SplashHider() {
   const { isLoading } = useConvexAuth();
   useEffect(() => {
+    void SplashScreen.hideAsync().catch(() => {});
+  }, []);
+  useEffect(() => {
     if (!isLoading) {
       void SplashScreen.hideAsync().catch(() => {});
     }
   }, [isLoading]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void SplashScreen.hideAsync().catch(() => {});
+    }, 3000);
+    return () => clearTimeout(t);
+  }, []);
   return null;
 }
+
+const sentryReady =
+  Boolean(SENTRY_DSN) &&
+  !SENTRY_DSN.includes("xxxx") &&
+  SENTRY_DSN.startsWith("https://");
 
 function RootLayout() {
   if (!convex) {
@@ -88,7 +102,7 @@ function RootLayout() {
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default sentryReady ? Sentry.wrap(RootLayout) : RootLayout;
 
 const configErrorStyles = StyleSheet.create({
   root: {

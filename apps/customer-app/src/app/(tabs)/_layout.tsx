@@ -4,9 +4,11 @@ import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { glass } from "@a3/ui/theme";
 import CustomerTabBar from "../../components/CustomerTabBar";
+import { usePushRegistration } from "../../lib/usePushRegistration";
 
 export default function TabsLayout() {
   const user = useQuery(api.users.getCurrentUser);
+  usePushRegistration();
   const pending = useQuery(
     api.bookings.getPendingBookingsCount,
     user?._id ? { customerId: user._id } : "skip",

@@ -11,6 +11,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,6 +20,7 @@ import { api } from "@a3/convex/_generated/api";
 import { GlassPageBackground } from "@a3/ui/components";
 import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { MaterialIcons } from "@expo/vector-icons";
+import { canNavigateToClub, openClubNavigation } from "../../lib/openClubNavigation";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const GALLERY_H = 200;
@@ -133,6 +135,24 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
   }
 
   const oh = profile.operatingHours;
+  const navigationTarget = {
+    lat: profile.location?.lat,
+    lng: profile.location?.lng,
+    address: profile.address,
+    label: profile.name,
+  };
+  const showNavigate = canNavigateToClub(navigationTarget);
+
+  const handleNavigate = () => {
+    void openClubNavigation(navigationTarget).then((opened) => {
+      if (!opened) {
+        Alert.alert(
+          "Could not open maps",
+          "Install a maps app or try again later.",
+        );
+      }
+    });
+  };
 
   return (
     <GlassPageBackground>
@@ -187,6 +207,12 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
             <MaterialIcons name="place" size={18} color={colors.text.secondary} />
             <Text style={styles.address}>{profile.address}</Text>
           </View>
+          {showNavigate ? (
+            <Pressable style={styles.navigateBtn} onPress={handleNavigate}>
+              <MaterialIcons name="directions" size={20} color={glass.ctaBg} />
+              <Text style={styles.navigateBtnText}>Get directions</Text>
+            </Pressable>
+          ) : null}
           {profile.description ? (
             <Text style={styles.desc}>{profile.description}</Text>
           ) : null}
@@ -347,6 +373,20 @@ const styles = StyleSheet.create({
   clubName: { ...typography.heading2, color: colors.text.primary },
   addrRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing[1], marginTop: spacing[2] },
   address: { ...typography.body, color: colors.text.secondary, flex: 1 },
+  navigateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: spacing[2],
+    marginTop: spacing[3],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: glass.ctaBg,
+    backgroundColor: "rgba(245, 166, 35, 0.08)",
+  },
+  navigateBtnText: { ...typography.label, color: glass.ctaBg },
   desc: { ...typography.body, color: colors.text.primary, marginTop: spacing[4] },
   sectionTitle: {
     ...typography.sectionHeader,

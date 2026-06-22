@@ -30,7 +30,8 @@ import {
   normalizeIanaTimeZone,
 } from "@a3/utils/timezone";
 import { formatCurrency } from "@a3/utils/billing";
-import { getActiveRoleId } from "../lib/activeRoleStorage";
+import { useStaffRole, staffRoleQueryId } from "../lib/StaffRoleContext";
+import { TabAccessDenied } from "../components/TabAccessDenied";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
 import { SafeBarChart } from "../components/SafeBarChart";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -139,17 +140,12 @@ function FinancialsContent(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
 
-  const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
-
-  useEffect(() => {
-    void getActiveRoleId().then((v) => {
-      if (v) setRoleId(v as Id<"staffRoles">);
-    });
-  }, []);
+  const { roleId, canAccessTab } = useStaffRole();
+  const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
 
   const access = useQuery(
     api.financials.getFinancialTabAccess,
-    clubId ? { clubId, roleId } : "skip",
+    clubId && roleId !== undefined ? { clubId, roleId: queryRoleId } : "skip",
   );
 
   const [dateFrom, setDateFrom] = useState("");
@@ -179,25 +175,25 @@ function FinancialsContent(): React.JSX.Element {
 
   const revenueArgs =
     clubId && dateFrom && dateTo && !rangeInvalid
-      ? { clubId, dateFrom, dateTo, roleId }
+      ? { clubId, dateFrom, dateTo, roleId: queryRoleId }
       : "skip";
   const revenue = useQuery(api.financials.getRevenueByDay, revenueArgs);
 
   const breakdownArgs =
     clubId && dateFrom && dateTo && !rangeInvalid
-      ? { clubId, dateFrom, dateTo, roleId }
+      ? { clubId, dateFrom, dateTo, roleId: queryRoleId }
       : "skip";
   const breakdown = useQuery(
     api.financials.getPaymentMethodBreakdown,
     breakdownArgs,
   );
 
-  const creditsArgs = clubId ? { clubId, sortBy, roleId } : "skip";
+  const creditsArgs = clubId && roleId !== undefined ? { clubId, sortBy, roleId: queryRoleId } : "skip";
   const credits = useQuery(api.financials.getOutstandingCredits, creditsArgs);
 
   const analyticsArgs =
     clubId && dateFrom && dateTo && !rangeInvalid
-      ? { clubId, dateFrom, dateTo, roleId }
+      ? { clubId, dateFrom, dateTo, roleId: queryRoleId }
       : "skip";
   const bestTables = useQuery(
     api.financials.getBestPerformingTables,
@@ -235,14 +231,24 @@ function FinancialsContent(): React.JSX.Element {
   );
 
   const onDateChange = useCallback(
-    (_e: DateTimePickerEvent, date?: Date) => {
+    (event: DateTimePickerEvent, date?: Date) => {
+      if (Platform.OS === "android") {
+        setPicker(null);
+        if (event.type === "dismissed" || !date) return;
+      }
       if (!date || !picker) return;
       const ymd = toClubDate(date.getTime(), clubTimezone);
       if (picker === "from") setDateFrom(ymd);
       else setDateTo(ymd);
-      if (Platform.OS !== "ios") setPicker(null);
     },
     [picker, clubTimezone],
+  );
+
+  const pickerValue = ymdToDate(
+    (picker === "from" ? dateFrom : dateTo) ||
+      dashboard?.todayYmd ||
+      toClubDate(Date.now(), clubTimezone),
+    clubTimezone,
   );
 
   const chartWidth = Dimensions.get("window").width - spacing[6] * 2;
@@ -281,7 +287,7 @@ function FinancialsContent(): React.JSX.Element {
                 await resolveCredit({
                   sessionId: row.sessionId,
                   resolvedMethod: method,
-                  roleId,
+                  roleId: queryRoleId,
                 });
                 setPaySheet(null);
                 Alert.alert(
@@ -304,7 +310,7 @@ function FinancialsContent(): React.JSX.Element {
         ],
       );
     },
-    [resolveCredit, roleId],
+    [resolveCredit, queryRoleId],
   );
 
   if (dashboard === undefined) {
@@ -321,6 +327,10 @@ function FinancialsContent(): React.JSX.Element {
         <OwnerNoClubPlaceholder />
       </SafeAreaView>
     );
+  }
+
+  if (roleId !== undefined && !canAccessTab("financials")) {
+    return <TabAccessDenied tabLabel="Financials" />;
   }
 
   if (access === undefined) {
@@ -377,22 +387,37 @@ function FinancialsContent(): React.JSX.Element {
           </Pressable>
         </View>
 
-        {picker ? (
+        {picker && Platform.OS === "android" ? (
           <DateTimePicker
-            value={ymdToDate(
-              (picker === "from" ? dateFrom : dateTo) || dashboard.todayYmd,
-              clubTimezone,
-            )}
+            value={pickerValue}
             mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "default"}
+            display="default"
             onChange={onDateChange}
-            {...(Platform.OS === "ios" ? { themeVariant: "dark" as const } : {})}
           />
         ) : null}
-        {Platform.OS === "ios" && picker ? (
-          <Pressable style={styles.iosPickDone} onPress={() => setPicker(null)}>
-            <Text style={styles.iosPickDoneText}>Done</Text>
-          </Pressable>
+
+        {picker && Platform.OS === "ios" ? (
+          <Modal transparent animationType="slide" visible>
+            <View style={styles.iosPickerBackdrop}>
+              <View style={styles.iosPickerSheet}>
+                <View style={styles.iosPickerHeader}>
+                  <Text style={styles.iosPickerTitle}>
+                    {picker === "from" ? "From date" : "To date"}
+                  </Text>
+                  <Pressable onPress={() => setPicker(null)} hitSlop={8}>
+                    <Text style={styles.iosPickDoneText}>Done</Text>
+                  </Pressable>
+                </View>
+                <DateTimePicker
+                  value={pickerValue}
+                  mode="date"
+                  display="spinner"
+                  onChange={onDateChange}
+                  themeVariant="dark"
+                />
+              </View>
+            </View>
+          </Modal>
         ) : null}
 
         <View style={styles.chips}>
@@ -1211,4 +1236,25 @@ const styles = StyleSheet.create({
   backText: { ...typography.label, color: colors.text.primary },
   iosPickDone: { alignItems: "flex-end", paddingRight: spacing[4] },
   iosPickDoneText: { color: colors.status.info, ...typography.label },
+  iosPickerBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: colors.overlay.scrim,
+  },
+  iosPickerSheet: {
+    backgroundColor: colors.bg.secondary,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingBottom: spacing[6],
+  },
+  iosPickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.subtle,
+  },
+  iosPickerTitle: { ...typography.label, color: colors.text.primary },
 });

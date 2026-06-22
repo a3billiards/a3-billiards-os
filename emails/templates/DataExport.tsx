@@ -1,4 +1,4 @@
-﻿// @ts-nocheck — @react-email vs React 19: duplicate ReactNode types under pnpm
+// @ts-nocheck — @react-email vs React 19: duplicate ReactNode types under pnpm
 import * as React from "react";
 import {
   Body,
@@ -19,9 +19,11 @@ export interface DataExportProps {
   exportUrl?: string;
   /** When true, copy explains JSON is attached instead of download link. */
   attached?: boolean;
+  /** Human-readable summary shown in the email body. */
+  summary?: string;
 }
 
-export function DataExport({ exportUrl, attached }: DataExportProps): React.JSX.Element {
+export function DataExport({ exportUrl, attached, summary }: DataExportProps): React.JSX.Element {
   return (
     <Html>
       <Head />
@@ -34,9 +36,27 @@ export function DataExport({ exportUrl, attached }: DataExportProps): React.JSX.
             As requested, your A3 Billiards OS personal data export has been prepared. The export includes: name, phone, email, age, session history summary, booking history, and complaint count.
           </Text>
           {attached ? (
-            <Text style={{ color: fg, fontSize: 15, lineHeight: 1.6 }}>
-              The export is attached to this email as a JSON file.
-            </Text>
+            <>
+              <Text style={{ color: fg, fontSize: 15, lineHeight: 1.6 }}>
+                The full export is attached as JSON. A readable summary is below.
+              </Text>
+              {summary ? (
+                <Text
+                  style={{
+                    color: fg,
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    fontFamily: "ui-monospace, monospace",
+                    backgroundColor: "#161b22",
+                    padding: 16,
+                    borderRadius: 8,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {summary}
+                </Text>
+              ) : null}
+            </>
           ) : exportUrl ? (
             <>
               <Button

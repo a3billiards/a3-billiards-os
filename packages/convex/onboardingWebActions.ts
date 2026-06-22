@@ -11,6 +11,7 @@ import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { action } from "./_generated/server";
 import { listOnboardingPlansFromEnv } from "./onboardingPlanPricing";
+import { geocodeAddress } from "./model/geocode";
 
 const FREE_ACCESS_COUPON = "A3A3A3";
 
@@ -87,26 +88,8 @@ export const registerOwnerAccount = action({
 export const geocodeClubAddress = action({
   args: { address: v.string() },
   handler: async (_ctx, { address }) => {
-    const key = process.env.GOOGLE_MAPS_API_KEY;
-    if (!key || key.length === 0) {
-      throw new Error(
-        "DATA_001: Geocoding is not configured (GOOGLE_MAPS_API_KEY)",
-      );
-    }
-    const q = encodeURIComponent(address.trim());
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${q}&key=${key}`;
-    const res = await fetch(url);
-    const data = (await res.json()) as {
-      status?: string;
-      results?: { geometry?: { location?: { lat: number; lng: number } } }[];
-    };
-    if (data.status !== "OK" || !data.results?.[0]?.geometry?.location) {
-      throw new Error(
-        "DATA_001: Could not resolve address — check the address and try again",
-      );
-    }
-    const loc = data.results[0].geometry.location;
-    return { lat: loc.lat, lng: loc.lng };
+    const { lat, lng } = await geocodeAddress(address);
+    return { lat, lng };
   },
 });
 

@@ -9,12 +9,16 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as adminAuth from "../adminAuth.js";
 import type * as auth from "../auth.js";
 import type * as bookings from "../bookings.js";
 import type * as clubDiscovery from "../clubDiscovery.js";
+import type * as clubDocuments from "../clubDocuments.js";
 import type * as clubProfile from "../clubProfile.js";
 import type * as complaints from "../complaints.js";
 import type * as crons from "../crons.js";
+import type * as customerAuth from "../customerAuth.js";
+import type * as customerAuthActions from "../customerAuthActions.js";
 import type * as deletion from "../deletion.js";
 import type * as deletionActions from "../deletionActions.js";
 import type * as financials from "../financials.js";
@@ -26,6 +30,7 @@ import type * as http from "../http.js";
 import type * as mfa from "../mfa.js";
 import type * as mfaActions from "../mfaActions.js";
 import type * as model_clubSubscription from "../model/clubSubscription.js";
+import type * as model_geocode from "../model/geocode.js";
 import type * as model_index from "../model/index.js";
 import type * as model_otp from "../model/otp.js";
 import type * as model_passcodePermissions from "../model/passcodePermissions.js";
@@ -33,6 +38,7 @@ import type * as model_phoneRegistration from "../model/phoneRegistration.js";
 import type * as model_rateLimiter from "../model/rateLimiter.js";
 import type * as model_sessionRate from "../model/sessionRate.js";
 import type * as model_sessionSnackRules from "../model/sessionSnackRules.js";
+import type * as model_staffTabAccess from "../model/staffTabAccess.js";
 import type * as model_viewer from "../model/viewer.js";
 import type * as notifications from "../notifications.js";
 import type * as notificationsActions from "../notificationsActions.js";
@@ -76,12 +82,16 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  adminAuth: typeof adminAuth;
   auth: typeof auth;
   bookings: typeof bookings;
   clubDiscovery: typeof clubDiscovery;
+  clubDocuments: typeof clubDocuments;
   clubProfile: typeof clubProfile;
   complaints: typeof complaints;
   crons: typeof crons;
+  customerAuth: typeof customerAuth;
+  customerAuthActions: typeof customerAuthActions;
   deletion: typeof deletion;
   deletionActions: typeof deletionActions;
   financials: typeof financials;
@@ -93,6 +103,7 @@ declare const fullApi: ApiFromModules<{
   mfa: typeof mfa;
   mfaActions: typeof mfaActions;
   "model/clubSubscription": typeof model_clubSubscription;
+  "model/geocode": typeof model_geocode;
   "model/index": typeof model_index;
   "model/otp": typeof model_otp;
   "model/passcodePermissions": typeof model_passcodePermissions;
@@ -100,6 +111,7 @@ declare const fullApi: ApiFromModules<{
   "model/rateLimiter": typeof model_rateLimiter;
   "model/sessionRate": typeof model_sessionRate;
   "model/sessionSnackRules": typeof model_sessionSnackRules;
+  "model/staffTabAccess": typeof model_staffTabAccess;
   "model/viewer": typeof model_viewer;
   notifications: typeof notifications;
   notificationsActions: typeof notificationsActions;

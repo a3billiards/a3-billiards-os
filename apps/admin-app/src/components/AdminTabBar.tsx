@@ -10,14 +10,16 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   index: "dashboard",
   users: "people",
   complaints: "flag",
+  audit: "history",
   notifications: "notifications",
 };
 
 const TAB_LABELS: Record<string, string> = {
-  index: "Dashboard",
+  index: "Home",
   users: "Users",
-  complaints: "Complaints",
-  notifications: "Notifications",
+  complaints: "Flags",
+  audit: "Audit",
+  notifications: "Alerts",
 };
 
 export default function AdminTabBar({

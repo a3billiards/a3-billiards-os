@@ -92,6 +92,47 @@ export const verifyPasscode = action({
 });
 
 /**
+ * Change settings passcode while signed in (verify current PIN, then set new PIN).
+ */
+export const changePasscode = action({
+  args: {
+    currentPasscode: v.string(),
+    newPasscode: v.string(),
+  },
+  handler: async (ctx, { currentPasscode, newPasscode }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("AUTH_001: Not authenticated");
+
+    const ctxRow = await ctx.runQuery(internal.passcode.getOwnerVerifyContext, {});
+    if (ctxRow === null) {
+      throw new Error("PERM_001: Owner only");
+    }
+    if (!ctxRow.settingsPasscodeSet || !ctxRow.settingsPasscodeHash) {
+      throw new Error("PASSCODE_002: Passcode not configured");
+    }
+
+    const currentDigits = assertSixDigitPin(currentPasscode);
+    const newDigits = assertSixDigitPin(newPasscode);
+    if (currentDigits === newDigits) {
+      throw new Error("DATA_001: New passcode must be different");
+    }
+
+    const ok = await bcrypt.compare(currentDigits, ctxRow.settingsPasscodeHash);
+    if (!ok) {
+      throw new Error("PASSCODE_001: Invalid passcode");
+    }
+
+    const passcodeHash = await bcrypt.hash(newDigits, BCRYPT_ROUNDS);
+    await ctx.runMutation(internal.passcode.applyChangePasscode, {
+      userId,
+      passcodeHash,
+    });
+
+    return { success: true as const };
+  },
+});
+
+/**
  * Clears passcode flags for the authenticated owner and emails a PasscodeReset notice via Resend.
  */
 export const resetPasscodeViaEmail = action({

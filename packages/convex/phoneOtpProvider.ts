@@ -72,6 +72,7 @@ export function A3PhoneOtp() {
             age,
             phone,
             phoneVerified: true,
+            customerRegisteredVia: "app",
             consentGiven: true,
             consentGivenAt: Date.now(),
             ...(email !== undefined ? { email } : {}),

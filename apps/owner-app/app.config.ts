@@ -2,6 +2,9 @@
 // Asset references (icon, splash, adaptiveIcon) intentionally omitted until
 // real assets are added under ./assets/images/.
 
+import fs from "fs";
+import path from "path";
+
 /** iOS URL scheme required by Google Sign-In when not using GoogleService-Info.plist. */
 function googleIosUrlSchemes(): string[] {
   const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
@@ -15,13 +18,25 @@ function googleIosUrlSchemes(): string[] {
   return [`com.googleusercontent.apps.${prefix}`];
 }
 
+function resolveGoogleServicesJsonPath(): string | undefined {
+  const candidates = [
+    process.env.GOOGLE_SERVICES_JSON,
+    path.join(__dirname, "owner-google-services.json"),
+  ].filter((c): c is string => typeof c === "string" && c.trim().length > 0);
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 export default () => {
   const googleSchemes = googleIosUrlSchemes();
   const plistPath = process.env.GOOGLE_SERVICE_INFO_PLIST;
-  const androidJsonPath = process.env.GOOGLE_SERVICES_JSON;
+  const androidJsonPath = resolveGoogleServicesJsonPath();
   /** Embed Google Maps SDK keys (EAS secrets). Required for `react-native-maps` MapView. */
   const googleMapsAndroidKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY;
   const googleMapsIosKey = process.env.GOOGLE_MAPS_IOS_API_KEY;
+  const isDevClientBuild = process.env.EAS_BUILD_PROFILE === "development";
 
   const ios: Record<string, unknown> = {
     supportsTablet: true,
@@ -46,10 +61,11 @@ export default () => {
 
   const android: Record<string, unknown> = {
     package: "com.a3billiards.ownerapp",
-    edgeToEdgeEnabled: true,
+    edgeToEdgeEnabled: false,
     predictiveBackGestureEnabled: false,
+    softwareKeyboardLayoutMode: "pan",
   };
-  if (typeof androidJsonPath === "string" && androidJsonPath.length > 0) {
+  if (androidJsonPath) {
     android.googleServicesFile = androidJsonPath;
   }
   if (
@@ -73,9 +89,17 @@ export default () => {
     ios,
     android,
     plugins: [
+      ...(isDevClientBuild ? (["expo-dev-client"] as const) : []),
       "expo-router",
       "expo-secure-store",
       "@react-native-google-signin/google-signin",
+      [
+        "expo-notifications",
+        {
+          color: "#43A047",
+          defaultChannel: "default",
+        },
+      ],
       "@sentry/react-native/expo",
     ],
     experiments: {

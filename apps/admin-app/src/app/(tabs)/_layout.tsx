@@ -44,6 +44,7 @@ export default function TabsLayout() {
                 : undefined,
           }}
         />
+        <Tabs.Screen name="audit" options={{ title: "Audit Log" }} />
         <Tabs.Screen name="notifications" options={{ title: "Notifications" }} />
       </Tabs>
     </View>

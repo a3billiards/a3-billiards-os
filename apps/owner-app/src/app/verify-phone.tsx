@@ -6,7 +6,6 @@ import {
   Pressable,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -17,7 +16,7 @@ import {
   useQuery,
 } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
 const PIN_LENGTH = 6;
@@ -275,10 +274,7 @@ export default function VerifyPhoneScreen() {
     mode === "input" || mode === "expired";
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAvoidingView style={styles.flex} {...iosKeyboardAvoidingProps}>
       <View style={styles.container}>
         <Text style={styles.logo}>A3</Text>
         <Text style={styles.title}>Verify Phone</Text>

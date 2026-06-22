@@ -8,6 +8,7 @@ import {
   parseIndiaE164OrThrow,
   throwIfPhoneUnavailableForNewAccount,
 } from "./model/phoneRegistration";
+import { ensureGoogleLinkedToUser } from "./googleAuthOps";
 import { internalMutation, internalQuery } from "./_generated/server";
 
 function throwErr(message: string): never {
@@ -27,9 +28,10 @@ export const findExistingGoogleUser = internalQuery({
     if (byGoogle) return byGoogle;
 
     if (email) {
+      const normalized = email.trim().toLowerCase();
       const byEmail = await ctx.db
         .query("users")
-        .withIndex("by_email", (q) => q.eq("email", email))
+        .withIndex("by_email", (q) => q.eq("email", normalized))
         .unique();
       if (byEmail) return byEmail;
     }
@@ -37,17 +39,60 @@ export const findExistingGoogleUser = internalQuery({
   },
 });
 
-export const linkGoogleId = internalMutation({
-  args: { userId: v.id("users"), googleId: v.string() },
-  handler: async (ctx, { userId, googleId }) => {
-    const conflict = await ctx.db
+/** Owner app: prefer web onboarding account (password) over a stale Google-only stub. */
+export const findExistingOwnerGoogleUser = internalQuery({
+  args: {
+    googleId: v.string(),
+    email: v.optional(v.string()),
+  },
+  handler: async (ctx, { googleId, email }) => {
+    if (email) {
+      const normalized = email.trim().toLowerCase();
+      const byEmail = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", normalized))
+        .unique();
+      if (byEmail?.role === "owner") {
+        const passwordAccount = await ctx.db
+          .query("authAccounts")
+          .withIndex("providerAndAccountId", (q) =>
+            q.eq("provider", "password").eq("providerAccountId", normalized),
+          )
+          .unique();
+        if (passwordAccount !== null && passwordAccount.userId === byEmail._id) {
+          return byEmail;
+        }
+      }
+    }
+
+    const byGoogle = await ctx.db
       .query("users")
       .withIndex("by_googleId", (q) => q.eq("googleId", googleId))
       .unique();
-    if (conflict !== null && conflict._id !== userId) {
-      throwErr("DATA_002: Google account already linked to another user");
+    if (byGoogle?.role === "owner") return byGoogle;
+
+    if (email) {
+      const normalized = email.trim().toLowerCase();
+      const byEmail = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", normalized))
+        .unique();
+      if (byEmail?.role === "owner") return byEmail;
     }
-    await ctx.db.patch(userId, { googleId });
+
+    return null;
+  },
+});
+
+export const linkGoogleId = internalMutation({
+  args: {
+    userId: v.id("users"),
+    googleId: v.string(),
+    email: v.optional(v.string()),
+    requireOwnerRole: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await ensureGoogleLinkedToUser(ctx, args);
   },
 });
 

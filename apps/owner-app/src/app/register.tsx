@@ -5,9 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
   Linking,
 } from "react-native";
@@ -17,7 +14,7 @@ import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
 import { resolveGoogleIdTokenForConvexAuth } from "../lib/googleIdToken";
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
@@ -206,14 +203,7 @@ export default function OwnerRegisterScreen() {
 
   return (
     <GlassPageBackground>
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+    <KeyboardFormScroll contentContainerStyle={styles.scroll}>
         <View style={styles.container}>
           <View style={styles.logoTile}>
             <Text style={styles.logoText}>A3</Text>
@@ -369,8 +359,7 @@ export default function OwnerRegisterScreen() {
             </Pressable>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
     </GlassPageBackground>
   );
 }

@@ -123,6 +123,16 @@ export function requireAdmin(viewer: Viewer): AdminViewer {
   return viewer;
 }
 
+/** Admin role + completed MFA for this session (PRD §4.5). */
+export async function requireAdminWithMfa(ctx: AuthCtx): Promise<AdminViewer> {
+  const viewer = requireAdmin(await requireViewer(ctx));
+  const user = await ctx.db.get(viewer.userId);
+  if (!user?.adminMfaVerifiedAt) {
+    throwAuth("AUTH_003: Admin MFA verification required");
+  }
+  return viewer;
+}
+
 export function requireOwner(viewer: Viewer): OwnerViewer {
   if (viewer.role !== "owner") {
     throwAuth("PERM_001: Owner only");

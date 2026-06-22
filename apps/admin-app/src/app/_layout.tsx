@@ -14,17 +14,19 @@ import { StatusBar } from "expo-status-bar";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AdminAuthProvider, useAdminAuth } from "../lib/adminAuth";
 
 try {
   void SplashScreen.preventAutoHideAsync();
 } catch {}
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
-if (
+const SENTRY_ENABLED =
   SENTRY_DSN &&
   !SENTRY_DSN.includes("xxxx") &&
-  SENTRY_DSN.startsWith("https://")
-) {
+  SENTRY_DSN.startsWith("https://");
+
+if (SENTRY_ENABLED) {
   Sentry.init({
     dsn: SENTRY_DSN,
     enableAutoSessionTracking: true,
@@ -58,12 +60,16 @@ function MissingConfigScreen() {
   );
 }
 
-function AdminAuthShell(): React.JSX.Element {
+function AdminAuthShellInner(): React.JSX.Element {
   const router = useRouter();
   const segments = useSegments();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signOut } = useAuthActions();
-  const user = useQuery(api.users.getCurrentUser, isAuthenticated ? {} : "skip");
+  const { isSigningOut, signOutAdmin } = useAdminAuth();
+  const user = useQuery(
+    api.users.getCurrentUser,
+    isAuthenticated && !isSigningOut ? {} : "skip",
+  );
   const clearedNonAdmin = useRef(false);
 
   const firstSegment = segments[0] ?? "";
@@ -90,7 +96,7 @@ function AdminAuthShell(): React.JSX.Element {
   }, [isAuthenticated, user, signOut]);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || isSigningOut) return;
     if (!isAuthenticated) {
       if (!onPublicAuthRoute) {
         router.replace("/login");
@@ -102,7 +108,8 @@ function AdminAuthShell(): React.JSX.Element {
       return;
     }
     if (!user.adminMfaVerifiedAt) {
-      if (!onPublicAuthRoute) {
+      const onTabs = firstSegment === "(tabs)";
+      if (!onPublicAuthRoute && !onTabs) {
         router.replace("/mfa");
       }
       return;
@@ -117,9 +124,10 @@ function AdminAuthShell(): React.JSX.Element {
     onPublicAuthRoute,
     router,
     firstSegment,
+    isSigningOut,
   ]);
 
-  if (isLoading || (isAuthenticated && user === undefined)) {
+  if (isSigningOut || isLoading || (isAuthenticated && user === undefined)) {
     return (
       <View style={styles.boot}>
         <ActivityIndicator size="large" color={colors.accent.green} />
@@ -162,9 +170,8 @@ function AdminAuthShell(): React.JSX.Element {
         </Text>
         <Pressable
           style={styles.deniedBtn}
-          onPress={async () => {
-            await signOut();
-            router.replace("/login");
+          onPress={() => {
+            void signOutAdmin();
           }}
         >
           <Text style={styles.deniedBtnText}>Sign out</Text>
@@ -174,7 +181,8 @@ function AdminAuthShell(): React.JSX.Element {
   }
 
   if (!user.adminMfaVerifiedAt) {
-    if (!onPublicAuthRoute) {
+    const onTabs = firstSegment === "(tabs)";
+    if (!onPublicAuthRoute && !onTabs) {
       return <Redirect href="/mfa" />;
     }
     return (
@@ -205,6 +213,14 @@ function AdminAuthShell(): React.JSX.Element {
   );
 }
 
+function AdminAuthShell(): React.JSX.Element {
+  return (
+    <AdminAuthProvider>
+      <AdminAuthShellInner />
+    </AdminAuthProvider>
+  );
+}
+
 function RootLayout() {
   if (!convex) {
     return (
@@ -222,7 +238,7 @@ function RootLayout() {
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default SENTRY_ENABLED ? Sentry.wrap(RootLayout) : RootLayout;
 
 const configErrorStyles = StyleSheet.create({
   icon: { fontSize: 48, marginBottom: 16 },

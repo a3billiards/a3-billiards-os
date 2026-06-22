@@ -27,6 +27,9 @@ export const adminResetUserPassword = action({
     if (!adminRow || adminRow.role !== "admin") {
       throw new Error("AUTH_001: Admin authentication required");
     }
+    if (!adminRow.adminMfaVerifiedAt) {
+      throw new Error("AUTH_003: Admin MFA verification required");
+    }
 
     const rawToken = randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);

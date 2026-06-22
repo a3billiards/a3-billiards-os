@@ -365,7 +365,7 @@ export default function BookClubScreen() {
       <ScrollView
         style={styles.body}
         contentContainerStyle={styles.bodyContent}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
       >
         {step === 0 && (
           <TableTypePicker

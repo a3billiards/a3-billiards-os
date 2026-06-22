@@ -6,7 +6,8 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "test": "turbo test"
+    "test": "turbo test",
+    "patch:expo-ngrok": "node scripts/patch-expo-ngrok.cjs"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

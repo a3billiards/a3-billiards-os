@@ -10,6 +10,7 @@ import {
   RefreshControl,
   TextInput,
   Linking,
+  Alert,
 } from "react-native";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { useRouter } from "expo-router";
@@ -25,7 +26,8 @@ import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { formatCurrency, formatElapsed } from "@a3/utils/billing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getActiveRoleId } from "../../lib/activeRoleStorage";
+import { useStaffRole, staffRoleQueryId } from "../../lib/StaffRoleContext";
+import { TabAccessDenied } from "../../components/TabAccessDenied";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
 
@@ -36,6 +38,8 @@ export default function SlotsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
+  const { roleId, canAccessTab } = useStaffRole();
+  const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const [walkInTableId, setWalkInTableId] = useState<Id<"tables"> | null>(
     null,
@@ -57,7 +61,6 @@ export default function SlotsScreen() {
   const [debouncedCustomerPhone, setDebouncedCustomerPhone] = useState("");
   const [pendingCustomerId, setPendingCustomerId] = useState<Id<"users"> | null>(null);
   const [showComplaintGate, setShowComplaintGate] = useState(false);
-  const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
   const walkInModalOpenedForTableRef = useRef<string | null>(null);
   const [checkoutTableId, setCheckoutTableId] = useState<Id<"tables"> | null>(
     null,
@@ -78,12 +81,6 @@ export default function SlotsScreen() {
   const [deskBusyExtendLock, setDeskBusyExtendLock] = useState(false);
   const [deskError, setDeskError] = useState<string | null>(null);
   const [deskInfo, setDeskInfo] = useState<string | null>(null);
-
-  useEffect(() => {
-    void getActiveRoleId().then((v) => {
-      if (v) setRoleId(v as Id<"staffRoles">);
-    });
-  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedCustomerPhone(customerPhoneInput.trim()), 300);
@@ -141,7 +138,7 @@ export default function SlotsScreen() {
   const checkoutPreview = useQuery(
     api.ownerSessions.previewTableCheckout,
     checkoutTableId !== null
-      ? { tableId: checkoutTableId, roleId, discountPercent: parsedDiscount }
+      ? { tableId: checkoutTableId, roleId: queryRoleId, discountPercent: parsedDiscount }
       : "skip",
   );
 
@@ -192,7 +189,7 @@ export default function SlotsScreen() {
           forceStartDespiteConflict: opts?.forceOverride || undefined,
           guestName: opts?.customerId ? undefined : opts?.guestName,
           customerId: opts?.customerId,
-          roleId,
+          roleId: queryRoleId,
           staffAcknowledgedComplaint: opts?.staffAcknowledgedComplaint,
         });
         if ((result as { hasUpcomingBooking?: boolean }).hasUpcomingBooking) {
@@ -215,7 +212,7 @@ export default function SlotsScreen() {
         clearWalkInState();
       }
     },
-    [startWalkIn, clearWalkInState, roleId],
+    [startWalkIn, clearWalkInState, queryRoleId],
   );
 
   useEffect(() => {
@@ -255,7 +252,7 @@ export default function SlotsScreen() {
         await checkoutTableSession({
           tableId: checkoutTableId,
           paymentMethod,
-          roleId,
+          roleId: queryRoleId,
           discountPercent: parsedDiscount > 0 ? parsedDiscount : undefined,
         });
         setShowCheckoutModal(false);
@@ -267,7 +264,7 @@ export default function SlotsScreen() {
         setCheckoutBusy(false);
       }
     },
-    [checkoutTableId, checkoutTableSession, roleId, parsedDiscount],
+    [checkoutTableId, checkoutTableSession, queryRoleId, parsedDiscount],
   );
 
   const handleTablePress = useCallback(
@@ -355,6 +352,10 @@ export default function SlotsScreen() {
     return <OwnerNoClubPlaceholder />;
   }
 
+  if (roleId !== undefined && !canAccessTab("slots")) {
+    return <TabAccessDenied tabLabel="Slots" />;
+  }
+
   const summary = dashboard.bookingSummary;
   const showSummary = dashboard.bookingSettingsEnabled;
   /** Do not cover the walk-in / conflict modals — overlay uses absoluteFill and can steal touches on some devices. */
@@ -382,9 +383,9 @@ export default function SlotsScreen() {
           />
         }
       >
-        <Text style={styles.screenTitle}>Slots</Text>
+        <Text style={styles.screenTitle}>{dashboard.clubName}</Text>
         <Text style={styles.screenSubtitle}>
-          Tap a free table for a walk-in, or an occupied table to close out and free it.
+          Slots · Tap a free table for a walk-in, or an occupied table to close out.
         </Text>
 
         {showSummary && (
@@ -573,7 +574,7 @@ export default function SlotsScreen() {
           <View style={[styles.modalCard, { maxHeight: "90%" }]}>
             {walkInStartStep === "choose" ? (
               <ScrollView
-                keyboardShouldPersistTaps="handled"
+                keyboardShouldPersistTaps="always"
                 showsVerticalScrollIndicator={false}
                 bounces={false}
               >
@@ -688,7 +689,7 @@ export default function SlotsScreen() {
               </ScrollView>
             ) : walkInStartStep === "deskRegister" ? (
               <ScrollView
-                keyboardShouldPersistTaps="handled"
+                keyboardShouldPersistTaps="always"
                 showsVerticalScrollIndicator={false}
               >
                 <Text style={styles.modalTitle}>Register customer</Text>
@@ -699,6 +700,9 @@ export default function SlotsScreen() {
                 </Text>
                 {deskError ? (
                   <Text style={styles.walkInErr}>{deskError}</Text>
+                ) : null}
+                {deskInfo ? (
+                  <Text style={styles.walkInOk}>{deskInfo}</Text>
                 ) : null}
                 <Text style={styles.walkInLabel}>Full name</Text>
                 <TextInput
@@ -748,6 +752,10 @@ export default function SlotsScreen() {
                       try {
                         await ownerSendDeskCustomerOtp({ phone });
                         setDeskInfo("OTP sent to WhatsApp.");
+                        Alert.alert(
+                          "Code sent",
+                          "A 6-digit verification code was sent to the customer's WhatsApp.",
+                        );
                       } catch (e) {
                         setDeskInfo(null);
                         setDeskError(parseConvexError(e as Error).message);

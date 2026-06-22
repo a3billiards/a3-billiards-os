@@ -8,6 +8,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { parseGenericE164OrThrow } from "./model/phoneRegistration";
 import { listOnboardingPlansFromEnv } from "./onboardingPlanPricing";
+import { isValidGeocodeLocation } from "./model/geocode";
 
 const locationObj = v.object({
   lat: v.number(),
@@ -73,6 +74,11 @@ export const saveClubDraft = mutation({
     const cur = currency.trim().toUpperCase();
     if (cur.length !== 3) {
       throw new Error("DATA_001: Currency must be a 3-letter ISO code");
+    }
+    if (!isValidGeocodeLocation(location)) {
+      throw new Error(
+        "DATA_001: Club location is missing. Pin your club on the map on the club step before continuing.",
+      );
     }
 
     const now = Date.now();

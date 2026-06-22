@@ -6,6 +6,7 @@ export const OWNER_UNRESTRICTED_TABS = [
   "financials",
   "complaints",
   "bookings",
+  "documents",
 ] as const;
 
 export type PasscodePermissions = {

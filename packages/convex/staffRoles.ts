@@ -8,6 +8,7 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { assertMutationClubScope, requireOwner, requireViewer } from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
+import { resolveStaffTabAccess } from "./model/staffTabAccess";
 
 const TAB_VALUES = [
   "slots",
@@ -15,6 +16,7 @@ const TAB_VALUES = [
   "financials",
   "complaints",
   "bookings",
+  "documents",
 ] as const;
 
 function assertAllowedTabs(tabs: string[]): void {
@@ -49,6 +51,17 @@ export const listStaffRoles = query({
       .query("staffRoles")
       .withIndex("by_club", (q) => q.eq("clubId", clubId))
       .collect();
+  },
+});
+
+export const getActiveStaffTabAccess = query({
+  args: { roleId: v.optional(v.id("staffRoles")) },
+  handler: async (ctx, { roleId }) => {
+    const owner = requireOwner(await requireViewer(ctx));
+    if (owner.clubId === null) {
+      return { allowedTabs: [] as string[], isOwnerMode: true };
+    }
+    return await resolveStaffTabAccess(ctx, owner.clubId, roleId);
   },
 });
 

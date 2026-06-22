@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -19,8 +19,9 @@ import { parseConvexError } from "@a3/ui/errors";
 import { computeBookingUnixTime, timeZoneAbbreviation } from "@a3/utils/timezone";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getActiveRoleId } from "../../lib/activeRoleStorage";
+import { useStaffRole, staffRoleQueryId } from "../../lib/StaffRoleContext";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
+import { TabAccessDenied } from "../../components/TabAccessDenied";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
 
 type Segment = "pending" | "upcoming" | "history";
@@ -68,15 +69,21 @@ export default function BookingsTab() {
   const params = useLocalSearchParams<{ segment?: string }>();
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
+  const { roleId, canAccessTab } = useStaffRole();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
+  const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
   const pending = useQuery(
     api.bookings.listPendingBookings,
-    clubId ? { clubId, limit: 50 } : "skip",
+    clubId && roleId !== undefined
+      ? { clubId, limit: 50, roleId: queryRoleId }
+      : "skip",
   );
   const upcoming = useQuery(
     api.bookings.listUpcomingBookings,
-    clubId ? { clubId, limit: 50 } : "skip",
+    clubId && roleId !== undefined
+      ? { clubId, limit: 50, roleId: queryRoleId }
+      : "skip",
   );
 
   const initialSeg =
@@ -95,19 +102,12 @@ export default function BookingsTab() {
   const [selectedTableId, setSelectedTableId] = useState<Id<"tables"> | null>(null);
   const [reasonText, setReasonText] = useState("");
   const [inFlight, setInFlight] = useState<string | null>(null);
-  const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
   const [complaintGateBooking, setComplaintGateBooking] = useState<{
     bookingId: Id<"bookings">;
     customerId: Id<"users">;
     customerName: string;
     confirmedTableId: Id<"tables"> | undefined;
   } | null>(null);
-
-  useEffect(() => {
-    void getActiveRoleId().then((v) => {
-      if (v) setRoleId(v as Id<"staffRoles">);
-    });
-  }, []);
 
   const complaintGateDetails = useQuery(
     api.complaints.getCustomerActiveComplaints,
@@ -131,13 +131,14 @@ export default function BookingsTab() {
 
   const historyPage = useQuery(
     api.bookings.listHistoryBookings,
-    clubId
+    clubId && roleId !== undefined
       ? {
           clubId,
           statusFilter: historyFilter === "all" ? undefined : historyFilter,
           searchQuery: searchQuery.trim() || undefined,
           cursor: historyCursor,
           limit: 20,
+          roleId: queryRoleId,
         }
       : "skip",
   );
@@ -170,6 +171,10 @@ export default function BookingsTab() {
 
   if (dashboard === null) {
     return <OwnerNoClubPlaceholder />;
+  }
+
+  if (roleId !== undefined && !canAccessTab("bookings")) {
+    return <TabAccessDenied tabLabel="Bookings" />;
   }
 
   if (
@@ -336,7 +341,7 @@ export default function BookingsTab() {
                         await startSession({
                           bookingId: item.booking._id,
                           tableId: item.booking.confirmedTableId,
-                          roleId,
+                          roleId: queryRoleId,
                         });
                         Alert.alert("Success", "Session started successfully.");
                       } catch (e) {
@@ -534,7 +539,7 @@ export default function BookingsTab() {
                         bookingId: complaintGateBooking.bookingId,
                         tableId: complaintGateBooking.confirmedTableId,
                         staffAcknowledgedComplaint: true,
-                        roleId,
+                        roleId: queryRoleId,
                       });
                       setComplaintGateBooking(null);
                       Alert.alert("Success", "Session started successfully.");

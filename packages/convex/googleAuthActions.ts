@@ -124,6 +124,7 @@ export const resolveGoogleSignIn = action({
         await ctx.runMutation(internal.googleAuth.linkGoogleId, {
           userId: existing._id,
           googleId,
+          email: email ?? undefined,
         });
       }
       return { isNewUser: false as const, userId: existing._id };
@@ -153,7 +154,7 @@ export const resolveOwnerGoogleSignIn = action({
     const { googleId, email, name } = await verifyIdTokenClaims(idToken);
 
     const existing: Doc<"users"> | null = await ctx.runQuery(
-      internal.googleAuth.findExistingGoogleUser,
+      internal.googleAuth.findExistingOwnerGoogleUser,
       {
         googleId,
         email: email ?? undefined,
@@ -172,12 +173,12 @@ export const resolveOwnerGoogleSignIn = action({
       if (existing.deletionRequestedAt !== undefined) {
         throw new Error("AUTH_006: Account pending deletion");
       }
-      if (!existing.googleId) {
-        await ctx.runMutation(internal.googleAuth.linkGoogleId, {
-          userId: existing._id,
-          googleId,
-        });
-      }
+      await ctx.runMutation(internal.googleAuth.linkGoogleId, {
+        userId: existing._id,
+        googleId,
+        email: email ?? undefined,
+        requireOwnerRole: true,
+      });
       return { isNewUser: false as const, userId: existing._id };
     }
 

@@ -55,6 +55,7 @@ export const insertDeskRegisteredCustomer = internalMutation({
       age,
       phone: normalized,
       role: "customer",
+      customerRegisteredVia: "desk",
       phoneVerified: true,
       isFrozen: false,
       settingsPasscodeSet: false,

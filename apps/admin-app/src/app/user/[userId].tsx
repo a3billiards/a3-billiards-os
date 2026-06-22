@@ -64,12 +64,14 @@ export default function UserProfileScreen(): React.JSX.Element {
   const userId = rawId as Id<"users">;
 
   const profile = useQuery(api.users.getUserProfile, { userId });
+  const currentUser = useQuery(api.users.getCurrentUser, {});
   const editUser = useMutation(api.users.adminEditUser);
   const updatePhone = useMutation(api.users.adminUpdatePhone);
   const freezeUser = useMutation(api.users.adminFreezeUser);
   const unfreezeUser = useMutation(api.users.adminUnfreezeUser);
   const resetPasscode = useMutation(api.users.adminResetOwnerPasscode);
   const promoteAdmin = useMutation(api.users.adminPromoteToAdmin);
+  const demoteAdmin = useMutation(api.users.adminDemoteToOwner);
   const forceEnd = useMutation(api.sessions.forceEndSession);
   const sendResetEmail = useAction(api.usersAdminActions.adminResetUserPassword);
 
@@ -89,6 +91,8 @@ export default function UserProfileScreen(): React.JSX.Element {
 
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [promoteConfirm, setPromoteConfirm] = useState("");
+  const [demoteOpen, setDemoteOpen] = useState(false);
+  const [demoteConfirm, setDemoteConfirm] = useState("");
 
   const [expandedComplaint, setExpandedComplaint] = useState<string | null>(
     null,
@@ -229,7 +233,28 @@ export default function UserProfileScreen(): React.JSX.Element {
       await promoteAdmin({ userId });
       setPromoteOpen(false);
       setPromoteConfirm("");
-      Alert.alert("Done", "User promoted to admin.");
+      Alert.alert(
+        "Done",
+        "User promoted to admin. They sign in on the Admin app with their existing email+password, then complete MFA.",
+      );
+    } catch (e) {
+      Alert.alert("Error", parseConvexError(e as Error).message);
+    }
+  };
+
+  const onDemote = async () => {
+    if (demoteConfirm.trim() !== "CONFIRM") {
+      Alert.alert("Type CONFIRM to enable demotion.");
+      return;
+    }
+    try {
+      await demoteAdmin({ userId });
+      setDemoteOpen(false);
+      setDemoteConfirm("");
+      Alert.alert(
+        "Done",
+        "Admin demoted to owner. They can use the Owner app again; Admin app access is removed.",
+      );
     } catch (e) {
       Alert.alert("Error", parseConvexError(e as Error).message);
     }
@@ -288,6 +313,15 @@ export default function UserProfileScreen(): React.JSX.Element {
 
   const { user, complaints, activeSessions, ownedClub } = profile;
 
+  const canDemote =
+    currentUser?.isSuperAdmin === true &&
+    currentUser._id !== userId &&
+    user.role === "admin" &&
+    !user.isSuperAdmin;
+
+  const showAdminPasswordWarning =
+    user.role === "admin" && user.email && !user.hasPasswordLogin;
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.topBar}>
@@ -322,6 +356,14 @@ export default function UserProfileScreen(): React.JSX.Element {
           <View style={styles.bannerDel}>
             <Text style={styles.bannerDelText}>
               🕐 Pending Deletion (30-day grace)
+            </Text>
+          </View>
+        ) : null}
+        {showAdminPasswordWarning ? (
+          <View style={styles.bannerWarn}>
+            <Text style={styles.bannerWarnText}>
+              No password login — admin cannot sign in. Use Reset Password below;
+              they complete the email link, then log in on the Admin app.
             </Text>
           </View>
         ) : null}
@@ -474,6 +516,15 @@ export default function UserProfileScreen(): React.JSX.Element {
               <Text style={styles.actionBtnSecondaryText}>Promote to Admin</Text>
             </Pressable>
           ) : null}
+
+          {canDemote ? (
+            <Pressable
+              style={styles.actionBtnDanger}
+              onPress={() => setDemoteOpen(true)}
+            >
+              <Text style={styles.actionBtnDangerText}>Demote to Owner</Text>
+            </Pressable>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -577,8 +628,9 @@ export default function UserProfileScreen(): React.JSX.Element {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Promote to Admin</Text>
             <Text style={styles.warn}>
-              Promote {user.name} to Admin? This grants full platform access. This
-              action cannot be undone. Type CONFIRM to enable the button.
+              Promote {user.name} to Admin? They must already have email+password
+              login from the onboarding website. After promotion they use the Admin
+              app only (email, password, then MFA). Type CONFIRM to enable.
             </Text>
             <TextInput
               style={styles.input}
@@ -608,6 +660,49 @@ export default function UserProfileScreen(): React.JSX.Element {
                   ]}
                 >
                   Promote
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={demoteOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Demote to Owner</Text>
+            <Text style={styles.warn}>
+              Demote {user.name} from Admin back to Owner? They lose Admin app
+              access and return to the Owner app. Type CONFIRM to enable.
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={demoteConfirm}
+              onChangeText={setDemoteConfirm}
+              placeholder="CONFIRM"
+              autoCapitalize="characters"
+              placeholderTextColor={colors.text.secondary}
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => {
+                  setDemoteOpen(false);
+                  setDemoteConfirm("");
+                }}
+              >
+                <Text style={styles.link}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={onDemote}
+                disabled={demoteConfirm.trim() !== "CONFIRM"}
+              >
+                <Text
+                  style={[
+                    styles.linkStrong,
+                    demoteConfirm.trim() !== "CONFIRM" && { opacity: 0.4 },
+                  ]}
+                >
+                  Demote
                 </Text>
               </Pressable>
             </View>
@@ -672,6 +767,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing[2],
   },
   bannerDelText: { color: colors.accent.amber, fontWeight: "600" },
+  bannerWarn: {
+    backgroundColor: colors.accent.amber + "22",
+    padding: spacing[3],
+    borderRadius: radius.md,
+    marginBottom: spacing[3],
+  },
+  bannerWarnText: { color: colors.accent.amber, fontWeight: "600" },
   card: {
     backgroundColor: colors.bg.secondary,
     borderRadius: radius.md,

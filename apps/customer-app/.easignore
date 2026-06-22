@@ -1,0 +1,13 @@
+# EAS upload exclusions for customer-app (overrides repo .gitignore).
+# customer-google-services.json is gitignored at repo root but MUST be uploaded for Android native builds.
+
+node_modules/
+.git/
+.expo/
+dist/
+web-build/
+android/
+ios/
+*.jks
+.env*.local
+.DS_Store

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,6 @@ import { useRouter } from "expo-router";
 import { useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
-import type { Id } from "@a3/convex/_generated/dataModel";
 import { layout, spacing, typography, glass } from "@a3/ui/theme";
 import {
   GlassPageBackground,
@@ -20,8 +20,9 @@ import {
   GlassIconTile,
 } from "@a3/ui/components";
 import { formatCurrency } from "@a3/utils/billing";
-import { getActiveRoleId } from "../../lib/activeRoleStorage";
+import { useStaffRole, staffRoleQueryId } from "../../lib/StaffRoleContext";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
+import { OwnerModePasscodeGate } from "../../components/OwnerModePasscodeGate";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
 
 type QuickTile = {
@@ -46,23 +47,72 @@ const QUICK_TILES: QuickTile[] = [
   { href: "/(tabs)/settings", label: "Settings", icon: "settings", tint: glass.textMuted },
 ];
 
+const QUICK_TILE_TAB: Record<QuickTile["href"], string | null> = {
+  "/(tabs)/slots": "slots",
+  "/(tabs)/bookings": "bookings",
+  "/(tabs)/snacks": "snacks",
+  "/(tabs)/financials": "financials",
+  "/(tabs)/complaints": "complaints",
+  "/(tabs)/settings": null,
+};
+
 export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
+  const { roleId, canAccessTab } = useStaffRole();
+  const [ownerPasscodeOpen, setOwnerPasscodeOpen] = useState(false);
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
-  const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
+  const roles = useQuery(
+    api.staffRoles.listStaffRoles,
+    dashboard ? {} : "skip",
+  );
 
-  useEffect(() => {
-    void getActiveRoleId().then((v) => {
-      if (v) setRoleId(v as Id<"staffRoles">);
-    });
-  }, []);
+  const activeRoleName = roles?.find((r) => r._id === roleId)?.name ?? null;
+
+  const visibleQuickTiles = QUICK_TILES.filter((t) => {
+    const tab = QUICK_TILE_TAB[t.href];
+    if (tab === null) return true;
+    if (roleId === undefined) return false;
+    return canAccessTab(tab);
+  });
+
+  const onRolePillPress = useCallback(() => {
+    if (roleId && activeRoleName) {
+      Alert.alert(
+        `Staff role: ${activeRoleName}`,
+        "Enter the settings passcode to switch to full owner access. Ask the owner to change your staff role.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Owner mode",
+            onPress: () => setOwnerPasscodeOpen(true),
+          },
+        ],
+      );
+      return;
+    }
+    router.push("/(tabs)/settings");
+  }, [roleId, activeRoleName, router]);
+
+  const canViewFinancials = roleId !== undefined && canAccessTab("financials");
+  const canViewBookings = roleId !== undefined && canAccessTab("bookings");
 
   const stats = useQuery(
     api.financials.getHomePageDailyStats,
-    dashboard ? { clubId: dashboard.clubId, roleId } : "skip",
+    dashboard && canViewFinancials
+      ? { clubId: dashboard.clubId, roleId: staffRoleQueryId(roleId) }
+      : "skip",
   );
+
+  const activeTablesCount = canViewFinancials
+    ? stats?.activeTables
+    : dashboard?.tables.filter((t) => t.isActive).length;
+  const activeSessionsCount = canViewFinancials
+    ? stats?.activeSessions
+    : dashboard
+      ? Object.keys(dashboard.activeSessionByTableId ?? {}).length
+      : undefined;
 
   if (dashboard === undefined) {
     return (
@@ -80,9 +130,10 @@ export default function HomeScreen(): React.JSX.Element {
   }
 
   const summary = dashboard.bookingSummary;
-  const showSummary = dashboard.bookingSettingsEnabled;
+  const showSummary = dashboard.bookingSettingsEnabled && canViewBookings;
 
   return (
+    <>
     <GlassPageBackground>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <ScrollView
@@ -92,9 +143,14 @@ export default function HomeScreen(): React.JSX.Element {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header row — Home title + notifications + Owner pill */}
+          {/* Header row — club name + notifications + role pill */}
           <View style={styles.headerRow}>
-            <Text style={styles.headerTitle}>Home</Text>
+            <View style={styles.headerTitleBlock}>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {dashboard.clubName}
+              </Text>
+              <Text style={styles.headerSubtitle}>Home</Text>
+            </View>
             <View style={styles.headerActions}>
               <Pressable
                 hitSlop={10}
@@ -109,14 +165,28 @@ export default function HomeScreen(): React.JSX.Element {
                 />
                 <View style={styles.bellDot} />
               </Pressable>
-              <View style={styles.ownerPill}>
-                <MaterialIcons name="security" size={14} color="#7dd3fc" />
-                <Text style={styles.ownerPillText}>Owner</Text>
-              </View>
+              <Pressable
+                style={styles.ownerPill}
+                onPress={onRolePillPress}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  roleId ? `Staff role ${activeRoleName}. Tap to switch.` : "Owner mode"
+                }
+              >
+                <MaterialIcons
+                  name={roleId ? "badge" : "security"}
+                  size={14}
+                  color="#7dd3fc"
+                />
+                <Text style={styles.ownerPillText} numberOfLines={1}>
+                  {roleId ? activeRoleName ?? "Staff" : "Owner"}
+                </Text>
+              </Pressable>
             </View>
           </View>
 
-          {/* Today's Total Revenue hero */}
+          {/* Today's Total Revenue hero — owner / roles with financials only */}
+          {canViewFinancials ? (
           <LiquidGlassCard style={styles.revenueHero} padding={24}>
             <View style={styles.revenueLabelRow}>
               <MaterialIcons name="trending-up" size={14} color="#7dd3fc" />
@@ -143,6 +213,7 @@ export default function HomeScreen(): React.JSX.Element {
               <Text style={styles.revenueSubAccent}>Cash basis</Text>
             </View>
           </LiquidGlassCard>
+          ) : null}
 
           {/* Active Tables / Sessions Today */}
           <View style={styles.gridTwo}>
@@ -152,7 +223,7 @@ export default function HomeScreen(): React.JSX.Element {
                   <MaterialIcons name="view-module" size={20} color="#7dd3fc" />
                 </GlassIconTile>
                 <Text style={styles.statValue}>
-                  {stats === undefined ? "—" : stats.activeTables}
+                  {activeTablesCount === undefined ? "—" : activeTablesCount}
                 </Text>
                 <Text style={styles.statLabel}>Active Tables</Text>
               </LiquidGlassCard>
@@ -167,7 +238,7 @@ export default function HomeScreen(): React.JSX.Element {
                   />
                 </GlassIconTile>
                 <Text style={[styles.statValue, { color: "#86efac" }]}>
-                  {stats === undefined ? "—" : stats.activeSessions}
+                  {activeSessionsCount === undefined ? "—" : activeSessionsCount}
                 </Text>
                 <Text style={styles.statLabel}>Sessions Today</Text>
               </LiquidGlassCard>
@@ -177,7 +248,7 @@ export default function HomeScreen(): React.JSX.Element {
           {/* Quick Access */}
           <Text style={styles.sectionTitle}>Quick Access</Text>
           <View style={styles.quickRow}>
-            {QUICK_TILES.slice(0, 4).map((t) => (
+            {visibleQuickTiles.slice(0, 4).map((t) => (
               <Pressable
                 key={t.href}
                 onPress={() => router.push(t.href)}
@@ -291,6 +362,13 @@ export default function HomeScreen(): React.JSX.Element {
         </ScrollView>
       </SafeAreaView>
     </GlassPageBackground>
+    <OwnerModePasscodeGate
+      visible={ownerPasscodeOpen}
+      clubId={dashboard.clubId}
+      onCancel={() => setOwnerPasscodeOpen(false)}
+      onSuccess={() => setOwnerPasscodeOpen(false)}
+    />
+    </>
   );
 }
 
@@ -317,11 +395,21 @@ const styles = StyleSheet.create({
     paddingTop: spacing[2],
     paddingBottom: spacing[4],
   },
+  headerTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: spacing[3],
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: "600",
     color: glass.textPrimary,
     letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    ...typography.caption,
+    color: glass.textMuted,
+    marginTop: 2,
   },
   headerActions: {
     flexDirection: "row",
@@ -354,6 +442,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    maxWidth: 140,
     paddingHorizontal: 12,
     height: 34,
     borderRadius: 18,

@@ -7,9 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -17,6 +15,7 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { KeyboardFormScroll } from "@a3/ui/components";
 
 const MIN_LEN = 8;
 
@@ -52,7 +51,6 @@ export default function ChangePasswordScreen(): React.JSX.Element {
   const requestPasswordReset = useAction(requestPasswordResetAction);
 
   const currentRef = useRef<TextInput>(null);
-  const googleNavScheduled = useRef(false);
 
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -86,22 +84,11 @@ export default function ChangePasswordScreen(): React.JSX.Element {
     };
   }, []);
 
-  /** Owners using Google Sign-In can't change password here — bounce to settings with a toast. */
-  useEffect(() => {
-    if (user === undefined || user === null) return;
-    if (user.googleId == null || user.googleId === "") return;
-    if (googleNavScheduled.current) return;
-    googleNavScheduled.current = true;
-    showToast(
-      "Your account uses Google Sign-In. Password management is handled by Google.",
-      "info",
-      2800,
-    );
-    const nav = setTimeout(() => {
-      router.replace("/(tabs)/settings");
-    }, 2600);
-    return () => clearTimeout(nav);
-  }, [user, router, showToast]);
+  const hasPasswordLogin =
+    user !== undefined &&
+    user !== null &&
+    user.email !== undefined &&
+    user.email.trim().length > 0;
 
   const match = next === confirm;
   const confirmMismatch = confirmTouched && confirm.length > 0 && !match;
@@ -111,7 +98,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
     next.length >= MIN_LEN &&
     match &&
     !loading &&
-    !user?.googleId;
+    hasPasswordLogin;
 
   const email = user?.email?.trim() ?? "";
   const hasEmail = email.length > 0;
@@ -129,7 +116,12 @@ export default function ChangePasswordScreen(): React.JSX.Element {
       }, 800);
     } catch (e) {
       const msg = (e as Error).message;
-      if (msg.includes("Current password is incorrect")) {
+      if (msg.includes("Google Sign-In")) {
+        showToast(
+          "This account has no password set. Use Google Sign-In or reset via email.",
+          "info",
+        );
+      } else if (msg.includes("Current password is incorrect")) {
         setCurError("Incorrect password. Please try again.");
         setCurrent("");
         setTimeout(() => currentRef.current?.focus(), 100);
@@ -193,29 +185,13 @@ export default function ChangePasswordScreen(): React.JSX.Element {
     );
   }
 
-  if (user.googleId != null && user.googleId !== "") {
-    return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent.green} />
-        </View>
-        {toast ? <ToastBar state={toast} /> : null}
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <KeyboardFormScroll
+        contentContainerStyle={styles.pad}
+        showsVerticalScrollIndicator={false}
         keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
       >
-        <ScrollView
-          contentContainerStyle={styles.pad}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           <View style={styles.headerRow}>
             <Pressable
               style={styles.backHit}
@@ -326,8 +302,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
           )}
 
           <View style={{ height: spacing[12] }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardFormScroll>
 
       {toast ? <ToastBar state={toast} /> : null}
     </SafeAreaView>

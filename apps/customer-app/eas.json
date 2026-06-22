@@ -30,6 +30,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "298504132090-6slnps79adihgacaim1u7t83du55p6ei.apps.googleusercontent.com",

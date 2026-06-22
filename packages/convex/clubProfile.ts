@@ -160,7 +160,25 @@ export const updateAmenities = mutation({
     const club = await ctx.db.get(clubId);
     if (!club) throw new Error("DATA_003: Club not found");
     assertClubSubscriptionWritable(club);
-    await ctx.db.patch(clubId, { amenities });
+
+    const normalized: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of amenities) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      if (trimmed.length > 40) {
+        throw new Error("DATA_002: Each amenity must be 40 characters or less");
+      }
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      normalized.push(trimmed);
+    }
+    if (normalized.length > 20) {
+      throw new Error("DATA_002: Maximum 20 amenities allowed");
+    }
+
+    await ctx.db.patch(clubId, { amenities: normalized });
     return { success: true as const };
   },
 });

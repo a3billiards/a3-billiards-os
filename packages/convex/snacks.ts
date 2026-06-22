@@ -35,16 +35,20 @@ async function assertSnacksTabPermission(
   }
 }
 
+import { assertStaffTabAllowed } from "./model/staffTabAccess";
+
 export const listSnacks = query({
   args: {
     clubId: v.id("clubs"),
+    roleId: v.optional(v.id("staffRoles")),
   },
-  handler: async (ctx, { clubId }) => {
+  handler: async (ctx, { clubId, roleId }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
     if (owner.clubId !== clubId) {
       throw new Error("PERM_001: Cannot access another club's data");
     }
+    await assertStaffTabAllowed(ctx, clubId, "snacks", roleId);
 
     const snacks = await ctx.db
       .query("snacks")

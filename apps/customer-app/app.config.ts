@@ -18,7 +18,8 @@ function googleIosUrlSchemes(): string[] {
 export default () => {
   const googleSchemes = googleIosUrlSchemes();
   const plistPath = process.env.GOOGLE_SERVICE_INFO_PLIST;
-  const androidJsonPath = process.env.GOOGLE_SERVICES_JSON;
+  const androidJsonPath =
+    process.env.GOOGLE_SERVICES_JSON ?? "./customer-google-services.json";
 
   const ios: Record<string, unknown> = {
     supportsTablet: true,
@@ -40,11 +41,52 @@ export default () => {
 
   const android: Record<string, unknown> = {
     package: "com.a3billiards.customerapp",
-    edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
+    softwareKeyboardLayoutMode: "pan",
   };
   if (typeof androidJsonPath === "string" && androidJsonPath.length > 0) {
     android.googleServicesFile = androidJsonPath;
+  }
+
+  const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+  const sentryEnabled =
+    typeof sentryDsn === "string" &&
+    sentryDsn.startsWith("https://") &&
+    !sentryDsn.includes("xxxx");
+
+  const isDevClientBuild = process.env.EAS_BUILD_PROFILE === "development";
+
+  const plugins: (string | [string, Record<string, unknown>])[] = [
+    ...(isDevClientBuild ? (["expo-dev-client"] as const) : []),
+    [
+      "expo-splash-screen",
+      {
+        backgroundColor: "#0D1117",
+        image: "./assets/images/icon.png",
+        imageWidth: 200,
+      },
+    ],
+    "expo-router",
+    [
+      "expo-location",
+      {
+        locationWhenInUsePermission:
+          "Allow A3 Billiards to use your location to find clubs near you.",
+      },
+    ],
+    "expo-secure-store",
+    "@react-native-google-signin/google-signin",
+    [
+      "expo-notifications",
+      {
+        icon: "./assets/images/notification-icon.png",
+        color: "#43A047",
+        defaultChannel: "default",
+      },
+    ],
+  ];
+  if (sentryEnabled) {
+    plugins.splice(5, 0, "@sentry/react-native/expo");
   }
 
   return {
@@ -56,23 +98,21 @@ export default () => {
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     owner: "a3333",
+    icon: "./assets/images/icon.png",
+    splash: {
+      image: "./assets/images/icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#0D1117",
+    },
     ios,
-    android,
-    plugins: [
-      "expo-router",
-      "expo-location",
-      "expo-secure-store",
-      "@react-native-google-signin/google-signin",
-      "@sentry/react-native/expo",
-      [
-        "expo-notifications",
-        {
-          icon: "./assets/images/notification-icon.png",
-          color: "#43A047",
-          defaultChannel: "default",
-        },
-      ],
-    ],
+    android: {
+      ...android,
+      adaptiveIcon: {
+        foregroundImage: "./assets/images/icon.png",
+        backgroundColor: "#0D1117",
+      },
+    },
+    plugins,
     experiments: {
       typedRoutes: false,
     },

@@ -14,19 +14,33 @@ function capitalizeTableType(raw: string): string {
     .join("-");
 }
 
+/** Geocoding skipped or failed during onboarding — not usable for distance filter. */
+function isValidClubLocation(
+  location: { lat: number; lng: number } | undefined,
+): location is { lat: number; lng: number } {
+  if (!location) return false;
+  return (
+    Number.isFinite(location.lat) &&
+    Number.isFinite(location.lng) &&
+    !(location.lat === 0 && location.lng === 0)
+  );
+}
+
 export const searchClubs = query({
   args: {
     searchText: v.optional(v.string()),
     userLat: v.optional(v.number()),
     userLng: v.optional(v.number()),
     radiusKm: v.optional(v.number()),
+    /** When true, hide clubs outside radiusKm (only if GPS coords provided). */
+    nearbyOnly: v.optional(v.boolean()),
     cursor: v.optional(v.number()),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     requireCustomer(await requireViewer(ctx));
     const radius = args.radiusKm ?? 50;
-    const rawLimit = args.limit ?? 20;
+    const rawLimit = Math.min(Math.max(args.limit ?? 20, 1), 50);
     const cursor = args.cursor ?? 0;
     const trimmed = args.searchText?.trim();
     const hasSearch = Boolean(trimmed && trimmed.length > 0);
@@ -35,6 +49,7 @@ export const searchClubs = query({
       args.userLng !== undefined &&
       Number.isFinite(args.userLat) &&
       Number.isFinite(args.userLng);
+    const nearbyOnly = args.nearbyOnly === true && hasGps && !hasSearch;
 
     const active = await ctx.db
       .query("clubs")
@@ -53,10 +68,15 @@ export const searchClubs = query({
       candidates = candidates.filter((c) => c.name.toLowerCase().includes(q));
     }
 
-    if (hasGps) {
+    if (nearbyOnly) {
       candidates = candidates.filter((c) => {
-        if (!c.location) return false;
-        const d = haversineKm(args.userLat!, args.userLng!, c.location.lat, c.location.lng);
+        if (!isValidClubLocation(c.location)) return false;
+        const d = haversineKm(
+          args.userLat!,
+          args.userLng!,
+          c.location.lat,
+          c.location.lng,
+        );
         return d <= radius;
       });
     }
@@ -64,7 +84,7 @@ export const searchClubs = query({
     type Row = { club: Doc<"clubs">; distanceKm: number | null };
     const withDist: Row[] = candidates.map((club) => {
       let distanceKm: number | null = null;
-      if (hasGps && club.location) {
+      if (hasGps && isValidClubLocation(club.location)) {
         distanceKm = haversineKm(
           args.userLat!,
           args.userLng!,
@@ -76,7 +96,14 @@ export const searchClubs = query({
     });
 
     if (hasGps) {
-      withDist.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
+      withDist.sort((a, b) => {
+        if (a.distanceKm === null && b.distanceKm === null) {
+          return a.club.name.localeCompare(b.club.name);
+        }
+        if (a.distanceKm === null) return 1;
+        if (b.distanceKm === null) return -1;
+        return a.distanceKm - b.distanceKm;
+      });
     } else {
       withDist.sort((a, b) => a.club.name.localeCompare(b.club.name));
     }
@@ -104,7 +131,7 @@ export const searchClubs = query({
           clubId: club._id,
           name: club.name,
           address: club.address,
-          distanceKm: hasGps ? distanceKm : null,
+          distanceKm: hasGps && distanceKm !== null ? distanceKm : null,
           thumbnailUrl,
           tableTypes,
           operatingHours: club.operatingHours ?? null,

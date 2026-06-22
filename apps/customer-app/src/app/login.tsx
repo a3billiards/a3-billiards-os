@@ -1,42 +1,38 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
 
-type Mode = "phone" | "email";
+type Mode = "password" | "otp";
 type PhoneStep = "enterPhone" | "enterCode";
+
+const FROZEN_MESSAGE = "Your account is frozen.";
 
 export default function CustomerLoginScreen() {
   const router = useRouter();
+  const { frozen } = useLocalSearchParams<{ frozen?: string }>();
   const { signIn } = useAuthActions();
   const sendLoginOtp = useAction(api.phoneOtp.sendLoginOtp);
 
-  const [mode, setMode] = useState<Mode>("phone");
+  const [mode, setMode] = useState<Mode>("otp");
 
-  // Phone+OTP state
-  const [phoneStep, setPhoneStep] = useState<PhoneStep>("enterPhone");
   const [phone, setPhone] = useState("+91");
+  const [password, setPassword] = useState("");
+  const [phoneStep, setPhoneStep] = useState<PhoneStep>("enterPhone");
   const [code, setCode] = useState("");
   const [info, setInfo] = useState<string | null>(null);
-
-  // Email+password state
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,21 +40,60 @@ export default function CustomerLoginScreen() {
   const codeRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
 
-  const phoneValid = /^\+[1-9]\d{6,14}$/.test(phone.replace(/\s/g, ""));
+  useEffect(() => {
+    if (frozen === "1") {
+      setError(FROZEN_MESSAGE);
+    }
+  }, [frozen]);
+
+  const normalizedPhone = phone.replace(/\s/g, "");
+  const phoneValid = /^\+[1-9]\d{6,14}$/.test(normalizedPhone);
   const codeValid = /^\d{6}$/.test(code.replace(/\s/g, ""));
+  const canSubmitPassword =
+    phoneValid && password.length >= 8 && !loading;
 
   const navigatePostLogin = useCallback(() => {
     router.replace("/post-login-gate");
   }, [router]);
 
-  // ───── Phone + OTP ─────
+  const handlePasswordLogin = useCallback(async () => {
+    if (!canSubmitPassword) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const { signingIn } = await signIn("password", {
+        email: normalizedPhone,
+        password,
+        flow: "signIn",
+      });
+      if (!signingIn) {
+        setError("Sign-in failed. Check your phone and password.");
+        setLoading(false);
+        return;
+      }
+      navigatePostLogin();
+    } catch (e) {
+      const appErr = parseConvexError(e as Error);
+      if (appErr.code === "AUTH_002") {
+        setError(FROZEN_MESSAGE);
+      } else if (appErr.code === "AUTH_006") {
+        setError("This account is pending deletion.");
+      } else {
+        setError(
+          "Invalid phone or password. Use WhatsApp OTP if you have not set a password yet.",
+        );
+      }
+      setLoading(false);
+    }
+  }, [canSubmitPassword, normalizedPhone, password, signIn, navigatePostLogin]);
+
   const handleSendOtp = useCallback(async () => {
     if (!phoneValid || loading) return;
     setError(null);
     setInfo(null);
     setLoading(true);
     try {
-      await sendLoginOtp({ phone: phone.replace(/\s/g, "") });
+      await sendLoginOtp({ phone: normalizedPhone });
       setPhoneStep("enterCode");
       setInfo("OTP sent via WhatsApp.");
       setTimeout(() => codeRef.current?.focus(), 50);
@@ -71,7 +106,7 @@ export default function CustomerLoginScreen() {
           );
           break;
         case "AUTH_002":
-          setError("This account is frozen. Contact support.");
+          setError(FROZEN_MESSAGE);
           break;
         case "AUTH_006":
           setError("This account is pending deletion.");
@@ -88,7 +123,7 @@ export default function CustomerLoginScreen() {
     } finally {
       setLoading(false);
     }
-  }, [phone, phoneValid, loading, sendLoginOtp]);
+  }, [phoneValid, normalizedPhone, loading, sendLoginOtp]);
 
   const handleVerifyOtp = useCallback(async () => {
     if (!codeValid || loading) return;
@@ -97,7 +132,7 @@ export default function CustomerLoginScreen() {
     setLoading(true);
     try {
       const { signingIn } = await signIn("phoneOtp", {
-        phone: phone.replace(/\s/g, ""),
+        phone: normalizedPhone,
         code: code.replace(/\s/g, ""),
         flow: "signIn",
       });
@@ -119,7 +154,7 @@ export default function CustomerLoginScreen() {
           setError(appErr.message ?? "Wrong or expired OTP.");
           break;
         case "AUTH_002":
-          setError("This account is frozen. Contact support.");
+          setError(FROZEN_MESSAGE);
           break;
         case "AUTH_006":
           setError("This account is pending deletion.");
@@ -132,62 +167,87 @@ export default function CustomerLoginScreen() {
       }
       setLoading(false);
     }
-  }, [code, codeValid, phone, loading, signIn, navigatePostLogin]);
+  }, [code, codeValid, normalizedPhone, loading, signIn, navigatePostLogin]);
 
-  // ───── Email + password (fallback) ─────
-  const canSubmitEmail =
-    email.trim().length > 0 && password.length >= 8 && !loading;
-
-  const handleEmailLogin = useCallback(async () => {
-    if (!canSubmitEmail) return;
-    setError(null);
-    setLoading(true);
-    try {
-      const { signingIn } = await signIn("password", {
-        email: email.trim().toLowerCase(),
-        password,
-        flow: "signIn",
-      });
-      if (!signingIn) {
-        setError("Sign-in failed. Check your email and password.");
-        setLoading(false);
-        return;
-      }
-      navigatePostLogin();
-    } catch (e) {
-      const appErr = parseConvexError(e as Error);
-      if (appErr.code === "AUTH_002") {
-        setError("This account is frozen. Contact support.");
-      } else if (appErr.code === "AUTH_006") {
-        setError("This account is pending deletion.");
-      } else {
-        setError("Invalid email or password.");
-      }
-      setLoading(false);
-    }
-  }, [canSubmitEmail, email, password, signIn, navigatePostLogin]);
+  const switchMode = useCallback(
+    (next: Mode) => {
+      setMode(next);
+      setError(null);
+      setInfo(null);
+      setPhoneStep("enterPhone");
+      setCode("");
+      setPassword("");
+    },
+    [],
+  );
 
   return (
     <GlassPageBackground>
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+    <KeyboardFormScroll contentContainerStyle={styles.scroll}>
         <View style={styles.container}>
           <View style={styles.logoTile}>
             <Text style={styles.logoText}>A3</Text>
           </View>
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>
-            Sign in to your A3 Billiards account
+            {mode === "password"
+              ? "Sign in with your phone number and password"
+              : "Sign in with a WhatsApp OTP"}
           </Text>
           <LiquidGlassCard style={styles.formCard} padding={24}>
 
-          {mode === "phone" ? (
+          {mode === "password" ? (
+            <View style={styles.form}>
+              <Text style={styles.label}>Phone Number</Text>
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="+91XXXXXXXXXX"
+                placeholderTextColor={colors.text.tertiary}
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+                editable={!loading}
+                accessibilityLabel="Phone number"
+              />
+              <Text style={styles.hint}>
+                Same number you registered with (E.164 format).
+              </Text>
+
+              <Text style={[styles.label, styles.fieldGap]}>Password</Text>
+              <TextInput
+                ref={passwordRef}
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Your login password"
+                placeholderTextColor={colors.text.tertiary}
+                secureTextEntry
+                textContentType="password"
+                returnKeyType="go"
+                onSubmitEditing={handlePasswordLogin}
+                editable={!loading}
+                accessibilityLabel="Password"
+              />
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  !canSubmitPassword && styles.buttonDisabled,
+                  pressed && canSubmitPassword && styles.pressed,
+                ]}
+                onPress={handlePasswordLogin}
+                disabled={!canSubmitPassword}
+                accessibilityRole="button"
+              >
+                {loading ? (
+                  <ActivityIndicator color={glass.ctaText} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Sign In</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
             <View style={styles.form}>
               <Text style={styles.label}>Phone Number</Text>
               <TextInput
@@ -270,77 +330,18 @@ export default function CustomerLoginScreen() {
                 )}
               </Pressable>
             </View>
-          ) : (
-            // ── Email + password fallback ──
-            <View style={styles.form}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={colors.text.tertiary}
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                returnKeyType="next"
-                onSubmitEditing={() => passwordRef.current?.focus()}
-                editable={!loading}
-                accessibilityLabel="Email address"
-              />
-              <Text style={[styles.label, styles.fieldGap]}>Password</Text>
-              <TextInput
-                ref={passwordRef}
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor={colors.text.tertiary}
-                secureTextEntry
-                textContentType="password"
-                returnKeyType="go"
-                onSubmitEditing={handleEmailLogin}
-                editable={!loading}
-                accessibilityLabel="Password"
-              />
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  !canSubmitEmail && styles.buttonDisabled,
-                  pressed && canSubmitEmail && styles.pressed,
-                ]}
-                onPress={handleEmailLogin}
-                disabled={!canSubmitEmail}
-                accessibilityRole="button"
-              >
-                {loading ? (
-                  <ActivityIndicator color={glass.ctaText} />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Sign In</Text>
-                )}
-              </Pressable>
-            </View>
           )}
 
-          {/* ── Mode toggle ── */}
           <Pressable
-            onPress={() => {
-              setMode((m) => (m === "phone" ? "email" : "phone"));
-              setError(null);
-              setInfo(null);
-              setPhoneStep("enterPhone");
-              setCode("");
-              setPassword("");
-            }}
+            onPress={() => switchMode(mode === "password" ? "otp" : "password")}
             disabled={loading}
             hitSlop={8}
             style={styles.toggleRow}
           >
             <Text style={styles.toggleText}>
-              {mode === "phone"
-                ? "Use email & password instead"
-                : "Use phone number & OTP instead"}
+              {mode === "password"
+                ? "Sign in with WhatsApp OTP instead"
+                : "Sign in with phone & password instead"}
             </Text>
           </Pressable>
 
@@ -375,8 +376,7 @@ export default function CustomerLoginScreen() {
             </Pressable>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
     </GlassPageBackground>
   );
 }

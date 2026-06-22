@@ -1154,10 +1154,20 @@ export const listPendingBookings = query({
     clubId: v.id("clubs"),
     cursor: v.optional(v.number()),
     limit: v.optional(v.number()),
+    roleId: v.optional(v.id("staffRoles")),
   },
-  handler: async (ctx, { clubId, cursor = 0, limit = 20 }) => {
+  handler: async (ctx, { clubId, cursor = 0, limit = 20, roleId }) => {
     const owner = requireOwner(await requireViewer(ctx));
     if (owner.clubId !== clubId) throw new Error("PERM_001: Owner only");
+    if (roleId) {
+      const role = await ctx.db.get(roleId);
+      if (!role || role.clubId !== clubId) {
+        throw new Error("PERM_001: Staff role not found");
+      }
+      if (!role.allowedTabs.includes("bookings")) {
+        throw new Error("PERM_001: Bookings tab not allowed for active role");
+      }
+    }
 
     const rows = await ctx.db
       .query("bookings")
@@ -1280,10 +1290,20 @@ export const listUpcomingBookings = query({
     clubId: v.id("clubs"),
     cursor: v.optional(v.number()),
     limit: v.optional(v.number()),
+    roleId: v.optional(v.id("staffRoles")),
   },
-  handler: async (ctx, { clubId, cursor = 0, limit = 20 }) => {
+  handler: async (ctx, { clubId, cursor = 0, limit = 20, roleId }) => {
     const owner = requireOwner(await requireViewer(ctx));
     if (owner.clubId !== clubId) throw new Error("PERM_001: Owner only");
+    if (roleId) {
+      const role = await ctx.db.get(roleId);
+      if (!role || role.clubId !== clubId) {
+        throw new Error("PERM_001: Staff role not found");
+      }
+      if (!role.allowedTabs.includes("bookings")) {
+        throw new Error("PERM_001: Bookings tab not allowed for active role");
+      }
+    }
     const club = await ctx.db.get(clubId);
     if (!club) throw new Error("DATA_003: Club not found");
     const today = dateYmdInTimeZone(Date.now(), club.timezone);
@@ -1333,10 +1353,20 @@ export const listHistoryBookings = query({
     searchQuery: v.optional(v.string()),
     cursor: v.optional(v.number()),
     limit: v.optional(v.number()),
+    roleId: v.optional(v.id("staffRoles")),
   },
   handler: async (ctx, args) => {
     const owner = requireOwner(await requireViewer(ctx));
     if (owner.clubId !== args.clubId) throw new Error("PERM_001: Owner only");
+    if (args.roleId) {
+      const role = await ctx.db.get(args.roleId);
+      if (!role || role.clubId !== args.clubId) {
+        throw new Error("PERM_001: Staff role not found");
+      }
+      if (!role.allowedTabs.includes("bookings")) {
+        throw new Error("PERM_001: Bookings tab not allowed for active role");
+      }
+    }
     const historyStatuses: Doc<"bookings">["status"][] = [
       "rejected",
       "cancelled_by_customer",

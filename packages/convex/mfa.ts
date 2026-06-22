@@ -5,7 +5,7 @@
 
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { checkMfaSendSlidingWindowPerEmail } from "./model/rateLimiter";
 
 export const storeMfaCode = internalMutation({
@@ -52,9 +52,26 @@ export const storeMfaCode = internalMutation({
       createdAt: now,
     });
 
-    await ctx.db.patch(adminId, { adminMfaVerifiedAt: undefined });
-
     return { email: user.email };
+  },
+});
+
+/** True when admin already has an unused MFA code (avoid invalidating on screen remount). */
+export const hasActiveMfaCode = internalQuery({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, { adminId }) => {
+    const now = Date.now();
+    const row = await ctx.db
+      .query("adminMfaCodes")
+      .withIndex("by_admin", (q) => q.eq("adminId", adminId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("used"), false),
+          q.gt(q.field("expiresAt"), now),
+        ),
+      )
+      .first();
+    return row !== null;
   },
 });
 
@@ -91,5 +108,57 @@ export const consumeMfaCode = internalMutation({
     }
     await ctx.db.patch(recordId, { used: true });
     await ctx.db.patch(record.adminId, { adminMfaVerifiedAt: Date.now() });
+  },
+});
+
+/** Called from password sign-in authorize (action ctx) to force MFA on every login. */
+export const internalClearAdminMfaOnPasswordSignIn = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get(userId);
+    if (!user || user.role !== "admin") return;
+    await ctx.db.patch(userId, { adminMfaVerifiedAt: undefined });
+  },
+});
+
+/** Dev/support: delete MFA code rows so rate limit resets (internal seed only). */
+export const internalClearMfaCodesForEmail = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const emailNormalized = email.trim().toLowerCase();
+    const rows = await ctx.db
+      .query("adminMfaCodes")
+      .withIndex("by_email_normalized_createdAt", (q) =>
+        q.eq("emailNormalized", emailNormalized),
+      )
+      .collect();
+    for (const row of rows) {
+      await ctx.db.delete(row._id);
+    }
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", emailNormalized))
+      .unique();
+    if (user?.role === "admin") {
+      await ctx.db.patch(user._id, { adminMfaVerifiedAt: undefined });
+    }
+    return { deleted: rows.length };
+  },
+});
+
+/** Clears MFA session flag on sign-out so the next login requires a fresh code. */
+export const clearAdminMfaSession = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const adminId = await getAuthUserId(ctx);
+    if (adminId === null) {
+      throw new Error("AUTH_001: Not authenticated");
+    }
+    const user = await ctx.db.get(adminId);
+    if (!user || user.role !== "admin") {
+      return { cleared: false as const };
+    }
+    await ctx.db.patch(adminId, { adminMfaVerifiedAt: undefined });
+    return { cleared: true as const };
   },
 });

@@ -5,6 +5,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, glass } from "@a3/ui/theme";
 import { ownerShell } from "../theme/ownerShell";
+import { useStaffRole } from "../lib/StaffRoleContext";
+
+const STAFF_GATED_TABS = new Set([
+  "slots",
+  "snacks",
+  "financials",
+  "complaints",
+  "bookings",
+  "documents",
+]);
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   home: "home",
@@ -13,6 +23,7 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   financials: "bar-chart",
   complaints: "report-problem",
   bookings: "event",
+  documents: "folder",
   settings: "settings",
 };
 
@@ -23,6 +34,7 @@ const TAB_LABELS: Record<string, string> = {
   financials: "Finances",
   complaints: "Complaints",
   bookings: "Bookings",
+  documents: "Docs",
   settings: "Settings",
 };
 
@@ -32,6 +44,14 @@ export default function OwnerTabBar({
   navigation,
 }: BottomTabBarProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const { canAccessTab, roleId } = useStaffRole();
+
+  const visibleRoutes = state.routes.filter((route) => {
+    if (route.name === "settings" && roleId) return false;
+    if (!STAFF_GATED_TABS.has(route.name)) return true;
+    if (roleId === undefined) return false;
+    return canAccessTab(route.name);
+  });
 
   return (
     <View
@@ -48,7 +68,8 @@ export default function OwnerTabBar({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {state.routes.map((route, index) => {
+          {visibleRoutes.map((route) => {
+            const index = state.routes.findIndex((r) => r.key === route.key);
             const { options } = descriptors[route.key];
             const label =
               (options.title as string | undefined) ?? TAB_LABELS[route.name] ?? route.name;

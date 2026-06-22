@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Modal,
   KeyboardAvoidingView,
-  Platform,
   Alert,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,7 +17,7 @@ import { useQuery, useAction } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
-import { colors, typography, spacing, layout, radius, zIndex } from "@a3/ui/theme";
+import { colors, typography, spacing, layout, radius, zIndex, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { adminTabBarTotalInset } from "../theme/adminShell";
 import { parseConvexError } from "@a3/ui/errors";
 
@@ -36,6 +35,7 @@ type SearchUserRow = {
   phone: string | null;
   role: "admin" | "owner" | "customer";
   isFrozen: boolean;
+  hasPushToken: boolean;
 };
 
 type HistoryRow = {
@@ -353,7 +353,8 @@ export default function NotificationCenterScreen(): React.JSX.Element {
   const bodyTrim = body.trim();
   const selectedIds = target.kind === "selected" ? target.ids : [];
 
-  const recipientCount = recipientPreview?.count ?? 0;
+  const recipientCount = recipientPreview?.withPushEnabled ?? recipientPreview?.count ?? 0;
+  const matchingUsers = recipientPreview?.matchingUsers ?? 0;
   const recipientLoading = recipientPreview === undefined && canQuery;
 
   const rateAllowed = rate?.allowed !== false;
@@ -398,17 +399,31 @@ export default function NotificationCenterScreen(): React.JSX.Element {
       });
       setConfirmOpen(false);
       resetForm();
-      Alert.alert(
-        "Sent",
-        `Notification sent to ${res.recipientCount} recipients.`,
-      );
+      if (res.sentCount === 0 && res.recipientCount > 0) {
+        Alert.alert(
+          "Saved — push not delivered",
+          `Broadcast recorded for ${res.recipientCount} recipient(s), but no push was delivered. Configure Firebase on Convex and reopen customer/owner apps to register device tokens.`,
+        );
+      } else {
+        Alert.alert(
+          "Sent",
+          `Notification sent to ${res.recipientCount} recipient(s) (${res.sentCount} device${res.sentCount === 1 ? "" : "s"}).`,
+        );
+      }
     } catch (e) {
-      const msg = parseConvexError(e as Error).message;
-      if (msg.includes("RATE_001")) {
+      const parsed = parseConvexError(e as Error);
+      const msg = parsed.message;
+      if (parsed.code === "RATE_001" || msg.includes("RATE_001")) {
         setConfirmOpen(false);
         setComposeRateError(msg.replace(/^RATE_001:\s*/i, ""));
+      } else if (parsed.code === "PUSH_001" || msg.includes("PUSH_001")) {
+        setConfirmOpen(false);
+        setSheetError(
+          msg.replace(/^PUSH_001:\s*/i, "") ||
+            "Push notifications are not configured on the server (Firebase).",
+        );
       } else {
-        setSheetError("Failed to send. Please try again.");
+        setSheetError(msg || "Failed to send. Please try again.");
       }
     } finally {
       setSendLoading(false);
@@ -488,10 +503,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={styles.flex} {...iosKeyboardAvoidingProps}>
         <View style={styles.topSection}>
           <View style={styles.hero}>
             <Text style={styles.screenTitle}>Notification Center</Text>
@@ -541,7 +553,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
               styles.composeScroll,
               { paddingBottom: tabBarBottomPad },
             ]}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
           >
               {rate && rate.allowed && rate.remainingCount < 10 ? (
@@ -737,6 +749,9 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                               {item.isFrozen ? (
                                 <Text style={styles.frozenBadge}>⚠ Frozen</Text>
                               ) : null}
+                              {!item.hasPushToken ? (
+                                <Text style={styles.noPushBadge}>No push</Text>
+                              ) : null}
                             </View>
                           </View>
                           {selected ? (
@@ -764,8 +779,9 @@ export default function NotificationCenterScreen(): React.JSX.Element {
               </View>
               {recipientCount === 0 && !recipientLoading && canQuery ? (
                 <Text style={styles.warnZero}>
-                  ⚠ No recipients found for this target. The notification will not be
-                  sent.
+                  {matchingUsers > 0
+                    ? `⚠ ${matchingUsers} user(s) match this target, but none have push enabled. They must open the customer or owner app on a dev/production build, allow notifications when prompted, then try again.`
+                    : "⚠ No users match this target."}
                 </Text>
               ) : null}
 
@@ -1111,6 +1127,11 @@ const styles = StyleSheet.create({
   frozenBadge: {
     ...typography.caption,
     color: colors.accent.amberLight,
+    fontWeight: "600",
+  },
+  noPushBadge: {
+    ...typography.caption,
+    color: colors.text.secondary,
     fontWeight: "600",
   },
   roleMini: {

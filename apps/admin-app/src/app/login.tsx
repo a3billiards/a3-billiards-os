@@ -5,15 +5,12 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
 } from "react-native";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
 import { MaterialIcons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
@@ -62,6 +59,8 @@ export default function LoginScreen() {
         setError("This account is frozen. Contact support.");
       } else if (appError.code === "AUTH_006") {
         setError("This account is pending deletion.");
+      } else if (appError.code === "AUTH_010") {
+        setError(appError.message);
       } else if (
         appError.code === "AUTH_001" ||
         appError.code === "UNKNOWN"
@@ -76,14 +75,7 @@ export default function LoginScreen() {
 
   return (
     <GlassPageBackground>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
+      <KeyboardFormScroll contentContainerStyle={styles.scroll}>
           <View style={styles.container}>
             <View style={styles.logoTile}>
               <Text style={styles.logoText}>A3</Text>
@@ -180,8 +172,7 @@ export default function LoginScreen() {
               </Pressable>
             </LiquidGlassCard>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardFormScroll>
     </GlassPageBackground>
   );
 }

@@ -15,7 +15,7 @@ import {
   internalQuery,
   query,
 } from "./_generated/server";
-import { requireViewer } from "./model/viewer";
+import { requireAdminWithMfa, requireViewer } from "./model/viewer";
 import { computeBookingUnixTime } from "@a3/utils/timezone";
 
 const targetTypeV = v.union(
@@ -30,11 +30,31 @@ function throwErr(message: string): never {
 }
 
 async function requireAdminViewer(ctx: Parameters<typeof requireViewer>[0]) {
-  const viewer = await requireViewer(ctx);
-  if (viewer.role !== "admin") {
-    throwErr("AUTH_001: Admin authentication required");
+  return requireAdminWithMfa(ctx);
+}
+
+/** Users matching target audience (ignores push tokens). */
+function countMatchingUsers(
+  allUsers: Doc<"users">[],
+  args: {
+    targetType: "all" | "role" | "selected";
+    targetRole?: "owner" | "customer";
+    targetUserIds?: Id<"users">[];
+  },
+): number {
+  const { targetType, targetRole, targetUserIds } = args;
+  if (targetType === "all") {
+    return allUsers.filter((u) => !u.isFrozen).length;
   }
-  return viewer;
+  if (targetType === "role") {
+    if (targetRole !== "owner" && targetRole !== "customer") return 0;
+    return allUsers.filter(
+      (u) => u.role === targetRole && !u.isFrozen,
+    ).length;
+  }
+  if (!targetUserIds || targetUserIds.length === 0) return 0;
+  const idSet = new Set(targetUserIds);
+  return allUsers.filter((u) => idSet.has(u._id)).length;
 }
 
 /** Resolve users who will receive a broadcast (with ≥1 token). */
@@ -77,18 +97,27 @@ export const getRecipientCount = query({
   },
   handler: async (ctx, args) => {
     await requireAdminViewer(ctx);
-    const all = await ctx.db.query("users").collect();
     if (args.targetType === "selected") {
       const ids = args.targetUserIds ?? [];
-      let count = 0;
+      let withPush = 0;
       for (const id of ids) {
         const u = await ctx.db.get(id);
-        if (u && u.fcmTokens.length > 0) count += 1;
+        if (u && u.fcmTokens.length > 0) withPush += 1;
       }
-      return { count };
+      return {
+        count: withPush,
+        matchingUsers: ids.length,
+        withPushEnabled: withPush,
+      };
     }
+    const all = await ctx.db.query("users").collect();
     const recipients = resolveRecipientUsers(all, args);
-    return { count: recipients.length };
+    const matchingUsers = countMatchingUsers(all, args);
+    return {
+      count: recipients.length,
+      matchingUsers,
+      withPushEnabled: recipients.length,
+    };
   },
 });
 
@@ -271,6 +300,9 @@ export const internalAssertAdmin = internalQuery({
     const u = await ctx.db.get(userId);
     if (!u || u.role !== "admin") {
       throw new Error("AUTH_001: Admin authentication required");
+    }
+    if (!u.adminMfaVerifiedAt) {
+      throw new Error("AUTH_003: Admin MFA verification required");
     }
     return { ok: true as const };
   },

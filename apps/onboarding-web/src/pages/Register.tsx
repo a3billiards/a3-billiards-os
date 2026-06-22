@@ -5,6 +5,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../convexApi";
 import { parseConvexError } from "../lib/parseConvexError";
 import { captureEvent } from "../instrumentation";
+import { ClubLocationPinPicker } from "../components/ClubLocationPinPicker";
 
 const PRIVACY = "/privacy";
 const TERMS = "/terms";
@@ -47,7 +48,6 @@ export default function Register() {
     api.ownerEmailVerificationActions.sendOwnerEmailVerificationCode,
   );
   const verifyEmailCode = useAction(api.ownerEmailVerificationActions.verifyOwnerEmailCode);
-  const geocode = useAction(api.onboardingWebActions.geocodeClubAddress);
   const createOrder = useAction(api.onboardingWebActions.createRazorpayOrder);
   const applyCoupon = useAction(api.onboardingWebActions.applyCouponFreeAccess);
   const saveDraft = useMutation(api.onboardingWeb.saveClubDraft);
@@ -212,23 +212,10 @@ export default function Register() {
     }
   }, [email, sendVerificationCode]);
 
-  const handleGeocode = useCallback(async () => {
-    setError(null);
-    if (!address.trim()) {
-      setError("Enter the club address first.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const loc = await geocode({ address: address.trim() });
-      setLat(loc.lat);
-      setLng(loc.lng);
-    } catch (e) {
-      setError(parseConvexError(e as Error).message + " — you can skip geocoding and continue.");
-    } finally {
-      setBusy(false);
-    }
-  }, [address, geocode]);
+  const handlePinChange = useCallback((newLat: number, newLng: number) => {
+    setLat(newLat);
+    setLng(newLng);
+  }, []);
 
   const handleStep2 = useCallback(async () => {
     setError(null);
@@ -249,12 +236,16 @@ export default function Register() {
       setError("Minimum bill minutes must be at least 1.");
       return;
     }
+    if (lat === null || lng === null || (lat === 0 && lng === 0)) {
+      setError("Pin your club location on the map before continuing.");
+      return;
+    }
     setBusy(true);
     try {
       await saveDraft({
         clubName: clubName.trim(),
         address: address.trim(),
-        location: { lat: lat ?? 0, lng: lng ?? 0 },
+        location: { lat, lng },
         currency: currency.trim().toUpperCase(),
         baseRatePerMin: rate,
         minBillMinutes: Math.floor(minM),
@@ -512,17 +503,15 @@ export default function Register() {
             rows={3}
             value={address}
             onChange={(e) => setAddress(e.target.value)}
+            placeholder="Building, street, area, city, state, PIN"
           />
-          <div className="inline-actions">
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void handleGeocode()}>
-              {busy ? "Geocoding…" : "Pin on map (optional)"}
-            </button>
-          </div>
-          {lat !== null && lng !== null ? (
-            <p className="muted" style={{ marginTop: 8 }}>
-              Location: {lat.toFixed(5)}, {lng.toFixed(5)}
-            </p>
-          ) : null}
+          <label>Club location on map</label>
+          <ClubLocationPinPicker
+            lat={lat}
+            lng={lng}
+            onChange={handlePinChange}
+            disabled={busy}
+          />
           <div className="row">
             <div>
               <label htmlFor="currency">Currency</label>

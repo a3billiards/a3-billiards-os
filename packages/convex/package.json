@@ -17,6 +17,8 @@
     "deploy": "convex deploy",
     "typecheck": "tsc --noEmit",
     "seed:test-owner": "node ../../scripts/convex-seed/run-seed-test-owner.cjs",
+    "seed:test-admin": "node ../../scripts/convex-seed/run-seed-test-admin.cjs",
+    "seed:clear-admin-mfa": "node ../../scripts/convex-seed/run-clear-admin-mfa-rate-limit.cjs",
     "seed:test-club": "node ../../scripts/convex-seed/run-seed-test-club-for-user.cjs"
   },
   "dependencies": {

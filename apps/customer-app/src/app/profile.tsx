@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -18,7 +17,7 @@ import { useMutation, useAction, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@a3/convex/_generated/api";
 import { GlassPageBackground } from "@a3/ui/components";
-import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass, iosKeyboardAvoidingProps, keyboardScrollDefaults } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 
 function formatMemberSince(createdAt: number): string {
@@ -41,6 +40,8 @@ export default function ProfileScreen(): React.JSX.Element {
   const router = useRouter();
   const { signOut } = useAuthActions();
   const user = useQuery(api.users.getCurrentUser);
+  const hasLoginPassword = useQuery(api.customerAuth.hasLoginPassword);
+  const canCreateLoginPassword = useQuery(api.customerAuth.canCreateLoginPassword);
 
   const updateProfile = useMutation(api.users.updateCustomerProfile);
   const requestDeletion = useAction(api.deletionActions.requestCustomerDeletion);
@@ -92,7 +93,7 @@ export default function ProfileScreen(): React.JSX.Element {
     googleId && userEmail && String(userEmail).trim().length > 0,
   );
   const emailEditableGoogle = Boolean(googleId && !emailReadOnlyGoogle);
-  const isPasswordAccount = !googleId;
+  const isPasswordAccount = Boolean(hasLoginPassword) && !googleId;
   const canExportData = Boolean(userEmail && String(userEmail).trim().length > 0);
 
   const dirty = useMemo(() => {
@@ -273,7 +274,7 @@ export default function ProfileScreen(): React.JSX.Element {
   return (
     <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.scroll} {...keyboardScrollDefaults}>
         <Text style={styles.screenTitle}>Profile</Text>
 
         <View style={styles.hero}>
@@ -354,14 +355,38 @@ export default function ProfileScreen(): React.JSX.Element {
           </Pressable>
         ) : null}
 
-        {isPasswordAccount ? (
+        {canCreateLoginPassword || isPasswordAccount ? (
           <>
-            <Text style={[styles.sectionLabel, { marginTop: spacing[4] }]}>Account Security</Text>
+            <Text style={[styles.sectionLabel, { marginTop: spacing[4] }]}>
+              Account Security
+            </Text>
             <View style={styles.card}>
-              <Pressable style={styles.linkRow} onPress={() => router.push("/change-password")}>
-                <Text style={styles.rowLabel}>Change Password</Text>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
+              {canCreateLoginPassword ? (
+                <Pressable
+                  style={styles.linkRow}
+                  onPress={() => router.push("/set-password")}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowLabel}>Create Login Password</Text>
+                    <Text style={styles.subtitle}>
+                      Sign in with phone + password instead of WhatsApp OTP
+                    </Text>
+                  </View>
+                  <Text style={styles.chevron}>›</Text>
+                </Pressable>
+              ) : null}
+              {canCreateLoginPassword && isPasswordAccount ? (
+                <View style={styles.divider} />
+              ) : null}
+              {isPasswordAccount ? (
+                <Pressable
+                  style={styles.linkRow}
+                  onPress={() => router.push("/change-password")}
+                >
+                  <Text style={styles.rowLabel}>Change Password</Text>
+                  <Text style={styles.chevron}>›</Text>
+                </Pressable>
+              ) : null}
             </View>
           </>
         ) : null}
@@ -403,7 +428,7 @@ export default function ProfileScreen(): React.JSX.Element {
       <Modal transparent visible={sheet !== null} animationType="slide">
         <Pressable style={styles.modalScrim} onPress={() => sheet !== "deleteSuccess" && setSheet(null)}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            {...iosKeyboardAvoidingProps}
             style={{ flex: 1, justifyContent: "flex-end" }}
           >
             <Pressable onPress={(e) => e.stopPropagation()}>

@@ -19,7 +19,7 @@ import {
   parseIndiaE164OrThrow,
   throwIfPhoneUnavailableForNewAccount,
 } from "./model/phoneRegistration";
-import { requireCustomer, requireOwner, requireViewer } from "./model/viewer";
+import { requireAdminWithMfa, requireCustomer, requireOwner, requireViewer } from "./model/viewer";
 
 const PASSWORD_PROVIDER = "password" as const;
 
@@ -48,11 +48,7 @@ function isValidEmailFormat(email: string): boolean {
 }
 
 async function requireAdminViewer(ctx: QueryCtx | MutationCtx) {
-  const viewer = await requireViewer(ctx);
-  if (viewer.role !== "admin") {
-    throwErr("AUTH_001: Admin authentication required");
-  }
-  return viewer;
+  return requireAdminWithMfa(ctx);
 }
 
 type PublicUser = Omit<
@@ -117,13 +113,18 @@ async function syncPasswordProviderAccountId(
   if (accounts.length === 0) return;
 
   for (const acc of accounts) {
+    // Customer phone+password logins use E.164 as providerAccountId — do not remap to email.
+    if (acc.providerAccountId.startsWith("+")) continue;
     if (oldEmail === undefined || acc.providerAccountId === oldEmail) {
       await ctx.db.patch(acc._id, { providerAccountId: newEmail });
       return;
     }
   }
 
-  await ctx.db.patch(accounts[0]._id, { providerAccountId: newEmail });
+  const first = accounts[0];
+  if (first && !first.providerAccountId.startsWith("+")) {
+    await ctx.db.patch(first._id, { providerAccountId: newEmail });
+  }
 }
 
 export const getCurrentUser = query({
@@ -470,6 +471,10 @@ export const adminPromoteToAdmin = mutation({
       );
     }
 
+    await ctx.runMutation(internal.adminAuth.assertOwnerReadyForAdminPromotion, {
+      userId: targetUserId,
+    });
+
     const now = Date.now();
     await ctx.db.patch(targetUserId, { role: "admin" });
     await ctx.db.insert("adminAuditLog", {
@@ -478,6 +483,46 @@ export const adminPromoteToAdmin = mutation({
       targetUserId,
       previousValue: "owner",
       newValue: "admin",
+      createdAt: now,
+    });
+
+    return { ok: true as const };
+  },
+});
+
+/** Super-admin only: demote an admin back to owner. */
+export const adminDemoteToOwner = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId: targetUserId }) => {
+    const viewer = await requireAdminViewer(ctx);
+    const viewerUser = await ctx.db.get(viewer.userId);
+    if (!viewerUser?.isSuperAdmin) {
+      throwErr("PERM_001: Super admin only");
+    }
+    if (targetUserId === viewer.userId) {
+      throwErr("DEMOTE_001: Cannot demote your own account");
+    }
+
+    const target = await ctx.db.get(targetUserId);
+    if (!target) throwErr("DATA_003: User not found");
+    if (target.role !== "admin") {
+      throwErr("DEMOTE_002: User is not an admin");
+    }
+    if (target.isSuperAdmin) {
+      throwErr("DEMOTE_003: Cannot demote a super admin");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(targetUserId, {
+      role: "owner",
+      adminMfaVerifiedAt: undefined,
+    });
+    await ctx.db.insert("adminAuditLog", {
+      adminId: viewer.userId,
+      action: "role_change",
+      targetUserId,
+      previousValue: "admin",
+      newValue: "owner",
       createdAt: now,
     });
 
@@ -543,6 +588,7 @@ export const searchUsers = query({
       phoneVerified: u.phoneVerified,
       complaintCount: u.complaints.length,
       deletionRequested: u.deletionRequestedAt != null,
+      hasPushToken: u.fcmTokens.length > 0,
       createdAt: u.createdAt,
     }));
 
@@ -630,6 +676,18 @@ export const getUserProfile = query({
       }
     }
 
+    let hasPasswordLogin = false;
+    if (u.email) {
+      const normalized = u.email.trim().toLowerCase();
+      const passwordAcc = await ctx.db
+        .query("authAccounts")
+        .withIndex("providerAndAccountId", (q) =>
+          q.eq("provider", PASSWORD_PROVIDER).eq("providerAccountId", normalized),
+        )
+        .unique();
+      hasPasswordLogin = passwordAcc?.userId === u._id;
+    }
+
     return {
       user: {
         _id: u._id,
@@ -637,6 +695,8 @@ export const getUserProfile = query({
         email: u.email ?? null,
         phone: u.phone ?? null,
         role: u.role,
+        isSuperAdmin: u.isSuperAdmin === true,
+        hasPasswordLogin,
         isFrozen: u.isFrozen,
         phoneVerified: u.phoneVerified,
         age: u.age,

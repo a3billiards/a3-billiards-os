@@ -19,6 +19,8 @@ import { formatCurrency } from "@a3/utils/billing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
+import { useStaffRole, staffRoleQueryId } from "../../lib/StaffRoleContext";
+import { TabAccessDenied } from "../../components/TabAccessDenied";
 
 type FormState = {
   name: string;
@@ -26,12 +28,15 @@ type FormState = {
 };
 
 export default function SnacksScreen() {
+  const { roleId, canAccessTab } = useStaffRole();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const snacks = useQuery(
     api.snacks.listSnacks,
-    dashboard ? { clubId: dashboard.clubId } : "skip",
+    dashboard && roleId !== undefined
+      ? { clubId: dashboard.clubId, roleId: staffRoleQueryId(roleId) }
+      : "skip",
   );
   const createSnack = useMutation(api.snacks.createSnack);
   const updateSnack = useMutation(api.snacks.updateSnack);
@@ -60,6 +65,10 @@ export default function SnacksScreen() {
 
   if (dashboard === null) {
     return <OwnerNoClubPlaceholder />;
+  }
+
+  if (roleId !== undefined && !canAccessTab("snacks")) {
+    return <TabAccessDenied tabLabel="Snacks" />;
   }
 
   if (snacks === undefined) {
