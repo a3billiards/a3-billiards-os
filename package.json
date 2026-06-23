@@ -15,6 +15,12 @@
     "@types/node": "^20.0.0"
   },
   "packageManager": "pnpm@9.15.9",
+  "pnpm": {
+    "neverBuiltDependencies": [
+      "amazon-ivs-react-native-player",
+      "amazon-ivs-react-native-broadcast"
+    ]
+  },
   "engines": {
     "node": ">=20"
   }
