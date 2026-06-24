@@ -9,13 +9,9 @@ import {
   Modal,
   Dimensions,
   Alert,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import DateTimePicker, {
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
 import { useMutation, useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
@@ -24,16 +20,16 @@ import { colors, typography, spacing, radius } from "@a3/ui/theme";
 import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
 import {
   addCalendarDaysYmd,
-  toClubDate,
-  zonedWallTimeToUtcMs,
   timeZoneAbbreviation,
   normalizeIanaTimeZone,
 } from "@a3/utils/timezone";
 import { formatCurrency } from "@a3/utils/billing";
-import { useStaffRole, staffRoleQueryId } from "../lib/StaffRoleContext";
+import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../lib/StaffRoleContext";
 import { TabAccessDenied } from "../components/TabAccessDenied";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
 import { SafeBarChart } from "../components/SafeBarChart";
+import { FinancialDateRangeBar } from "../components/FinancialDateRangeBar";
+import { countDaysInclusive } from "../lib/financialDateRange";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ownerTabBarTotalInset } from "../theme/ownerShell";
 
@@ -57,41 +53,6 @@ type CreditRow = {
   billableMinutes: number | null;
   ratePerMin: number;
 };
-
-function countDaysInclusive(
-  dateFrom: string,
-  dateTo: string,
-  timeZone: string,
-): number {
-  if (dateFrom.localeCompare(dateTo) > 0) return 0;
-  let n = 0;
-  let cur = dateFrom;
-  while (cur.localeCompare(dateTo) <= 0 && n < 400) {
-    n += 1;
-    cur = addCalendarDaysYmd(cur, 1, timeZone);
-  }
-  return n;
-}
-
-function firstOfMonthYmd(todayYmd: string): string {
-  return `${todayYmd.slice(0, 7)}-01`;
-}
-
-function startOfLastMonthYmd(todayYmd: string): string {
-  const y = Number(todayYmd.slice(0, 4));
-  const mo = Number(todayYmd.slice(5, 7));
-  if (mo === 1) return `${y - 1}-12-01`;
-  return `${y}-${String(mo - 1).padStart(2, "0")}-01`;
-}
-
-function endOfLastMonthYmd(todayYmd: string, tz: string): string {
-  const firstThis = firstOfMonthYmd(todayYmd);
-  return addCalendarDaysYmd(firstThis, -1, tz);
-}
-
-function ymdToDate(ymd: string, tz: string): Date {
-  return new Date(zonedWallTimeToUtcMs(ymd, "12:00", tz));
-}
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -142,15 +103,15 @@ function FinancialsContent(): React.JSX.Element {
 
   const { roleId, canAccessTab } = useStaffRole();
   const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
+  const financialsEnabled = useStaffTabQueriesEnabled("financials");
 
   const access = useQuery(
     api.financials.getFinancialTabAccess,
-    clubId && roleId !== undefined ? { clubId, roleId: queryRoleId } : "skip",
+    clubId && financialsEnabled ? { clubId, roleId: queryRoleId } : "skip",
   );
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [picker, setPicker] = useState<"from" | "to" | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("date");
   const [expandedId, setExpandedId] = useState<Id<"sessions"> | null>(null);
   const [paySheet, setPaySheet] = useState<CreditRow | null>(null);
@@ -174,13 +135,13 @@ function FinancialsContent(): React.JSX.Element {
   const largeRange = rangeDays > 90;
 
   const revenueArgs =
-    clubId && dateFrom && dateTo && !rangeInvalid
+    clubId && dateFrom && dateTo && !rangeInvalid && financialsEnabled
       ? { clubId, dateFrom, dateTo, roleId: queryRoleId }
       : "skip";
   const revenue = useQuery(api.financials.getRevenueByDay, revenueArgs);
 
   const breakdownArgs =
-    clubId && dateFrom && dateTo && !rangeInvalid
+    clubId && dateFrom && dateTo && !rangeInvalid && financialsEnabled
       ? { clubId, dateFrom, dateTo, roleId: queryRoleId }
       : "skip";
   const breakdown = useQuery(
@@ -188,11 +149,12 @@ function FinancialsContent(): React.JSX.Element {
     breakdownArgs,
   );
 
-  const creditsArgs = clubId && roleId !== undefined ? { clubId, sortBy, roleId: queryRoleId } : "skip";
+  const creditsArgs =
+    clubId && financialsEnabled ? { clubId, sortBy, roleId: queryRoleId } : "skip";
   const credits = useQuery(api.financials.getOutstandingCredits, creditsArgs);
 
   const analyticsArgs =
-    clubId && dateFrom && dateTo && !rangeInvalid
+    clubId && dateFrom && dateTo && !rangeInvalid && financialsEnabled
       ? { clubId, dateFrom, dateTo, roleId: queryRoleId }
       : "skip";
   const bestTables = useQuery(
@@ -206,50 +168,6 @@ function FinancialsContent(): React.JSX.Element {
   const heatmap = useQuery(api.financials.getPeakHourHeatmap, analyticsArgs);
 
   const resolveCredit = useMutation(api.financials.resolveCredit);
-
-  const onPickChip = useCallback(
-    (kind: "7" | "30" | "this" | "last") => {
-      const to =
-        dashboard?.todayYmd ?? toClubDate(Date.now(), clubTimezone);
-      if (kind === "7") {
-        setDateFrom(addCalendarDaysYmd(to, -6, clubTimezone));
-        setDateTo(to);
-      } else if (kind === "30") {
-        setDateFrom(addCalendarDaysYmd(to, -29, clubTimezone));
-        setDateTo(to);
-      } else if (kind === "this") {
-        setDateFrom(firstOfMonthYmd(to));
-        setDateTo(to);
-      } else {
-        const end = endOfLastMonthYmd(to, clubTimezone);
-        const start = startOfLastMonthYmd(to);
-        setDateFrom(start);
-        setDateTo(end);
-      }
-    },
-    [clubTimezone, dashboard?.todayYmd],
-  );
-
-  const onDateChange = useCallback(
-    (event: DateTimePickerEvent, date?: Date) => {
-      if (Platform.OS === "android") {
-        setPicker(null);
-        if (event.type === "dismissed" || !date) return;
-      }
-      if (!date || !picker) return;
-      const ymd = toClubDate(date.getTime(), clubTimezone);
-      if (picker === "from") setDateFrom(ymd);
-      else setDateTo(ymd);
-    },
-    [picker, clubTimezone],
-  );
-
-  const pickerValue = ymdToDate(
-    (picker === "from" ? dateFrom : dateTo) ||
-      dashboard?.todayYmd ||
-      toClubDate(Date.now(), clubTimezone),
-    clubTimezone,
-  );
 
   const chartWidth = Dimensions.get("window").width - spacing[6] * 2;
 
@@ -374,78 +292,33 @@ function FinancialsContent(): React.JSX.Element {
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.tzNote}>Dates in {tzAbbr}</Text>
+        <FinancialDateRangeBar
+          clubTimezone={clubTimezone}
+          todayYmd={dashboard.todayYmd}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          tzAbbr={tzAbbr}
+        />
 
-        <View style={styles.dateRow}>
-          <Pressable style={styles.dateBtn} onPress={() => setPicker("from")}>
-            <Text style={styles.dateLbl}>From</Text>
-            <Text style={styles.dateVal}>{dateFrom || "—"}</Text>
-          </Pressable>
-          <Pressable style={styles.dateBtn} onPress={() => setPicker("to")}>
-            <Text style={styles.dateLbl}>To</Text>
-            <Text style={styles.dateVal}>{dateTo || "—"}</Text>
-          </Pressable>
-        </View>
-
-        {picker && Platform.OS === "android" ? (
-          <DateTimePicker
-            value={pickerValue}
-            mode="date"
-            display="default"
-            onChange={onDateChange}
-          />
-        ) : null}
-
-        {picker && Platform.OS === "ios" ? (
-          <Modal transparent animationType="slide" visible>
-            <View style={styles.iosPickerBackdrop}>
-              <View style={styles.iosPickerSheet}>
-                <View style={styles.iosPickerHeader}>
-                  <Text style={styles.iosPickerTitle}>
-                    {picker === "from" ? "From date" : "To date"}
-                  </Text>
-                  <Pressable onPress={() => setPicker(null)} hitSlop={8}>
-                    <Text style={styles.iosPickDoneText}>Done</Text>
-                  </Pressable>
-                </View>
-                <DateTimePicker
-                  value={pickerValue}
-                  mode="date"
-                  display="spinner"
-                  onChange={onDateChange}
-                  themeVariant="dark"
-                />
-              </View>
-            </View>
-          </Modal>
-        ) : null}
-
-        <View style={styles.chips}>
-          {(
-            [
-              { k: "7" as const, label: "Last 7 days" },
-              { k: "30" as const, label: "Last 30 days" },
-              { k: "this" as const, label: "This month" },
-              { k: "last" as const, label: "Last month" },
-            ] as const
-          ).map((c) => (
-            <Pressable key={c.k} onPress={() => onPickChip(c.k)} style={styles.chip}>
-              <Text style={styles.chipText}>{c.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {rangeInvalid ? (
-          <Text style={styles.errText}>
-            End date cannot be before start date.
-          </Text>
-        ) : null}
-
-        {largeRange ? (
-          <Text style={styles.warnLarge}>
-            Large date ranges may take a moment to load.
-          </Text>
-        ) : null}
+        <Pressable
+          style={styles.gstLink}
+          onPress={() => router.push("/(tabs)/gst-report")}
+          accessibilityRole="button"
+          accessibilityLabel="Open GST Report"
+        >
+          <View style={styles.gstLinkIcon}>
+            <MaterialIcons name="receipt-long" size={22} color={colors.accent.green} />
+          </View>
+          <View style={styles.gstLinkText}>
+            <Text style={styles.gstLinkTitle}>GST Report</Text>
+            <Text style={styles.gstLinkSub}>
+              Estimated GST breakdown for your records
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
+        </Pressable>
 
         <Text style={styles.sectionTitle}>Revenue</Text>
         {revenue === undefined ? (
@@ -932,26 +805,26 @@ const styles = StyleSheet.create({
   title: { ...typography.heading3, color: colors.text.primary },
   sub: { ...typography.bodySmall, color: colors.text.secondary, marginTop: 4 },
   scroll: { paddingHorizontal: spacing[6], paddingBottom: spacing[16] },
-  tzNote: { ...typography.caption, color: colors.text.secondary, marginBottom: spacing[2] },
-  dateRow: { flexDirection: "row", gap: spacing[3], marginBottom: spacing[3] },
-  dateBtn: {
-    flex: 1,
-    padding: spacing[3],
-    borderRadius: radius.md,
-    backgroundColor: colors.bg.tertiary,
-  },
-  dateLbl: { ...typography.caption, color: colors.text.secondary },
-  dateVal: { ...typography.label, color: colors.text.primary, marginTop: 4 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing[2], marginBottom: spacing[4] },
-  chip: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: 999,
+  gstLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    padding: spacing[4],
+    borderRadius: radius.lg,
     backgroundColor: colors.bg.secondary,
+    marginBottom: spacing[6],
   },
-  chipText: { ...typography.caption, color: colors.text.primary },
-  errText: { color: colors.status.error, marginBottom: spacing[2] },
-  warnLarge: { color: colors.accent.amber, marginBottom: spacing[2] },
+  gstLinkIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(67,160,71,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gstLinkText: { flex: 1 },
+  gstLinkTitle: { ...typography.label, color: colors.text.primary, fontWeight: "700" },
+  gstLinkSub: { ...typography.caption, color: colors.text.secondary, marginTop: 2 },
   sectionTitle: { ...typography.heading4, color: colors.text.primary, marginBottom: spacing[3] },
   skelChart: {
     flexDirection: "row",
@@ -1234,27 +1107,4 @@ const styles = StyleSheet.create({
     padding: spacing[4],
   },
   backText: { ...typography.label, color: colors.text.primary },
-  iosPickDone: { alignItems: "flex-end", paddingRight: spacing[4] },
-  iosPickDoneText: { color: colors.status.info, ...typography.label },
-  iosPickerBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: colors.overlay.scrim,
-  },
-  iosPickerSheet: {
-    backgroundColor: colors.bg.secondary,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingBottom: spacing[6],
-  },
-  iosPickerHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.subtle,
-  },
-  iosPickerTitle: { ...typography.label, color: colors.text.primary },
 });

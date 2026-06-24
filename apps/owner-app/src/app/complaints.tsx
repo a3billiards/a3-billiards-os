@@ -19,7 +19,7 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { useStaffRole, staffRoleQueryId } from "../lib/StaffRoleContext";
+import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../lib/StaffRoleContext";
 import { TabAccessDenied } from "../components/TabAccessDenied";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -117,15 +117,16 @@ export default function ComplaintsScreen(): React.JSX.Element {
 
   const { roleId, canAccessTab } = useStaffRole();
   const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
+  const complaintsEnabled = useStaffTabQueriesEnabled("complaints");
 
   const access = useQuery(
     api.complaints.getComplaintsTabAccess,
-    clubId && roleId !== undefined ? { clubId, roleId: queryRoleId } : "skip",
+    clubId && complaintsEnabled ? { clubId, roleId: queryRoleId } : "skip",
   );
 
   const list = useQuery(
     api.complaints.getClubComplaints,
-    clubId && roleId !== undefined ? { clubId, roleId: queryRoleId } : "skip",
+    clubId && complaintsEnabled ? { clubId, roleId: queryRoleId } : "skip",
   );
 
   const [segment, setSegment] = useState<"active" | "retracted">("active");
@@ -155,7 +156,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
 
   const recentSessions = useQuery(
     api.complaints.getRecentCustomerSessionsForComplaint,
-    clubId && selectedUserId && linkSession
+    clubId && selectedUserId && linkSession && complaintsEnabled
       ? { clubId, customerId: selectedUserId, roleId: queryRoleId }
       : "skip",
   );

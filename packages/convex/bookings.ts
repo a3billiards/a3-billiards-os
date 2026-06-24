@@ -6,6 +6,7 @@ import {
   mutation,
   query,
   type MutationCtx,
+  type QueryCtx,
 } from "./_generated/server";
 import {
   bookingAppliesToTable,
@@ -28,10 +29,25 @@ import {
   zonedWallTimeToUtcMs,
 } from "@a3/utils/timezone";
 import { getApplicableRate } from "@a3/utils/billing";
+import { validateBookableWithinOperating } from "@a3/utils/availability";
 import { countActiveComplaintsForUser } from "./complaints";
 
 function normalizeTableType(value: string | undefined): string {
   return (value ?? "").trim().toLowerCase();
+}
+
+function normalizeBookingCoupon(code: string): string {
+  return code.trim().toUpperCase();
+}
+
+function assertValidBookingCoupon(coupon: string): void {
+  const normalized = normalizeBookingCoupon(coupon);
+  if (normalized.length < 4 || normalized.length > 32) {
+    throw new Error("DATA_002: Coupon code must be 4–32 characters");
+  }
+  if (!/^[A-Z0-9_-]+$/.test(normalized)) {
+    throw new Error("DATA_002: Coupon code may only use letters, numbers, - and _");
+  }
 }
 
 function parseHHMM(s: string): number {
@@ -137,7 +153,52 @@ function assertBookingTransition(
   }
 }
 
-/** Same rules as submitBooking / getAvailableSlots: zero-gap; pending by type; confirmed by table or type. */
+type ActiveSessionWindow = { startMs: number; endMs: number };
+
+async function loadActiveTablesForType(
+  ctx: QueryCtx | MutationCtx,
+  clubId: Id<"clubs">,
+  typeNormalized: string,
+): Promise<Doc<"tables">[]> {
+  const all = await ctx.db
+    .query("tables")
+    .withIndex("by_club", (q) => q.eq("clubId", clubId))
+    .collect();
+  return all.filter(
+    (t) => t.isActive && normalizeTableType(t.tableType) === typeNormalized,
+  );
+}
+
+/** Live walk-in / in-progress sessions that block overlapping booking windows. */
+async function loadActiveSessionWindowsForTables(
+  ctx: QueryCtx | MutationCtx,
+  tables: Doc<"tables">[],
+): Promise<Map<Id<"tables">, ActiveSessionWindow>> {
+  const map = new Map<Id<"tables">, ActiveSessionWindow>();
+  for (const table of tables) {
+    if (table.currentSessionId === undefined) continue;
+    const session = await ctx.db.get(table.currentSessionId);
+    if (!session || session.status !== "active") continue;
+    map.set(table._id, {
+      startMs: session.startTime,
+      endMs: session.endTime ?? Number.POSITIVE_INFINITY,
+    });
+  }
+  return map;
+}
+
+function tableHasLiveSessionConflict(
+  activeSessions: ReadonlyMap<Id<"tables">, ActiveSessionWindow>,
+  tableId: Id<"tables">,
+  windowStartMs: number,
+  windowEndMs: number,
+): boolean {
+  const live = activeSessions.get(tableId);
+  if (!live) return false;
+  return overlaps(windowStartMs, windowEndMs, live.startMs, live.endMs);
+}
+
+/** Same rules as submitBooking / getAvailableSlots: zero-gap; pending/confirmed per table when assigned. */
 function tableHasBookingConflictForWindow(
   table: Doc<"tables">,
   windowStartMs: number,
@@ -145,9 +206,19 @@ function tableHasBookingConflictForWindow(
   requestedTypeNormalized: string,
   activeBookings: Doc<"bookings">[],
   timezone: string,
+  activeSessions: ReadonlyMap<Id<"tables">, ActiveSessionWindow>,
   excludeBookingId?: Id<"bookings">,
 ): boolean {
-  if (table.currentSessionId !== undefined) return true;
+  if (
+    tableHasLiveSessionConflict(
+      activeSessions,
+      table._id,
+      windowStartMs,
+      windowEndMs,
+    )
+  ) {
+    return true;
+  }
   for (const b of activeBookings) {
     if (excludeBookingId !== undefined && b._id === excludeBookingId) continue;
     const { startMs: existingStartMs, endMs: existingEndMs } = bookingWindowMs(
@@ -160,16 +231,29 @@ function tableHasBookingConflictForWindow(
       continue;
     }
     if (
-      b.status === "pending_approval" &&
-      normalizeTableType(b.tableType) === requestedTypeNormalized
+      (b.status === "pending_approval" || b.status === "confirmed") &&
+      bookingAppliesToTable(b, table)
     ) {
-      return true;
-    }
-    if (b.status === "confirmed" && bookingAppliesToTable(b, table)) {
       return true;
     }
   }
   return false;
+}
+
+async function assertRequestedTableForBooking(
+  ctx: QueryCtx | MutationCtx,
+  clubId: Id<"clubs">,
+  tableId: Id<"tables">,
+  requestedTypeNormalized: string,
+): Promise<Doc<"tables">> {
+  const table = await ctx.db.get(tableId);
+  if (!table || table.clubId !== clubId || !table.isActive) {
+    throw new Error("SESSION_005: Table inactive or not found");
+  }
+  if (normalizeTableType(table.tableType) !== requestedTypeNormalized) {
+    throw new Error("BOOKING_009: Table type not bookable");
+  }
+  return table;
 }
 
 function formatDateLabel(startMs: number, timezone: string): string {
@@ -222,10 +306,12 @@ export const submitBooking = mutation({
   args: {
     clubId: v.id("clubs"),
     tableType: v.string(),
+    requestedTableId: v.id("tables"),
     requestedDate: v.string(),
     requestedStartTime: v.string(),
     requestedDurationMin: v.number(),
     notes: v.optional(v.string()),
+    couponCode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const viewer = await requireViewer(ctx);
@@ -257,6 +343,29 @@ export const submitBooking = mutation({
       club.subscriptionStatus === "frozen"
     ) {
       throw new Error("BOOKING_004: Club not accepting bookings");
+    }
+
+    const requireCoupon = club.bookingSettings.requireBookingCoupon === true;
+    const clubCoupon = normalizeBookingCoupon(
+      club.bookingSettings.bookingCouponCode ?? "",
+    );
+    let paidViaCoupon = false;
+    let couponCodeStored: string | undefined;
+    if (requireCoupon) {
+      if (!clubCoupon) {
+        throw new Error("BOOKING_004: Club booking coupon is not configured");
+      }
+      const submitted = normalizeBookingCoupon(args.couponCode ?? "");
+      if (submitted !== clubCoupon) {
+        throw new Error("PAYMENT_004: Invalid coupon code");
+      }
+      paidViaCoupon = true;
+      couponCodeStored = submitted;
+    } else if (args.couponCode?.trim()) {
+      if (clubCoupon && normalizeBookingCoupon(args.couponCode) === clubCoupon) {
+        paidViaCoupon = true;
+        couponCodeStored = clubCoupon;
+      }
     }
 
     // 3 — BOOKING_009
@@ -354,14 +463,15 @@ export const submitBooking = mutation({
       throw new Error("BOOKING_002: Max booking clubs reached");
     }
 
-    // 10 — BOOKING_003 (revalidate availability; race-safe)
-    const tables = await ctx.db
-      .query("tables")
-      .withIndex("by_club_type", (q) =>
-        q.eq("clubId", args.clubId).eq("tableType", requestedTypeNormalized),
-      )
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .collect();
+    // 10 — BOOKING_003 (revalidate availability for the requested table; race-safe)
+    const requestedTable = await assertRequestedTableForBooking(
+      ctx,
+      args.clubId,
+      args.requestedTableId,
+      requestedTypeNormalized,
+    );
+    const tables = [requestedTable];
+    const activeSessions = await loadActiveSessionWindowsForTables(ctx, tables);
 
     const sameDayBookings = await ctx.db
       .query("bookings")
@@ -384,6 +494,7 @@ export const submitBooking = mutation({
           requestedTypeNormalized,
           activeBookings,
           club.timezone,
+          activeSessions,
         )
       ) {
         hasAvailableTable = true;
@@ -411,13 +522,15 @@ export const submitBooking = mutation({
       notes: notesTrimmed || undefined,
       estimatedCost,
       currency: club.currency,
-      confirmedTableId: undefined,
+      confirmedTableId: requestedTable._id,
       approvedAt: undefined,
       approvedByRoleId: undefined,
       approvedByRoleName: undefined,
       sessionId: undefined,
       reminderSentAt: undefined,
       approvalReminderSentAt: undefined,
+      couponCode: couponCodeStored,
+      paidViaCoupon: paidViaCoupon || undefined,
       createdAt: nowMs,
       updatedAt: nowMs,
     });
@@ -432,7 +545,7 @@ export const submitBooking = mutation({
       tableType: requestedTypeNormalized,
       status: "pending_approval",
       rejectionReason: undefined,
-      confirmedTableLabel: undefined,
+      confirmedTableLabel: requestedTable.label,
       estimatedCost,
       currency: club.currency,
       notes: notesTrimmed || undefined,
@@ -488,6 +601,32 @@ export const getClubBookingFlowContext = query({
       if (!typ) continue;
       activeTableCountByType[typ] = (activeTableCountByType[typ] ?? 0) + 1;
     }
+    const bookableTableTypes = club.bookingSettings.bookableTableTypes.filter(
+      (t) => (activeTableCountByType[normalizeTableType(t)] ?? 0) > 0,
+    );
+    const bookableSet = new Set(
+      bookableTableTypes.map((t) => normalizeTableType(t)),
+    );
+    const tablesByType: Record<
+      string,
+      { tableId: Id<"tables">; label: string; floor?: string }[]
+    > = {};
+    for (const t of tables) {
+      if (!t.isActive) continue;
+      const typ = normalizeTableType(t.tableType);
+      if (!typ || !bookableSet.has(typ)) continue;
+      const row = {
+        tableId: t._id,
+        label: t.label,
+        ...(t.floor ? { floor: t.floor } : {}),
+      };
+      tablesByType[typ] = [...(tablesByType[typ] ?? []), row];
+    }
+    for (const typ of Object.keys(tablesByType)) {
+      tablesByType[typ]!.sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { numeric: true }),
+      );
+    }
     return {
       name: club.name,
       timezone: club.timezone,
@@ -500,8 +639,19 @@ export const getClubBookingFlowContext = query({
         endTime: r.endTime,
         ratePerMin: r.ratePerMin,
       })),
-      bookingSettings: club.bookingSettings,
+      bookingSettings: {
+        enabled: club.bookingSettings.enabled,
+        maxAdvanceDays: club.bookingSettings.maxAdvanceDays,
+        minAdvanceMinutes: club.bookingSettings.minAdvanceMinutes,
+        slotDurationOptions: club.bookingSettings.slotDurationOptions,
+        cancellationWindowMin: club.bookingSettings.cancellationWindowMin,
+        approvalDeadlineMin: club.bookingSettings.approvalDeadlineMin,
+        bookableTableTypes,
+        bookableHours: club.bookingSettings.bookableHours,
+        requireBookingCoupon: club.bookingSettings.requireBookingCoupon === true,
+      },
       activeTableCountByType,
+      tablesByType,
     };
   },
 });
@@ -510,6 +660,7 @@ export const getAvailableSlots = query({
   args: {
     clubId: v.id("clubs"),
     tableType: v.string(),
+    tableId: v.id("tables"),
     requestedDate: v.string(),
     requestedDurationMin: v.number(),
   },
@@ -527,13 +678,14 @@ export const getAvailableSlots = query({
 
     const requestedTypeNormalized = normalizeTableType(args.tableType);
 
-    const tables = await ctx.db
-      .query("tables")
-      .withIndex("by_club_type", (q) =>
-        q.eq("clubId", args.clubId).eq("tableType", requestedTypeNormalized),
-      )
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .collect();
+    const requestedTable = await assertRequestedTableForBooking(
+      ctx,
+      args.clubId,
+      args.tableId,
+      requestedTypeNormalized,
+    );
+    const tables = [requestedTable];
+    const activeSessions = await loadActiveSessionWindowsForTables(ctx, tables);
 
     const bookings = await ctx.db
       .query("bookings")
@@ -548,6 +700,8 @@ export const getAvailableSlots = query({
     const openMin = parseHHMM(bookableHours.open);
     const closeMin = parseHHMM(bookableHours.close);
     const slots: string[] = [];
+    const now = Date.now();
+    const minStartMs = now + club.bookingSettings.minAdvanceMinutes * 60_000;
 
     const slotStarts = enumerateSlotStartMinutes(
       openMin,
@@ -565,6 +719,8 @@ export const getAvailableSlots = query({
       );
       const slotEndMs = slotStartMs + args.requestedDurationMin * 60_000;
 
+      if (slotStartMs < minStartMs) continue;
+
       let hasAvailableTable = false;
       for (const table of tables) {
         if (
@@ -575,6 +731,7 @@ export const getAvailableSlots = query({
             requestedTypeNormalized,
             activeBookings,
             club.timezone,
+            activeSessions,
           )
         ) {
           hasAvailableTable = true;
@@ -743,9 +900,10 @@ export const approveBooking = mutation({
 
     const role = await roleContext(ctx, booking.clubId, args.roleId);
 
+    const tableIdToConfirm = args.confirmedTableId ?? booking.confirmedTableId;
     let confirmedTableLabel: string | undefined = undefined;
-    if (args.confirmedTableId !== undefined) {
-      const table = await ctx.db.get(args.confirmedTableId);
+    if (tableIdToConfirm !== undefined) {
+      const table = await ctx.db.get(tableIdToConfirm);
       if (!table || table.clubId !== owner.clubId || !table.isActive) {
         throw new Error("SESSION_005: Table inactive");
       }
@@ -753,7 +911,10 @@ export const approveBooking = mutation({
       if (normalizeTableType(table.tableType) !== normalizeTableType(booking.tableType)) {
         throw new Error("BOOKING_003: Slot unavailable");
       }
-      if (table.currentSessionId !== undefined) {
+      const approveSessions = await loadActiveSessionWindowsForTables(ctx, [
+        table,
+      ]);
+      if (approveSessions.has(table._id)) {
         throw new Error("SESSION_001: Table occupied");
       }
       const { startMs: approveStartMs, endMs: approveEndMs } = bookingWindowMs(
@@ -778,6 +939,7 @@ export const approveBooking = mutation({
           normalizeTableType(booking.tableType),
           activeSameDay,
           clubDoc.timezone,
+          approveSessions,
           args.bookingId,
         )
       ) {
@@ -791,7 +953,7 @@ export const approveBooking = mutation({
     const now = Date.now();
     await ctx.db.patch(args.bookingId, {
       status: "confirmed",
-      confirmedTableId: args.confirmedTableId,
+      confirmedTableId: tableIdToConfirm,
       approvedAt: now,
       approvedByRoleId: role.roleId,
       approvedByRoleName: role.roleName,
@@ -1074,7 +1236,8 @@ export const startSessionFromBooking = mutation({
     if (!table || table.clubId !== booking.clubId || !table.isActive) {
       throw new Error("SESSION_005: Table inactive");
     }
-    if (table.currentSessionId !== undefined) {
+    const startSessions = await loadActiveSessionWindowsForTables(ctx, [table]);
+    if (startSessions.has(table._id)) {
       throw new Error("SESSION_001: Table occupied");
     }
     ensureRoleCanAssignTable(role.allowedTableIds, targetTableId);
@@ -1202,8 +1365,12 @@ export const listPendingBookings = query({
         const complaintTypes = complaintDocs
           .filter((c): c is NonNullable<typeof c> => c !== null && c.removedAt === undefined)
           .map((c) => c.type);
+        const requestedTable = b.confirmedTableId
+          ? await ctx.db.get(b.confirmedTableId)
+          : null;
         return {
           booking: b,
+          requestedTableLabel: requestedTable?.label,
           customer: {
             name: user?.name ?? "Unknown",
             phone: user?.phone ?? "",
@@ -1251,13 +1418,12 @@ export const listAssignableTablesForBooking = query({
       ? new Set(role.allowedTableIds)
       : null;
     const requestedType = normalizeTableType(booking.tableType);
-    const tables = await ctx.db
-      .query("tables")
-      .withIndex("by_club_type", (q) =>
-        q.eq("clubId", booking.clubId).eq("tableType", requestedType),
-      )
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .collect();
+    const tables = await loadActiveTablesForType(
+      ctx,
+      booking.clubId,
+      requestedType,
+    );
+    const activeSessions = await loadActiveSessionWindowsForTables(ctx, tables);
     const sameDayBookings = await ctx.db
       .query("bookings")
       .withIndex("by_club_date", (q) =>
@@ -1278,6 +1444,7 @@ export const listAssignableTablesForBooking = query({
           requestedType,
           active,
           club.timezone,
+          activeSessions,
           booking._id,
         );
       })
@@ -1450,10 +1617,6 @@ export const checkApprovalDeadlines = internalMutation({
 
 const ALLOWED_SLOT_DURATIONS = new Set([30, 60, 90, 120, 180]);
 
-function isSimpleSameDayWindow(open: string, close: string): boolean {
-  return hhmmToMinutes(close) >= hhmmToMinutes(open);
-}
-
 function assertBookableHoursShape(h: {
   open: string;
   close: string;
@@ -1479,19 +1642,9 @@ function assertBookableWithinOperating(
   const oh = club.operatingHours;
   if (!oh) return;
   assertBookableHoursShape(bookableHours);
-  if (
-    isSimpleSameDayWindow(oh.open, oh.close) &&
-    isSimpleSameDayWindow(bookableHours.open, bookableHours.close)
-  ) {
-    const oOpen = hhmmToMinutes(oh.open);
-    const oClose = hhmmToMinutes(oh.close);
-    const bOpen = hhmmToMinutes(bookableHours.open);
-    const bClose = hhmmToMinutes(bookableHours.close);
-    if (bOpen < oOpen || bClose > oClose) {
-      throw new Error(
-        "CLUB_004: Bookable hours must fall within operating hours.",
-      );
-    }
+  const result = validateBookableWithinOperating(oh, bookableHours);
+  if (!result.ok) {
+    throw new Error(`CLUB_004: ${result.message}`);
   }
 }
 
@@ -1574,6 +1727,8 @@ export const updateBookingSettings = mutation({
           daysOfWeek: v.array(v.number()),
         }),
       ),
+      requireBookingCoupon: v.optional(v.boolean()),
+      bookingCouponCode: v.optional(v.string()),
     }),
   },
   handler: async (ctx, { clubId, settings }) => {
@@ -1643,6 +1798,24 @@ export const updateBookingSettings = mutation({
     if (settings.bookableHours !== undefined) {
       assertBookableWithinOperating(club, settings.bookableHours);
       next.bookableHours = settings.bookableHours;
+    }
+    if (settings.requireBookingCoupon !== undefined) {
+      next.requireBookingCoupon = settings.requireBookingCoupon;
+    }
+    if (settings.bookingCouponCode !== undefined) {
+      const code = normalizeBookingCoupon(settings.bookingCouponCode);
+      if (code.length === 0) {
+        next.bookingCouponCode = undefined;
+      } else {
+        assertValidBookingCoupon(code);
+        next.bookingCouponCode = code;
+      }
+    }
+    if (next.requireBookingCoupon === true) {
+      const code = normalizeBookingCoupon(next.bookingCouponCode ?? "");
+      if (!code) {
+        throw new Error("DATA_002: Set a booking coupon code before requiring it");
+      }
     }
 
     await ctx.db.patch(clubId, { bookingSettings: next });

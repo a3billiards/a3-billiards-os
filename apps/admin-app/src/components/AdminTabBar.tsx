@@ -10,6 +10,7 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   index: "dashboard",
   users: "people",
   complaints: "flag",
+  "live-moderation": "live-tv",
   audit: "history",
   notifications: "notifications",
 };
@@ -18,6 +19,7 @@ const TAB_LABELS: Record<string, string> = {
   index: "Home",
   users: "Users",
   complaints: "Flags",
+  "live-moderation": "Live",
   audit: "Audit",
   notifications: "Alerts",
 };

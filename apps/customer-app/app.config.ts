@@ -75,6 +75,14 @@ export default () => {
       },
     ],
     "expo-secure-store",
+    [
+      "expo-build-properties",
+      {
+        android: {
+          minSdkVersion: 31,
+        },
+      },
+    ],
     "@react-native-google-signin/google-signin",
     [
       "expo-notifications",

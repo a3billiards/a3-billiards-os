@@ -76,6 +76,10 @@ export const ERROR_CODES = {
     DEMOTE_002: "User is not an admin",
     DEMOTE_003: "Cannot demote a super admin",
     FORCE_001: "Session not found or not active",
+    LIVESTREAM_001: "A stream is already live for this club",
+    LIVESTREAM_002: "AWS IVS API call failed",
+    LIVESTREAM_003: "No stream is currently live for this club",
+    LIVESTREAM_004: "This stream is not currently active",
     UNKNOWN: "An unexpected error occurred",
   } as const;
    

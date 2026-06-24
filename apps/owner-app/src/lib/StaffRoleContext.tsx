@@ -71,6 +71,25 @@ export function useStaffRole(): StaffRoleContextValue {
   return ctx;
 }
 
+/** Convex queries for a staff-gated tab must skip until role is known and tab is allowed. */
+export function useStaffTabQueriesEnabled(tab: string): boolean {
+  const { roleId, canAccessTab } = useStaffRole();
+  if (roleId === undefined) return false;
+  if (roleId === null) return true;
+  return canAccessTab(tab);
+}
+
+/** Standard `{ clubId, roleId? }` args for tab-gated club queries, or `"skip"`. */
+export function useStaffTabQueryArgs(
+  clubId: Id<"clubs"> | undefined,
+  tab: string,
+): { clubId: Id<"clubs">; roleId: Id<"staffRoles"> | undefined } | "skip" {
+  const { roleId } = useStaffRole();
+  const enabled = useStaffTabQueriesEnabled(tab);
+  if (!clubId || !enabled) return "skip";
+  return { clubId, roleId: staffRoleQueryId(roleId) };
+}
+
 /** Convex roleId arg: undefined in owner mode, Id when staff role active. */
 export function staffRoleQueryId(
   roleId: Id<"staffRoles"> | null | undefined,

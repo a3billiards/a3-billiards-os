@@ -14,7 +14,13 @@ const STAFF_GATED_TABS = new Set([
   "complaints",
   "bookings",
   "documents",
+  "kitchen",
+  "loyalty",
+  "livestream",
 ]);
+
+/** Stack-style tab routes that must not appear in the bottom bar. */
+const HIDDEN_TAB_ROUTES = new Set(["gst-report"]);
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   home: "home",
@@ -24,6 +30,9 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   complaints: "report-problem",
   bookings: "event",
   documents: "folder",
+  kitchen: "restaurant",
+  loyalty: "stars",
+  livestream: "videocam",
   settings: "settings",
 };
 
@@ -35,6 +44,9 @@ const TAB_LABELS: Record<string, string> = {
   complaints: "Complaints",
   bookings: "Bookings",
   documents: "Docs",
+  kitchen: "Kitchen",
+  loyalty: "Loyalty",
+  livestream: "Live",
   settings: "Settings",
 };
 
@@ -47,6 +59,7 @@ export default function OwnerTabBar({
   const { canAccessTab, roleId } = useStaffRole();
 
   const visibleRoutes = state.routes.filter((route) => {
+    if (HIDDEN_TAB_ROUTES.has(route.name)) return false;
     if (route.name === "settings" && roleId) return false;
     if (!STAFF_GATED_TABS.has(route.name)) return true;
     if (roleId === undefined) return false;

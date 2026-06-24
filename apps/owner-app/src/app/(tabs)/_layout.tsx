@@ -27,7 +27,11 @@ function OwnerTabsWithPush() {
         <Tabs.Screen name="home" options={{ title: "Home" }} />
         <Tabs.Screen name="slots" options={{ title: "Slots" }} />
         <Tabs.Screen name="snacks" options={{ title: "Snacks" }} />
+        <Tabs.Screen name="kitchen" options={{ title: "Kitchen" }} />
+        <Tabs.Screen name="loyalty" options={{ title: "Loyalty" }} />
+        <Tabs.Screen name="livestream" options={{ title: "Live Stream" }} />
         <Tabs.Screen name="financials" options={{ title: "Financials" }} />
+        <Tabs.Screen name="gst-report" options={{ href: null, title: "GST Report" }} />
         <Tabs.Screen name="complaints" options={{ title: "Complaints" }} />
         <Tabs.Screen name="bookings" options={{ title: "Bookings" }} />
         <Tabs.Screen name="documents" options={{ title: "Documents" }} />

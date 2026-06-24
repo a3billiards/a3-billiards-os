@@ -13,7 +13,14 @@ import { bookingAppliesToTable, resolveRatePerMinAtSessionStart } from "./model/
 import { computeBookingUnixTime, dateYmdInTimeZone } from "@a3/utils/timezone";
 import { countActiveComplaintsForUser } from "./complaints";
 import { computeBill, clampDiscountPercent } from "@a3/utils/billing";
+import { computeFreeVisitBill } from "@a3/utils/loyaltyBilling";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
+import { internal } from "./_generated/api";
+import {
+  finalizeFreeVisitRedemption,
+  getActiveLoyaltyProgramme,
+  reserveFreeVisitCredit,
+} from "./model/loyaltyCore";
 
 async function assertSlotsTabPermission(
   ctx: MutationCtx | QueryCtx,
@@ -178,6 +185,7 @@ export const startWalkInSession = mutation({
     guestName: v.optional(v.string()),
     forceStartDespiteConflict: v.optional(v.boolean()),
     customerId: v.optional(v.id("users")),
+    freeVisitCreditId: v.optional(v.id("loyaltyCredits")),
     roleId: v.optional(v.id("staffRoles")),
     staffAcknowledgedComplaint: v.optional(v.boolean()),
   },
@@ -188,6 +196,7 @@ export const startWalkInSession = mutation({
       guestName,
       forceStartDespiteConflict,
       customerId,
+      freeVisitCreditId,
       roleId,
       staffAcknowledgedComplaint,
     } = args;
@@ -255,6 +264,29 @@ export const startWalkInSession = mutation({
       throw new Error(
         "DATA_001: Provide either a registered customer or a guest name, not both",
       );
+    }
+    if (freeVisitCreditId !== undefined && customerId === undefined) {
+      throw new Error("LOYALTY_021: Free visit requires a registered customer");
+    }
+
+    let freeVisitMaxMinutes: number | undefined;
+    let isFreeVisit = false;
+    if (freeVisitCreditId !== undefined) {
+      const programme = await getActiveLoyaltyProgramme(ctx, owner.clubId);
+      if (!programme) {
+        throw new Error("LOYALTY_022: No active loyalty programme");
+      }
+      const credit = await ctx.db.get(freeVisitCreditId);
+      if (
+        !credit ||
+        credit.clubId !== owner.clubId ||
+        credit.userId !== customerId ||
+        credit.status !== "available"
+      ) {
+        throw new Error("LOYALTY_023: Free-visit credit not available");
+      }
+      isFreeVisit = true;
+      freeVisitMaxMinutes = programme.freeVisitMaxMinutes;
     }
 
     const ratePerMin = resolveRatePerMinAtSessionStart(club, now);
@@ -333,9 +365,22 @@ export const startWalkInSession = mutation({
       bookingId: undefined,
       discountAppliedByRoleId: undefined,
       discountAppliedAt: undefined,
+      isFreeVisit: isFreeVisit || undefined,
+      freeVisitCreditId: isFreeVisit ? freeVisitCreditId : undefined,
+      freeVisitMaxMinutes,
       createdAt: now,
       updatedAt: now,
     });
+
+    if (isFreeVisit && freeVisitCreditId && sessionCustomerId) {
+      await reserveFreeVisitCredit(ctx, {
+        creditId: freeVisitCreditId,
+        clubId: owner.clubId,
+        userId: sessionCustomerId,
+        sessionId,
+        now,
+      });
+    }
 
     await ctx.db.patch(tableId, {
       currentSessionId: sessionId,
@@ -379,6 +424,8 @@ function computeCheckoutBill(session: {
   minBillMinutes: number;
   snackOrders: { snackId: Id<"snacks">; name: string; qty: number; priceAtOrder: number }[];
   discount?: number;
+  isFreeVisit?: boolean;
+  freeVisitMaxMinutes?: number;
 }) {
   const now = Date.now();
   const endTime = now <= session.startTime ? session.startTime + 1 : now;
@@ -388,6 +435,19 @@ function computeCheckoutBill(session: {
     qty: o.qty,
     priceAtOrder: o.priceAtOrder,
   }));
+
+  if (session.isFreeVisit && session.freeVisitMaxMinutes != null) {
+    const bill = computeFreeVisitBill({
+      startTime: session.startTime,
+      endTime,
+      ratePerMin: session.ratePerMin,
+      minBillMinutes: session.minBillMinutes,
+      snackOrders,
+      freeVisitMaxMinutes: session.freeVisitMaxMinutes,
+    });
+    return { endTime, bill };
+  }
+
   return {
     endTime,
     bill: computeBill({
@@ -454,17 +514,24 @@ export const previewTableCheckout = query({
     }
 
     const perms = await resolveDiscountPermissions(ctx, owner.clubId, roleId);
+    const isFreeVisit = session.isFreeVisit === true;
     const requested =
       typeof discountPercent === "number" && Number.isFinite(discountPercent)
         ? discountPercent
         : 0;
-    const appliedDiscountPct = clampDiscountPercent(
-      requested,
-      perms.canApplyDiscount,
-      perms.maxDiscountPercent,
-    );
+    const appliedDiscountPct =
+      isFreeVisit || requested <= 0
+        ? 0
+        : clampDiscountPercent(
+            requested,
+            perms.canApplyDiscount,
+            perms.maxDiscountPercent,
+          );
 
-    const { bill } = computeCheckoutBill({ ...session, discount: appliedDiscountPct });
+    const { bill } = computeCheckoutBill({
+      ...session,
+      discount: appliedDiscountPct,
+    });
     return {
       sessionId: session._id,
       tableLabel: table.label,
@@ -480,8 +547,10 @@ export const previewTableCheckout = query({
       discountedTable: bill.discountedTable,
       discountAmount: bill.discountAmount,
       discountPercent: appliedDiscountPct,
-      canApplyDiscount: perms.canApplyDiscount,
+      canApplyDiscount: isFreeVisit ? false : perms.canApplyDiscount,
       maxDiscountPercent: perms.maxDiscountPercent,
+      isFreeVisit,
+      freeVisitMaxMinutes: session.freeVisitMaxMinutes ?? null,
     };
   },
 });
@@ -521,15 +590,21 @@ export const checkoutTableSession = mutation({
     }
 
     const perms = await resolveDiscountPermissions(ctx, owner.clubId, roleId);
+    const isFreeVisit = session.isFreeVisit === true;
     const requested =
       typeof discountPercent === "number" && Number.isFinite(discountPercent)
         ? discountPercent
         : 0;
-    const appliedDiscountPct = clampDiscountPercent(
-      requested,
-      perms.canApplyDiscount,
-      perms.maxDiscountPercent,
-    );
+    if (isFreeVisit && requested > 0) {
+      throw new Error("LOYALTY_024: Discount cannot be applied on a free-visit session");
+    }
+    const appliedDiscountPct = isFreeVisit
+      ? 0
+      : clampDiscountPercent(
+          requested,
+          perms.canApplyDiscount,
+          perms.maxDiscountPercent,
+        );
 
     const { endTime, bill } = computeCheckoutBill({
       ...session,
@@ -587,6 +662,27 @@ export const checkoutTableSession = mutation({
         status: "completed",
         createdAt: now,
         updatedAt: now,
+      });
+    }
+
+    const completedSession = await ctx.db.get(session._id);
+    if (completedSession) {
+      if (completedSession.isFreeVisit) {
+        const overageMinutes =
+          "overageMinutes" in bill
+            ? (bill as { overageMinutes: number }).overageMinutes
+            : 0;
+        await finalizeFreeVisitRedemption(ctx, {
+          session: completedSession,
+          billableMinutes: bill.billableMinutes,
+          overageMinutes,
+          overageBilled: bill.discountedTable,
+          redeemedBy: owner.userId,
+          now,
+        });
+      }
+      await ctx.scheduler.runAfter(0, internal.loyalty.evaluateCheckoutLoyalty, {
+        sessionId: session._id,
       });
     }
 

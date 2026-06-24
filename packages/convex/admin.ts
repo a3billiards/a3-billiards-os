@@ -42,6 +42,7 @@ export const getAdminDashboard = query({
       paidCompletedRows,
       complaintsOpen,
       pendingBookings,
+      activeLiveStreams,
     ] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db
@@ -65,6 +66,10 @@ export const getAdminDashboard = query({
       ctx.db
         .query("bookings")
         .withIndex("by_global_status", (q) => q.eq("status", "pending_approval"))
+        .collect(),
+      ctx.db
+        .query("liveStreams")
+        .withIndex("by_status_startedAt", (q) => q.eq("status", "live"))
         .collect(),
     ]);
 
@@ -95,6 +100,7 @@ export const getAdminDashboard = query({
       },
       openComplaints: complaintsOpen.length,
       pendingBookings: pendingBookings.length,
+      activeLiveStreams: activeLiveStreams.length,
       fetchedAt,
     };
   },

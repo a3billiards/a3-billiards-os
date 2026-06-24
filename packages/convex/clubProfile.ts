@@ -8,7 +8,7 @@ import {
   requireViewer,
 } from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
-import { hhmmToMinutes } from "@a3/utils/timezone";
+import { validateBookableWithinOperating } from "@a3/utils/availability";
 
 const operatingHoursValidator = v.object({
   open: v.string(),
@@ -24,10 +24,6 @@ function assertHHMM(label: string, s: string): void {
   if (h < 0 || h > 23 || m < 0 || m > 59) {
     throw new Error(`DATA_002: ${label} is out of range`);
   }
-}
-
-function isSimpleSameDayWindow(open: string, close: string): boolean {
-  return hhmmToMinutes(close) >= hhmmToMinutes(open);
 }
 
 export const getMyClubProfile = query({
@@ -207,19 +203,10 @@ export const updateOperatingHours = mutation({
     }
 
     const bh = club.bookingSettings.bookableHours;
-    if (
-      bh &&
-      isSimpleSameDayWindow(operatingHours.open, operatingHours.close) &&
-      isSimpleSameDayWindow(bh.open, bh.close)
-    ) {
-      const oOpen = hhmmToMinutes(operatingHours.open);
-      const oClose = hhmmToMinutes(operatingHours.close);
-      const bOpen = hhmmToMinutes(bh.open);
-      const bClose = hhmmToMinutes(bh.close);
-      if (bOpen < oOpen || bClose > oClose) {
-        throw new Error(
-          "CLUB_004: Bookable hours must fall within operating hours. Update bookable hours first.",
-        );
+    if (bh) {
+      const result = validateBookableWithinOperating(operatingHours, bh);
+      if (!result.ok) {
+        throw new Error(`CLUB_004: ${result.message}`);
       }
     }
 

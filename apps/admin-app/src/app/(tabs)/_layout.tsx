@@ -14,6 +14,7 @@ export default function TabsLayout() {
     canDash ? {} : "skip",
   );
   const openComplaints = dash?.openComplaints ?? 0;
+  const activeLiveStreams = dash?.activeLiveStreams ?? 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: glass.pageBgBottom }}>
@@ -41,6 +42,18 @@ export default function TabsLayout() {
                 ? openComplaints > 99
                   ? "99+"
                   : openComplaints
+                : undefined,
+          }}
+        />
+        <Tabs.Screen
+          name="live-moderation"
+          options={{
+            title: "Live",
+            tabBarBadge:
+              activeLiveStreams > 0
+                ? activeLiveStreams > 99
+                  ? "99+"
+                  : activeLiveStreams
                 : undefined,
           }}
         />

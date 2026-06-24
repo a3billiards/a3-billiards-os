@@ -26,7 +26,7 @@ import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { formatCurrency, formatElapsed } from "@a3/utils/billing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useStaffRole, staffRoleQueryId } from "../../lib/StaffRoleContext";
+import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../../lib/StaffRoleContext";
 import { TabAccessDenied } from "../../components/TabAccessDenied";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
@@ -40,6 +40,7 @@ export default function SlotsScreen() {
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const { roleId, canAccessTab } = useStaffRole();
   const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
+  const slotsEnabled = useStaffTabQueriesEnabled("slots");
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const [walkInTableId, setWalkInTableId] = useState<Id<"tables"> | null>(
     null,
@@ -60,6 +61,8 @@ export default function SlotsScreen() {
   const [customerPhoneInput, setCustomerPhoneInput] = useState("");
   const [debouncedCustomerPhone, setDebouncedCustomerPhone] = useState("");
   const [pendingCustomerId, setPendingCustomerId] = useState<Id<"users"> | null>(null);
+  const [pendingFreeVisitCreditId, setPendingFreeVisitCreditId] =
+    useState<Id<"loyaltyCredits"> | null>(null);
   const [showComplaintGate, setShowComplaintGate] = useState(false);
   const walkInModalOpenedForTableRef = useRef<string | null>(null);
   const [checkoutTableId, setCheckoutTableId] = useState<Id<"tables"> | null>(
@@ -102,6 +105,18 @@ export default function SlotsScreen() {
     api.complaints.getCustomerActiveComplaints,
     pendingCustomerId ? { userId: pendingCustomerId } : "skip",
   );
+  const canViewLoyaltyRedemption =
+    roleId === null || (roleId !== undefined && canAccessTab("loyalty"));
+  const loyaltyRedemption = useQuery(
+    api.loyalty.getRedemptionOffer,
+    dashboard?.clubId && pendingCustomerId && canViewLoyaltyRedemption
+      ? {
+          clubId: dashboard.clubId,
+          customerId: pendingCustomerId,
+          roleId: queryRoleId,
+        }
+      : "skip",
+  );
 
   const snackEligibility = useQuery(
     api.snacks.getSessionSnackEligibility,
@@ -137,7 +152,7 @@ export default function SlotsScreen() {
 
   const checkoutPreview = useQuery(
     api.ownerSessions.previewTableCheckout,
-    checkoutTableId !== null
+    checkoutTableId !== null && slotsEnabled
       ? { tableId: checkoutTableId, roleId: queryRoleId, discountPercent: parsedDiscount }
       : "skip",
   );
@@ -157,6 +172,7 @@ export default function SlotsScreen() {
     setCustomerPhoneInput("");
     setDebouncedCustomerPhone("");
     setPendingCustomerId(null);
+    setPendingFreeVisitCreditId(null);
     setShowComplaintGate(false);
     setDeskName("");
     setDeskAge("");
@@ -178,6 +194,7 @@ export default function SlotsScreen() {
         forceOverride?: boolean;
         guestName?: string;
         customerId?: Id<"users">;
+        freeVisitCreditId?: Id<"loyaltyCredits">;
         staffAcknowledgedComplaint?: boolean;
       },
     ) => {
@@ -189,6 +206,7 @@ export default function SlotsScreen() {
           forceStartDespiteConflict: opts?.forceOverride || undefined,
           guestName: opts?.customerId ? undefined : opts?.guestName,
           customerId: opts?.customerId,
+          freeVisitCreditId: opts?.freeVisitCreditId,
           roleId: queryRoleId,
           staffAcknowledgedComplaint: opts?.staffAcknowledgedComplaint,
         });
@@ -498,7 +516,7 @@ export default function SlotsScreen() {
                         )
                       }
                     >
-                      <Text style={styles.addSnacksBtnText}>Add Snacks</Text>
+                      <Text style={styles.addSnacksBtnText}>Add Items</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -940,25 +958,64 @@ export default function SlotsScreen() {
                   </View>
                 ) : null}
                 {pendingCustomerId !== null && customerComplaints !== undefined ? (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.modalBtnPrimary,
-                      pressed && styles.pressed,
-                      { marginTop: spacing[4] },
-                    ]}
-                    onPress={() => {
-                      if (!walkInTableId || !walkInLockToken || !pendingCustomerId) return;
-                      if (customerComplaints.hasComplaints) {
-                        setShowComplaintGate(true);
-                      } else {
-                        void runStartWalkIn(walkInTableId, walkInLockToken, {
-                          customerId: pendingCustomerId,
-                        });
-                      }
-                    }}
-                  >
-                    <Text style={styles.modalBtnPrimaryText}>Start session</Text>
-                  </Pressable>
+                  <>
+                    {loyaltyRedemption?.eligible && loyaltyRedemption.creditId ? (
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.modalBtnSecondary,
+                          pressed && styles.pressed,
+                          { marginTop: spacing[3] },
+                        ]}
+                        onPress={() => {
+                          if (!walkInTableId || !walkInLockToken || !pendingCustomerId) return;
+                          Alert.alert(
+                            "Redeem free visit?",
+                            `${loyaltyRedemption.availableCredits} credit(s) for this club only. This session will use 1 credit and cover table time up to ${loyaltyRedemption.freeVisitMaxMinutes} minutes. Snacks are billed normally. Time beyond the cap is charged at the normal rate. Credits from other clubs cannot be used here.`,
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Redeem & start",
+                                onPress: () => {
+                                  if (customerComplaints.hasComplaints) {
+                                    setPendingFreeVisitCreditId(loyaltyRedemption.creditId!);
+                                    setShowComplaintGate(true);
+                                    return;
+                                  }
+                                  void runStartWalkIn(walkInTableId, walkInLockToken, {
+                                    customerId: pendingCustomerId,
+                                    freeVisitCreditId: loyaltyRedemption.creditId!,
+                                  });
+                                },
+                              },
+                            ],
+                          );
+                        }}
+                      >
+                        <Text style={styles.modalBtnSecondaryText}>
+                          Redeem free visit ({loyaltyRedemption.availableCredits} available)
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.modalBtnPrimary,
+                        pressed && styles.pressed,
+                        { marginTop: spacing[4] },
+                      ]}
+                      onPress={() => {
+                        if (!walkInTableId || !walkInLockToken || !pendingCustomerId) return;
+                        if (customerComplaints.hasComplaints) {
+                          setShowComplaintGate(true);
+                        } else {
+                          void runStartWalkIn(walkInTableId, walkInLockToken, {
+                            customerId: pendingCustomerId,
+                          });
+                        }
+                      }}
+                    >
+                      <Text style={styles.modalBtnPrimaryText}>Start session</Text>
+                    </Pressable>
+                  </>
                 ) : null}
                 <View style={styles.modalActions}>
                   <Pressable
@@ -1004,8 +1061,10 @@ export default function SlotsScreen() {
                 setShowComplaintGate(false);
                 void runStartWalkIn(walkInTableId, walkInLockToken, {
                   customerId: pendingCustomerId,
+                  freeVisitCreditId: pendingFreeVisitCreditId ?? undefined,
                   staffAcknowledgedComplaint: true,
                 });
+                setPendingFreeVisitCreditId(null);
               }}
             />
           </View>
@@ -1075,7 +1134,13 @@ export default function SlotsScreen() {
                     checkoutPreview.currency,
                   )}
                 </Text>
-                {checkoutPreview.canApplyDiscount ? (
+                {checkoutPreview.isFreeVisit ? (
+                  <Text style={styles.modalBody}>
+                    Free visit — table time up to {checkoutPreview.freeVisitMaxMinutes ?? "—"}{" "}
+                    min waived. Snacks billed normally.
+                  </Text>
+                ) : null}
+                {checkoutPreview.canApplyDiscount && !checkoutPreview.isFreeVisit ? (
                   <View style={styles.discountRow}>
                     <Text style={styles.walkInLabel}>
                       Discount %{" "}

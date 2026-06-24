@@ -18,6 +18,7 @@ import type { Id } from "@a3/convex/_generated/dataModel";
 import {
   DateStrip,
   TableTypePicker,
+  TablePicker,
   TimeSlotGrid,
   GlassPageBackground,
 } from "@a3/ui/components";
@@ -31,7 +32,7 @@ import {
 } from "@a3/utils/timezone";
 import { formatHhmm12h } from "@a3/utils/availability";
 
-const STEPS = ["Type", "Date", "Time", "Review"] as const;
+const STEPS = ["Type", "Table", "Date", "Duration", "Time", "Review"] as const;
 
 const DURATION_LABELS: Record<number, { chip: string; summary: string; sub?: string }> = {
   30: { chip: "30m", summary: "30 minutes", sub: "Quick game" },
@@ -76,6 +77,9 @@ function bookingErrorMessage(err: unknown, minAdvanceMinutes: number): string {
   if (raw.includes("SUBSCRIPTION_003")) {
     return "This club is not accepting online bookings at the moment.";
   }
+  if (raw.includes("PAYMENT_004")) {
+    return "Invalid coupon code. Check the code from the club and try again.";
+  }
   return raw.replace(/^[A-Z_]+_\d+:\s*/, "") || "Something went wrong. Please try again.";
 }
 
@@ -111,10 +115,12 @@ export default function BookClubScreen() {
 
   const [step, setStep] = useState(0);
   const [tableType, setTableType] = useState<string | null>(null);
+  const [selectedTableId, setSelectedTableId] = useState<Id<"tables"> | null>(null);
   const [dateYmd, setDateYmd] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
+  const [couponCode, setCouponCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const slotDurationOptions = ctx?.bookingSettings.slotDurationOptions;
@@ -132,12 +138,23 @@ export default function BookClubScreen() {
 
   const durationForSlots = durationMin ?? defaultDuration;
 
+  const tablesForType = useMemo(() => {
+    if (!ctx || !tableType) return [];
+    return ctx.tablesByType[tableType.trim().toLowerCase()] ?? [];
+  }, [ctx, tableType]);
+
+  const selectedTableLabel = useMemo(() => {
+    if (!selectedTableId) return "";
+    return tablesForType.find((t) => t.tableId === selectedTableId)?.label ?? "";
+  }, [selectedTableId, tablesForType]);
+
   const availableSlots = useQuery(
     api.bookings.getAvailableSlots,
-    clubIdParam && tableType && dateYmd
+    clubIdParam && tableType && selectedTableId && dateYmd
       ? {
           clubId,
           tableType,
+          tableId: selectedTableId,
           requestedDate: dateYmd,
           requestedDurationMin: durationForSlots,
         }
@@ -145,10 +162,10 @@ export default function BookClubScreen() {
   );
 
   useEffect(() => {
-    if (step !== 3 || !selectedTime || availableSlots === undefined) return;
+    if (step !== 5 || !selectedTime || availableSlots === undefined) return;
     if (!availableSlots.includes(selectedTime)) {
       setSelectedTime(null);
-      setStep(2);
+      setStep(4);
       Alert.alert(
         "Time unavailable",
         "Your selected time is no longer available for this duration. Please pick a new time.",
@@ -205,7 +222,11 @@ export default function BookClubScreen() {
   };
 
   const onConfirm = async () => {
-    if (!ctx || !tableType || !dateYmd || !selectedTime || durationMin === null) {
+    if (!ctx || !tableType || !selectedTableId || !dateYmd || !selectedTime || durationMin === null) {
+      return;
+    }
+    if (ctx.bookingSettings.requireBookingCoupon && !couponCode.trim()) {
+      Alert.alert("Coupon required", "Enter the booking coupon code from the club.");
       return;
     }
     setSubmitting(true);
@@ -213,10 +234,12 @@ export default function BookClubScreen() {
       await submit({
         clubId,
         tableType,
+        requestedTableId: selectedTableId,
         requestedDate: dateYmd,
         requestedStartTime: selectedTime,
         requestedDurationMin: durationMin,
         notes: notes.trim() || undefined,
+        couponCode: couponCode.trim() || undefined,
       });
       router.replace("/(tabs)/bookings");
       setTimeout(() => {
@@ -376,17 +399,32 @@ export default function BookClubScreen() {
             selectedType={tableType}
             onSelectType={(t: string) => {
               setTableType(t);
+              setSelectedTableId(null);
               setStep(1);
             }}
           />
         )}
 
-        {step === 1 && !bh ? (
+        {step === 1 && tableType ? (
+          <TablePicker
+            tableType={tableType}
+            tables={tablesForType}
+            selectedTableId={selectedTableId}
+            onSelectTable={(id: string) => {
+              setSelectedTableId(id as Id<"tables">);
+              setDateYmd(null);
+              setSelectedTime(null);
+              setStep(2);
+            }}
+          />
+        ) : null}
+
+        {step === 2 && !bh ? (
           <Text style={styles.errorText}>
             This club has not finished booking setup (hours missing).
           </Text>
         ) : null}
-        {step === 1 && bh ? (
+        {step === 2 && bh ? (
           <>
             <DateStrip
               timeZone={ctx.timezone}
@@ -400,32 +438,16 @@ export default function BookClubScreen() {
               selectedYmd={dateYmd}
               onSelectYmd={(d: string) => {
                 setDateYmd(d);
-                setStep(2);
-              }}
-            />
-            <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
-          </>
-        ) : null}
-
-        {step === 2 && bh && tableType && dateYmd ? (
-          <>
-            <TimeSlotGrid
-              availableSlots={availableSlots}
-              requestedDurationMin={durationForSlots}
-              selectedTime={selectedTime}
-              onSelectTime={(t: string) => {
-                setSelectedTime(t);
+                setSelectedTime(null);
                 setStep(3);
               }}
-              bookableOpen={bh.open}
-              bookableClose={bh.close}
             />
             <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
           </>
         ) : null}
 
-        {step === 3 && bh && tableType && dateYmd && selectedTime ? (
-          <View style={styles.review}>
+        {step === 3 && dateYmd ? (
+          <>
             <Text style={styles.reviewHeading}>How long do you want to play?</Text>
             <View style={styles.durGrid}>
               {slotOptions.map((d: number) => {
@@ -437,11 +459,12 @@ export default function BookClubScreen() {
                 return (
                   <Pressable
                     key={d}
-                    onPress={() => setDurationMin(d)}
-                    style={[
-                      styles.durCard,
-                      active && styles.durCardActive,
-                    ]}
+                    onPress={() => {
+                      setDurationMin(d);
+                      setSelectedTime(null);
+                      setStep(4);
+                    }}
+                    style={[styles.durCard, active && styles.durCardActive]}
                   >
                     <Text
                       style={[styles.durChip, active && styles.durChipActive]}
@@ -455,7 +478,6 @@ export default function BookClubScreen() {
                 );
               })}
             </View>
-
             {durationMin !== null && durationMin < ctx.minBillMinutes ? (
               <View style={styles.warnCard}>
                 <Text style={styles.warnText}>
@@ -464,10 +486,37 @@ export default function BookClubScreen() {
                 </Text>
               </View>
             ) : null}
+          </>
+        ) : null}
 
+        {step === 4 && bh && tableType && selectedTableId && dateYmd && durationMin !== null ? (
+          <>
+            <TimeSlotGrid
+              availableSlots={availableSlots}
+              requestedDurationMin={durationForSlots}
+              selectedTime={selectedTime}
+              onSelectTime={(t: string) => {
+                setSelectedTime(t);
+                setStep(5);
+              }}
+              bookableOpen={bh.open}
+              bookableClose={bh.close}
+            />
+            <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
+          </>
+        ) : null}
+
+        {step === 5 && bh && tableType && selectedTableId && dateYmd && selectedTime && durationMin !== null ? (
+          <View style={styles.review}>
             <Text style={styles.confirmTitle}>Confirm your booking</Text>
             <View style={styles.summaryCard}>
               <Text style={styles.summaryClub}>{ctx.name}</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryKey}>Table</Text>
+                <Text style={styles.summaryVal}>
+                  {selectedTableLabel || "—"}
+                </Text>
+              </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryKey}>Table Type</Text>
                 <Text style={styles.summaryVal}>
@@ -502,6 +551,24 @@ export default function BookClubScreen() {
               </View>
             </View>
             <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
+
+            {ctx.bookingSettings.requireBookingCoupon ? (
+              <>
+                <Text style={styles.notesLabel}>Booking coupon</Text>
+                <Text style={styles.couponHint}>
+                  Enter the coupon code from the club to confirm this booking (no card payment in app).
+                </Text>
+                <TextInput
+                  style={styles.notesInput}
+                  placeholder="Coupon code"
+                  placeholderTextColor={colors.text.tertiary}
+                  value={couponCode}
+                  onChangeText={(t: string) => setCouponCode(t.toUpperCase().slice(0, 32))}
+                  autoCapitalize="characters"
+                  maxLength={32}
+                />
+              </>
+            ) : null}
 
             <Text style={styles.notesLabel}>Notes (optional)</Text>
             <TextInput
@@ -601,7 +668,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  stepLabelCell: { width: "25%" },
+  stepLabelCell: { flex: 1 },
   stepLabel: {
     ...typography.caption,
     color: colors.text.secondary,
@@ -702,6 +769,11 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   notesLabel: { ...typography.label, color: colors.text.secondary },
+  couponHint: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
+  },
   notesInput: {
     backgroundColor: glass.inputBg,
     borderRadius: radius.md,

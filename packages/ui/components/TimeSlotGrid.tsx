@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -86,10 +86,23 @@ export function TimeSlotGrid({
 
   if (availableSlots.length === 0) {
     return (
-      <Text style={styles.empty}>
-        No available slots for this date and duration. Try a different date or
-        duration.
-      </Text>
+      <View style={styles.wrap}>
+        <Text style={styles.title}>Pick a start time</Text>
+        <Text style={styles.empty}>
+          No times are open for this date and duration. Try another date, a
+          shorter session, or a different table type.
+        </Text>
+        <View style={styles.grid}>
+          {allSlots.map((slot) => (
+            <View key={slot} style={[styles.slot, styles.slotDisabled]}>
+              <Text style={[styles.slotText, styles.slotTextDisabled]}>
+                {formatHhmm12h(slot)}
+              </Text>
+              <Text style={styles.bookedHint}>Unavailable</Text>
+            </View>
+          ))}
+        </View>
+      </View>
     );
   }
 

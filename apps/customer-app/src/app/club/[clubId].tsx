@@ -17,6 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
+import type { Id } from "@a3/convex/_generated/dataModel";
 import { GlassPageBackground } from "@a3/ui/components";
 import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -79,11 +80,13 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
     clubId ? { clubId: clubId as any } : "skip",
   );
   const user = useQuery(api.users.getCurrentUser);
+  const loyaltyStatus = useQuery(
+    api.loyalty.getCustomerLoyaltyStatus,
+    user?.role === "customer" && clubId ? { clubId: clubId as Id<"clubs"> } : "skip",
+  );
   const visits = useQuery(
     api.clubDiscovery.getCustomerVisitCountAtClub,
-    user?.role === "customer" && clubId
-      ? { clubId: clubId as any }
-      : "skip",
+    user?.role === "customer" && clubId ? { clubId: clubId as Id<"clubs"> } : "skip",
   );
 
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -283,6 +286,46 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
             </View>
           ))}
 
+          {loyaltyStatus ? (
+            <View style={styles.loyaltyCard}>
+              <Text style={styles.sectionTitle}>Your Loyalty at {profile.name}</Text>
+              <Text style={styles.loyaltyScope}>
+                Credits you earn here can only be used at this club — not at other clubs.
+              </Text>
+              <Text style={styles.loyaltyProgramme}>{loyaltyStatus.programmeName}</Text>
+              <Text style={styles.loyaltyCredits}>
+                {loyaltyStatus.availableCredits} free visit
+                {loyaltyStatus.availableCredits === 1 ? "" : "s"} available at {profile.name}
+              </Text>
+              {loyaltyStatus.rewardEarnedThisPeriod ? (
+                <Text style={styles.loyaltyProgress}>
+                  You&apos;ve earned your free visit this period — come back and play more
+                  to earn again.
+                </Text>
+              ) : (
+                <>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { width: `${loyaltyStatus.progressPercent}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.loyaltyProgress}>
+                    {loyaltyStatus.progressMinutes} / {loyaltyStatus.thresholdMinutes} min
+                    played in the last {loyaltyStatus.windowDays} days toward your next
+                    free visit
+                  </Text>
+                </>
+              )}
+              <Text style={styles.loyaltyMeta}>
+                {loyaltyStatus.sessionCountInWindow} visits · {loyaltyStatus.progressMinutes}{" "}
+                min this period · {loyaltyStatus.lifetimeCreditsEarned} credits earned lifetime
+              </Text>
+            </View>
+          ) : null}
+
           {user?.role === "customer" && visits && visits.count > 0 ? (
             <View style={styles.visitBox}>
               <Text style={styles.visitText}>
@@ -429,6 +472,31 @@ const styles = StyleSheet.create({
   specialLabel: { ...typography.label, color: colors.text.primary },
   specialRate: { ...typography.body, color: colors.accent.green, marginTop: spacing[1] },
   specialMeta: { ...typography.caption, color: colors.text.secondary, marginTop: 2 },
+  loyaltyCard: {
+    marginTop: spacing[5],
+    padding: spacing[4],
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
+    gap: spacing[2],
+  },
+  loyaltyScope: { ...typography.caption, color: colors.text.tertiary, marginBottom: spacing[2] },
+  loyaltyProgramme: { ...typography.label, color: colors.text.primary },
+  loyaltyCredits: { ...typography.bodyLarge, color: colors.accent.green, fontWeight: "600" },
+  loyaltyProgress: { ...typography.bodySmall, color: colors.text.secondary },
+  loyaltyMeta: { ...typography.caption, color: colors.text.tertiary },
+  progressTrack: {
+    height: 8,
+    borderRadius: radius.full,
+    backgroundColor: glass.inputBg,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: colors.accent.green,
+    borderRadius: radius.full,
+  },
   visitBox: {
     marginTop: spacing[6],
     padding: spacing[4],

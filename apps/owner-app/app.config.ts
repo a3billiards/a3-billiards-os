@@ -50,12 +50,25 @@ export default () => {
   }
   if (googleSchemes.length > 0) {
     ios.infoPlist = {
+      ...(ios.infoPlist as Record<string, unknown> | undefined),
       CFBundleURLTypes: [
         {
           CFBundleTypeRole: "Editor",
           CFBundleURLSchemes: googleSchemes,
         },
       ],
+      NSCameraUsageDescription:
+        "A3 Billiards needs camera access to broadcast live games from your club.",
+      NSMicrophoneUsageDescription:
+        "A3 Billiards needs microphone access to include audio in live broadcasts.",
+    };
+  } else {
+    ios.infoPlist = {
+      ...(ios.infoPlist as Record<string, unknown> | undefined),
+      NSCameraUsageDescription:
+        "A3 Billiards needs camera access to broadcast live games from your club.",
+      NSMicrophoneUsageDescription:
+        "A3 Billiards needs microphone access to include audio in live broadcasts.",
     };
   }
 
@@ -64,6 +77,11 @@ export default () => {
     edgeToEdgeEnabled: false,
     predictiveBackGestureEnabled: false,
     softwareKeyboardLayoutMode: "pan",
+    permissions: [
+      "CAMERA",
+      "RECORD_AUDIO",
+      "MODIFY_AUDIO_SETTINGS",
+    ],
   };
   if (androidJsonPath) {
     android.googleServicesFile = androidJsonPath;
@@ -92,6 +110,15 @@ export default () => {
       ...(isDevClientBuild ? (["expo-dev-client"] as const) : []),
       "expo-router",
       "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          android: {
+            minSdkVersion: 31,
+          },
+        },
+      ],
+      "./plugins/withIvsBroadcastPermissions.js",
       "@react-native-google-signin/google-signin",
       [
         "expo-notifications",

@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
@@ -121,9 +121,40 @@ export function DateStrip({
     return out;
   }, [todayYmd, maxAdvanceDays, timeZone]);
 
+  const selectableDays = useMemo(() => {
+    return days.filter((ymd) => {
+      const dow = dowIndex(ymd, timeZone);
+      if (!bookableDaysOfWeek.includes(dow)) return false;
+      return dateAllowsMinAdvance(
+        ymd,
+        timeZone,
+        nowMs,
+        minAdvanceMinutes,
+        bookableOpen,
+        bookableClose,
+        minDurationMin,
+      );
+    });
+  }, [
+    days,
+    timeZone,
+    bookableDaysOfWeek,
+    nowMs,
+    minAdvanceMinutes,
+    bookableOpen,
+    bookableClose,
+    minDurationMin,
+  ]);
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>When do you want to play?</Text>
+      {selectableDays.length === 0 ? (
+        <Text style={styles.emptyHint}>
+          No bookable dates in the next {maxAdvanceDays} days. The club may need
+          to update bookable days or hours in Settings.
+        </Text>
+      ) : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -250,6 +281,11 @@ const styles = StyleSheet.create({
   todaySpacer: { height: spacing[3] },
   textDisabled: { color: colors.status.disabled },
   textOnSelected: { color: colors.bg.primary },
+  emptyHint: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginBottom: spacing[3],
+  },
 });
 
 export default DateStrip;

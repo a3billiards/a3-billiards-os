@@ -126,4 +126,35 @@ http.route({
   }),
 });
 
+// ─────────────────────────────────────────────
+// ROUTE 5: AWS EventBridge — IVS Stream State Change (Live Streaming)
+// EventBridge API Destination POSTs IVS events here.
+// Verify X-A3-EventBridge-Secret header against AWS_EVENTBRIDGE_WEBHOOK_SECRET.
+// On Stream End: reconcile liveStreams rows still marked live (connection_lost).
+// Invalid secret → 403. Valid payloads always → 200 (idempotent no-ops OK).
+// ─────────────────────────────────────────────
+http.route({
+  path: "/webhooks/ivs-events",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const rawBody = await req.text();
+    const secretHeader = req.headers.get("x-a3-eventbridge-secret") ?? "";
+
+    try {
+      await ctx.runAction(internal.livestreamWebhook.handleIvsEventWebhook, {
+        rawBody,
+        secretHeader,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("Invalid webhook secret") || message.includes("PERM_001")) {
+        return new Response("Forbidden", { status: 403 });
+      }
+      console.error("IVS EventBridge webhook error:", message);
+    }
+
+    return new Response("OK", { status: 200 });
+  }),
+});
+
 export default http;

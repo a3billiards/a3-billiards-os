@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { View, Text, StyleSheet, Pressable, Image } from "react-native";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
@@ -122,6 +122,11 @@ export function BookingCard({
               {capitalize(log.tableType)} • {log.requestedDate} • {to12h(log.requestedStartTime)} •{" "}
               {humanDuration(log.requestedDurationMin)}
             </Text>
+            {log.status === "pending_approval" && log.confirmedTableLabel ? (
+              <Text style={styles.customerSubline}>
+                Table: {log.confirmedTableLabel}
+              </Text>
+            ) : null}
             {log.status === "confirmed" && log.confirmedTableLabel ? (
               <Text style={styles.customerSubline}>Table: {log.confirmedTableLabel}</Text>
             ) : null}
@@ -186,7 +191,9 @@ export function BookingCard({
 
       {booking.confirmedTableLabel ? (
         <Text style={styles.secondaryLine}>
-          Assigned: {booking.confirmedTableLabel}
+          {isOwnerPending
+            ? `Requested table: ${booking.confirmedTableLabel}`
+            : `Assigned: ${booking.confirmedTableLabel}`}
         </Text>
       ) : null}
 

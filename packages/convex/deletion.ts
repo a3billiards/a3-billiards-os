@@ -131,6 +131,26 @@ async function deleteClubScopedData(
     await ctx.db.delete(doc._id);
   }
 
+  const gstSettings = await ctx.db
+    .query("gstSettings")
+    .withIndex("by_club", (q) => q.eq("clubId", clubId))
+    .collect();
+  for (const g of gstSettings) {
+    await ctx.db.delete(g._id);
+  }
+
+  for (const status of ["pending", "preparing", "ready", "served"] as const) {
+    const kitchenOrders = await ctx.db
+      .query("kitchenOrders")
+      .withIndex("by_club_status", (q) =>
+        q.eq("clubId", clubId).eq("status", status),
+      )
+      .collect();
+    for (const ko of kitchenOrders) {
+      await ctx.db.delete(ko._id);
+    }
+  }
+
   const roles = await ctx.db
     .query("staffRoles")
     .withIndex("by_club", (q) => q.eq("clubId", clubId))

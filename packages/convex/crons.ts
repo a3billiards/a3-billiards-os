@@ -89,4 +89,14 @@ crons.daily(
   internal.sessions.archiveIfFirstOfMonth,
 );
 
+// ─── 8. Stale live stream cleanup ────────────────────────────────────────────
+// Runs every 30 minutes.
+// Closes liveStreams rows still status='live' with startedAt older than 8 hours.
+// Final safety net if owner End Stream and EventBridge webhook both fail (TDD v1.9 §7).
+crons.interval(
+  "closeStaleLiveStreams",
+  { minutes: 30 },
+  internal.livestream.closeStaleLiveStreams,
+);
+
 export default crons;

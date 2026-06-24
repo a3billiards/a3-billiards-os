@@ -19,7 +19,7 @@ import { parseConvexError } from "@a3/ui/errors";
 import { computeBookingUnixTime, timeZoneAbbreviation } from "@a3/utils/timezone";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useStaffRole, staffRoleQueryId } from "../../lib/StaffRoleContext";
+import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../../lib/StaffRoleContext";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { TabAccessDenied } from "../../components/TabAccessDenied";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
@@ -70,18 +70,19 @@ export default function BookingsTab() {
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const { roleId, canAccessTab } = useStaffRole();
+  const bookingsEnabled = useStaffTabQueriesEnabled("bookings");
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
   const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
   const pending = useQuery(
     api.bookings.listPendingBookings,
-    clubId && roleId !== undefined
+    clubId && bookingsEnabled
       ? { clubId, limit: 50, roleId: queryRoleId }
       : "skip",
   );
   const upcoming = useQuery(
     api.bookings.listUpcomingBookings,
-    clubId && roleId !== undefined
+    clubId && bookingsEnabled
       ? { clubId, limit: 50, roleId: queryRoleId }
       : "skip",
   );
@@ -131,7 +132,7 @@ export default function BookingsTab() {
 
   const historyPage = useQuery(
     api.bookings.listHistoryBookings,
-    clubId && roleId !== undefined
+    clubId && bookingsEnabled
       ? {
           clubId,
           statusFilter: historyFilter === "all" ? undefined : historyFilter,
@@ -191,9 +192,12 @@ export default function BookingsTab() {
     );
   }
 
-  const openApprove = (bookingId: Id<"bookings">) => {
+  const openApprove = (
+    bookingId: Id<"bookings">,
+    preselectedTableId?: Id<"tables">,
+  ) => {
     setSelectedBookingId(bookingId);
-    setSelectedTableId(null);
+    setSelectedTableId(preselectedTableId ?? null);
     setShowApproveModal(true);
   };
   const openReject = (bookingId: Id<"bookings">) => {
@@ -288,12 +292,15 @@ export default function BookingsTab() {
             notes: item.booking.notes,
             status: item.booking.status,
             createdAt: item.booking.createdAt,
+            confirmedTableLabel: item.requestedTableLabel,
           }}
           complaints={item.complaints}
           customerStats={item.customerStats}
           isLoading={inFlight === item.booking._id}
           footerText={elapsedLabel(item.booking.createdAt)}
-          onApprove={() => openApprove(item.booking._id)}
+          onApprove={() =>
+            openApprove(item.booking._id, item.booking.confirmedTableId)
+          }
           onReject={() => openReject(item.booking._id)}
         />
       ));
@@ -462,7 +469,11 @@ export default function BookingsTab() {
       <Modal visible={showApproveModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Assign a Table (Optional)</Text>
+            <Text style={styles.modalTitle}>
+              {selectedTableId
+                ? "Confirm table assignment"
+                : "Assign a Table (Optional)"}
+            </Text>
             <ScrollView style={{ maxHeight: 220 }}>
               {(assignableTables ?? []).map((t: any) => (
                 <Pressable

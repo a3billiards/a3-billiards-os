@@ -40,6 +40,10 @@ export default function ProfileScreen(): React.JSX.Element {
   const router = useRouter();
   const { signOut } = useAuthActions();
   const user = useQuery(api.users.getCurrentUser);
+  const loyaltyByClub = useQuery(
+    api.loyalty.listMyLoyaltyByClub,
+    user?.role === "customer" ? {} : "skip",
+  );
   const hasLoginPassword = useQuery(api.customerAuth.hasLoginPassword);
   const canCreateLoginPassword = useQuery(api.customerAuth.canCreateLoginPassword);
 
@@ -285,6 +289,39 @@ export default function ProfileScreen(): React.JSX.Element {
           <Text style={styles.heroMeta}>Customer</Text>
           <Text style={styles.heroMeta}>Member since {formatMemberSince(user.createdAt)}</Text>
         </View>
+
+        {loyaltyByClub && loyaltyByClub.length > 0 ? (
+          <>
+            <Text style={styles.sectionLabel}>Loyalty by club</Text>
+            <Text style={styles.loyaltyIntro}>
+              Each club keeps its own credits. What you earn at one club can only be used
+              there.
+            </Text>
+            <View style={styles.card}>
+              {loyaltyByClub.map((row, idx) => (
+                <View key={row.clubId}>
+                  {idx > 0 ? <View style={styles.divider} /> : null}
+                  <Pressable
+                    style={styles.linkRow}
+                    onPress={() => router.push(`/club/${row.clubId}`)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowLabel}>{row.clubName}</Text>
+                      <Text style={styles.rowValue}>
+                        {row.availableCredits} free visit
+                        {row.availableCredits === 1 ? "" : "s"} available
+                      </Text>
+                      <Text style={styles.subtitle}>
+                        {row.programmeName} · {row.lifetimeCreditsEarned} earned lifetime
+                      </Text>
+                    </View>
+                    <Text style={styles.chevron}>›</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
 
         <Text style={styles.sectionLabel}>Personal Info</Text>
         <View style={styles.card}>
@@ -675,6 +712,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing[2],
     textTransform: "uppercase",
     letterSpacing: 0.5,
+  },
+  loyaltyIntro: {
+    ...typography.caption,
+    color: colors.text.tertiary,
+    marginBottom: spacing[2],
   },
   card: {
     backgroundColor: glass.cardBg,

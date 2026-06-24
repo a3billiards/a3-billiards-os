@@ -17,6 +17,9 @@ const TAB_VALUES = [
   "complaints",
   "bookings",
   "documents",
+  "kitchen",
+  "loyalty",
+  "livestream",
 ] as const;
 
 function assertAllowedTabs(tabs: string[]): void {

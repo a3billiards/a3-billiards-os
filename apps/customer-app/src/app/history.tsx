@@ -20,6 +20,7 @@ import {
   formatCurrency,
   formatDuration,
 } from "@a3/utils/billing";
+import { computeFreeVisitBill } from "@a3/utils/loyaltyBilling";
 
 type SessionLogRow = {
   _id: string;
@@ -38,6 +39,7 @@ type SessionLogRow = {
   creditResolvedMethod: "cash" | "upi" | "card" | null;
   createdAt: number;
   updatedAt: number;
+  isFreeVisit: boolean;
 };
 
 type SessionDetail = {
@@ -57,6 +59,8 @@ type SessionDetail = {
   creditResolvedAt: number | null;
   creditResolvedMethod: "cash" | "upi" | "card" | null;
   cancellationReason: string | null;
+  isFreeVisit: boolean;
+  freeVisitMaxMinutes: number | null;
 };
 
 function normalizeClubId(raw: string | string[] | undefined): Id<"clubs"> | undefined {
@@ -167,6 +171,9 @@ function SessionCard({
   if (isActive) {
     statusPill = "In Progress";
     pillStyle = styles.pillActive;
+  } else if (row.isFreeVisit && isCompleted) {
+    statusPill = "Free visit";
+    pillStyle = styles.pillFreeVisit;
   } else if (isCancelled) {
     statusPill = "Cancelled";
     pillStyle = styles.pillMuted;
@@ -201,6 +208,44 @@ function SessionCard({
     if (!detail) return null;
     if (detail.status === "cancelled") return null;
     try {
+      const snackOrders = detail.snackOrders.map((s) => ({
+        qty: s.qty,
+        priceAtOrder: s.priceAtOrder,
+      }));
+      const endMs =
+        detail.status === "active"
+          ? Date.now()
+          : detail.endTime ?? detail.startTime + 1;
+
+      if (detail.isFreeVisit && detail.freeVisitMaxMinutes != null) {
+        const bill = computeFreeVisitBill({
+          startTime: detail.startTime,
+          endTime: endMs,
+          ratePerMin: detail.ratePerMin,
+          minBillMinutes: detail.minBillMinutes,
+          snackOrders: detail.snackOrders.map((s) => ({
+            snackId: s.snackId,
+            name: s.name,
+            qty: s.qty,
+            priceAtOrder: s.priceAtOrder,
+          })),
+          freeVisitMaxMinutes: detail.freeVisitMaxMinutes,
+        });
+        return {
+          actualMinutes: bill.actualMinutes,
+          billableMinutes: bill.billableMinutes,
+          tableSubtotal: bill.tableSubtotal,
+          discountAmount: 0,
+          discountedTable: bill.discountedTable,
+          snackTotal: bill.snackTotal,
+          finalBill: bill.finalBill,
+          isFreeVisit: true as const,
+          freeVisitMaxMinutes: detail.freeVisitMaxMinutes,
+          coveredMinutes: bill.coveredMinutes,
+          overageMinutes: bill.overageMinutes,
+        };
+      }
+
       if (detail.status === "active") {
         return computeBillBreakdown({
           startTime: detail.startTime,
@@ -210,10 +255,7 @@ function SessionCard({
           ratePerMin: detail.ratePerMin,
           minBillMinutes: detail.minBillMinutes,
           discount: detail.discount,
-          snackOrders: detail.snackOrders.map((s) => ({
-            qty: s.qty,
-            priceAtOrder: s.priceAtOrder,
-          })),
+          snackOrders,
         });
       }
       if (detail.endTime == null) return null;
@@ -224,10 +266,7 @@ function SessionCard({
         ratePerMin: detail.ratePerMin,
         minBillMinutes: detail.minBillMinutes,
         discount: detail.discount,
-        snackOrders: detail.snackOrders.map((s) => ({
-          qty: s.qty,
-          priceAtOrder: s.priceAtOrder,
-        })),
+        snackOrders,
       });
     } catch {
       return null;
@@ -361,6 +400,12 @@ function SessionCard({
           ) : breakdown ? (
             <>
               <Text style={styles.breakdownHeader}>Bill Breakdown</Text>
+              {"isFreeVisit" in breakdown && breakdown.isFreeVisit ? (
+                <Text style={styles.freeVisitNote}>
+                  Loyalty free visit — table time up to {breakdown.freeVisitMaxMinutes} min
+                  covered. Snacks billed normally.
+                </Text>
+              ) : null}
               <Text style={styles.sectionTitle}>Table time</Text>
               <View style={styles.rowBetween}>
                 <Text style={styles.lineDetail}>
@@ -371,6 +416,14 @@ function SessionCard({
                   {formatCurrency(breakdown.tableSubtotal, detail.currency)}
                 </Text>
               </View>
+              {"isFreeVisit" in breakdown && breakdown.isFreeVisit ? (
+                <Text style={styles.noteItalic}>
+                  {breakdown.coveredMinutes} min covered by loyalty credit
+                  {breakdown.overageMinutes > 0
+                    ? ` · ${breakdown.overageMinutes} min charged at normal rate`
+                    : ""}
+                </Text>
+              ) : null}
               {breakdown.billableMinutes > breakdown.actualMinutes ? (
                 <Text style={styles.noteItalic}>
                   Minimum {detail.minBillMinutes} min charge applied (actual: {breakdown.actualMinutes}{" "}
@@ -627,6 +680,7 @@ const styles = StyleSheet.create({
   },
   pillText: { ...typography.caption, fontWeight: "600" },
   pillActive: { backgroundColor: "rgba(67, 160, 71, 0.2)" },
+  pillFreeVisit: { backgroundColor: "rgba(156, 39, 176, 0.2)" },
   pillPaid: { backgroundColor: "rgba(33, 150, 243, 0.2)" },
   pillCredit: { backgroundColor: "rgba(245, 127, 23, 0.2)" },
   pillMuted: { backgroundColor: glass.inputBg },
@@ -678,6 +732,11 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     fontStyle: "italic",
+    marginBottom: spacing[2],
+  },
+  freeVisitNote: {
+    ...typography.caption,
+    color: colors.accent.green,
     marginBottom: spacing[2],
   },
   creditNote: { ...typography.caption, color: colors.accent.amber, marginTop: spacing[2] },

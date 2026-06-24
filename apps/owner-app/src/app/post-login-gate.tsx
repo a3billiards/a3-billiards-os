@@ -1,17 +1,28 @@
 import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors } from "@a3/ui/theme";
 import { usePushRegistration } from "../lib/usePushRegistration";
 
 export default function PostLoginGate() {
   const router = useRouter();
-  const user = useQuery(api.users.getCurrentUser);
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const user = useQuery(
+    api.users.getCurrentUser,
+    isAuthenticated ? {} : "skip",
+  );
   usePushRegistration();
 
   useEffect(() => {
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      router.replace("/login");
+      return;
+    }
+
     if (user === undefined) return;
 
     if (user === null) {
@@ -30,7 +41,7 @@ export default function PostLoginGate() {
     }
 
     router.replace("/(tabs)/home");
-  }, [user, router]);
+  }, [isLoading, isAuthenticated, user, router]);
 
   return (
     <View style={styles.container}>

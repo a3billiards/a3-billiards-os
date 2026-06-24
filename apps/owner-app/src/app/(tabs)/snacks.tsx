@@ -19,12 +19,13 @@ import { formatCurrency } from "@a3/utils/billing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
-import { useStaffRole, staffRoleQueryId } from "../../lib/StaffRoleContext";
+import { useStaffRole, useStaffTabQueryArgs } from "../../lib/StaffRoleContext";
 import { TabAccessDenied } from "../../components/TabAccessDenied";
 
 type FormState = {
   name: string;
   price: string;
+  fulfillmentType: "counter" | "kitchen";
 };
 
 export default function SnacksScreen() {
@@ -32,12 +33,8 @@ export default function SnacksScreen() {
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
-  const snacks = useQuery(
-    api.snacks.listSnacks,
-    dashboard && roleId !== undefined
-      ? { clubId: dashboard.clubId, roleId: staffRoleQueryId(roleId) }
-      : "skip",
-  );
+  const snacksArgs = useStaffTabQueryArgs(dashboard?.clubId, "snacks");
+  const snacks = useQuery(api.snacks.listSnacks, snacksArgs);
   const createSnack = useMutation(api.snacks.createSnack);
   const updateSnack = useMutation(api.snacks.updateSnack);
   const toggleSnackAvailability = useMutation(api.snacks.toggleSnackAvailability);
@@ -45,7 +42,11 @@ export default function SnacksScreen() {
 
   const [editorVisible, setEditorVisible] = useState(false);
   const [editingSnackId, setEditingSnackId] = useState<Id<"snacks"> | null>(null);
-  const [form, setForm] = useState<FormState>({ name: "", price: "" });
+  const [form, setForm] = useState<FormState>({
+    name: "",
+    price: "",
+    fulfillmentType: "counter",
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,7 +83,7 @@ export default function SnacksScreen() {
 
   const openCreate = () => {
     setEditingSnackId(null);
-    setForm({ name: "", price: "" });
+    setForm({ name: "", price: "", fulfillmentType: "counter" });
     setError(null);
     setEditorVisible(true);
   };
@@ -91,7 +92,11 @@ export default function SnacksScreen() {
     const snack = snacks.find((s) => s._id === snackId);
     if (!snack) return;
     setEditingSnackId(snackId);
-    setForm({ name: snack.name, price: String(snack.price) });
+    setForm({
+      name: snack.name,
+      price: String(snack.price),
+      fulfillmentType: snack.fulfillmentType ?? "counter",
+    });
     setError(null);
     setEditorVisible(true);
   };
@@ -117,9 +122,19 @@ export default function SnacksScreen() {
     setError(null);
     try {
       if (editingSnackId) {
-        await updateSnack({ snackId: editingSnackId, name, price });
+        await updateSnack({
+          snackId: editingSnackId,
+          name,
+          price,
+          fulfillmentType: form.fulfillmentType,
+        });
       } else {
-        await createSnack({ clubId: dashboard.clubId, name, price });
+        await createSnack({
+          clubId: dashboard.clubId,
+          name,
+          price,
+          fulfillmentType: form.fulfillmentType,
+        });
       }
       setEditorVisible(false);
     } catch (e) {
@@ -187,6 +202,11 @@ export default function SnacksScreen() {
                   <Text style={styles.snackName}>{snack.name}</Text>
                   <Text style={styles.snackPrice}>
                     {formatCurrency(snack.price, dashboard.currency)}
+                  </Text>
+                  <Text style={styles.snackType}>
+                    {(snack.fulfillmentType ?? "counter") === "kitchen"
+                      ? "Kitchen item"
+                      : "Counter snack"}
                   </Text>
                 </View>
                 <View
@@ -262,6 +282,46 @@ export default function SnacksScreen() {
               keyboardType="decimal-pad"
               style={styles.input}
             />
+
+            <Text style={styles.label}>Type</Text>
+            <View style={styles.typeRow}>
+              <Pressable
+                onPress={() =>
+                  setForm((prev) => ({ ...prev, fulfillmentType: "counter" }))
+                }
+                style={[
+                  styles.typeChip,
+                  form.fulfillmentType === "counter" && styles.typeChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.typeChipText,
+                    form.fulfillmentType === "counter" && styles.typeChipTextActive,
+                  ]}
+                >
+                  Counter snack
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() =>
+                  setForm((prev) => ({ ...prev, fulfillmentType: "kitchen" }))
+                }
+                style={[
+                  styles.typeChip,
+                  form.fulfillmentType === "kitchen" && styles.typeChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.typeChipText,
+                    form.fulfillmentType === "kitchen" && styles.typeChipTextActive,
+                  ]}
+                >
+                  Kitchen item
+                </Text>
+              </Pressable>
+            </View>
 
             {error ? <Text style={styles.formError}>{error}</Text> : null}
 
@@ -369,6 +429,11 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing[1],
   },
+  snackType: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginTop: spacing[1],
+  },
   badge: {
     borderRadius: radius.full,
     paddingHorizontal: spacing[2],
@@ -434,6 +499,34 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: colors.text.secondary,
     marginTop: spacing[1],
+  },
+  typeRow: {
+    flexDirection: "row",
+    gap: spacing[2],
+    marginTop: spacing[1],
+  },
+  typeChip: {
+    flex: 1,
+    minHeight: layout.touchTarget,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: colors.bg.tertiary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing[2],
+  },
+  typeChipActive: {
+    borderColor: colors.accent.green,
+    backgroundColor: colors.accent.green,
+  },
+  typeChipText: {
+    ...typography.labelSmall,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  typeChipTextActive: {
+    color: colors.bg.primary,
   },
   input: {
     minHeight: layout.touchTarget,

@@ -30,6 +30,11 @@ import { OwnerModePasscodeGate } from "./OwnerModePasscodeGate";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ownerTabBarTotalInset } from "../theme/ownerShell";
 import { uploadLocalFileToConvexStorage } from "../lib/uploadConvexStorage";
+import { HhMmTimeField, normalizeHhmmInput } from "./HhMmTimeField";
+import {
+  formatHhmm12h,
+  validateBookableWithinOperating,
+} from "@a3/utils/availability";
 
 const RENEW_URL = "https://renew.a3billiards.com";
 const PREDEFINED_AMENITIES = ["AC", "Parking", "Cafe", "WiFi", "Lounge", "Restrooms"] as const;
@@ -40,10 +45,15 @@ const MAX_AMENITIES = 20;
 function isPredefinedAmenity(value: string): boolean {
   return PREDEFINED_AMENITY_SET.has(value);
 }
+import { LoyaltyProgrammeSettings } from "./LoyaltyProgrammeSettings";
+
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const TAB_ORDER = [
   "slots",
   "snacks",
+  "kitchen",
+  "loyalty",
+  "livestream",
   "financials",
   "complaints",
   "bookings",
@@ -52,6 +62,9 @@ const TAB_ORDER = [
 const TAB_LABEL: Record<(typeof TAB_ORDER)[number], string> = {
   slots: "Slots",
   snacks: "Snacks",
+  kitchen: "Kitchen",
+  loyalty: "Loyalty",
+  livestream: "Live Stream",
   financials: "Financials",
   complaints: "Complaints",
   bookings: "Bookings",
@@ -71,6 +84,8 @@ type AccordionKey =
   | "rates"
   | "staff"
   | "booking"
+  | "gst"
+  | "loyalty"
   | "profile"
   | "security";
 
@@ -124,6 +139,10 @@ export default function OwnerSettingsContent({
     api.bookings.getBookingEnablePrecheck,
     club ? { clubId: club.clubId } : "skip",
   );
+  const gstSettings = useQuery(
+    api.gstReport.getGstSettings,
+    club ? { clubId: club.clubId } : "skip",
+  );
 
   const requestDataExport = useAction(api.ownerAccountActions.requestOwnerDataExport);
 
@@ -169,6 +188,7 @@ export default function OwnerSettingsContent({
 
   const toggleBookingEnabled = useMutation(api.bookings.toggleBookingEnabled);
   const updateBookingSettings = useMutation(api.bookings.updateBookingSettings);
+  const updateGstSettings = useMutation(api.gstReport.updateGstSettings);
 
   const generateUploadUrl = useMutation(api.clubProfile.generateClubPhotoUploadUrl);
   const toggleDiscoverability = useMutation(api.clubProfile.toggleDiscoverability);
@@ -186,6 +206,8 @@ export default function OwnerSettingsContent({
     rates: true,
     staff: true,
     booking: true,
+    gst: false,
+    loyalty: false,
     profile: true,
     security: true,
   });
@@ -295,8 +317,20 @@ export default function OwnerSettingsContent({
   const [bhOpen, setBhOpen] = useState("10:00");
   const [bhClose, setBhClose] = useState("22:00");
   const [bhDays, setBhDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
+  const [requireBookingCoupon, setRequireBookingCoupon] = useState(false);
+  const [bookingCouponCode, setBookingCouponCode] = useState("");
   const [bookingErr, setBookingErr] = useState<string | null>(null);
   const [toggleBookingErr, setToggleBookingErr] = useState<string | null>(null);
+
+  // —— GST settings ——
+  const [gstRegistered, setGstRegistered] = useState(false);
+  const [gstin, setGstin] = useState("");
+  const [supplyType, setSupplyType] = useState<"intrastate" | "interstate">("intrastate");
+  const [tableGstPercent, setTableGstPercent] = useState("18");
+  const [snacksGstPercent, setSnacksGstPercent] = useState("5");
+  const [monthlyItc, setMonthlyItc] = useState("");
+  const [gstErr, setGstErr] = useState<string | null>(null);
+  const [gstInit, setGstInit] = useState(false);
 
   // —— Profile (club) local ——
   const [desc, setDesc] = useState("");
@@ -333,7 +367,13 @@ export default function OwnerSettingsContent({
       setBhOpen(bh.open);
       setBhClose(bh.close);
       setBhDays([...bh.daysOfWeek]);
+    } else if (club.operatingHours) {
+      setBhOpen(club.operatingHours.open);
+      setBhClose(club.operatingHours.close);
+      setBhDays([...club.operatingHours.daysOfWeek]);
     }
+    setRequireBookingCoupon(club.bookingSettings.requireBookingCoupon === true);
+    setBookingCouponCode(club.bookingSettings.bookingCouponCode ?? "");
     setDesc(club.description);
     setAmenitiesDraft([...(club.amenities ?? [])]);
     if (club.operatingHours) {
@@ -348,6 +388,21 @@ export default function OwnerSettingsContent({
     }
     setLocationDirty(false);
   }, [club]);
+
+  useEffect(() => {
+    if (!gstSettings || gstInit) return;
+    setGstInit(true);
+    setGstRegistered(gstSettings.gstRegistered);
+    setGstin(gstSettings.gstin ?? "");
+    setSupplyType(gstSettings.supplyType);
+    setTableGstPercent(String(gstSettings.tableTimeGstPercent));
+    setSnacksGstPercent(String(gstSettings.snacksGstPercent));
+    setMonthlyItc(
+      gstSettings.monthlyInputTaxCredit != null
+        ? String(gstSettings.monthlyInputTaxCredit)
+        : "",
+    );
+  }, [gstSettings, gstInit]);
 
   const mapRegion = useMemo(() => {
     const c = markerCoord ?? DEFAULT_CENTER;
@@ -567,6 +622,32 @@ export default function OwnerSettingsContent({
         });
       }
       setRoleModal(null);
+    } catch (e) {
+      Alert.alert(parseConvexError(e as Error).message);
+    }
+  };
+
+  const createChefPreset = async () => {
+    if (!club) return;
+    const existing = roles?.some(
+      (r) =>
+        r.allowedTabs.length === 1 &&
+        r.allowedTabs[0] === "kitchen" &&
+        r.name.toLowerCase() === "chef",
+    );
+    if (existing) {
+      Alert.alert("Chef role already exists", "Edit it under Staff Roles if needed.");
+      return;
+    }
+    try {
+      await createRole({
+        clubId: club.clubId,
+        name: "Chef",
+        allowedTabs: ["kitchen"],
+        canFileComplaints: false,
+        canApplyDiscount: false,
+      });
+      Alert.alert("Chef role created", "Kitchen tab only. Assign it when handing the device to kitchen staff.");
     } catch (e) {
       Alert.alert(parseConvexError(e as Error).message);
     }
@@ -968,9 +1049,18 @@ export default function OwnerSettingsContent({
               </View>
               <View style={styles.rowBetween}>
                 <Text style={styles.sectionHint}>Roles for staff devices</Text>
-                <Pressable style={styles.addBtn} onPress={() => openRoleEditor("add")} disabled={frozen}>
-                  <Text style={styles.addBtnText}>+ Add Role</Text>
-                </Pressable>
+                <View style={styles.roleBtnRow}>
+                  <Pressable
+                    style={styles.smallGhost}
+                    disabled={frozen}
+                    onPress={() => void createChefPreset()}
+                  >
+                    <Text style={styles.smallGhostText}>+ Chef preset</Text>
+                  </Pressable>
+                  <Pressable style={styles.addBtn} onPress={() => openRoleEditor("add")} disabled={frozen}>
+                    <Text style={styles.addBtnText}>+ Add Role</Text>
+                  </Pressable>
+                </View>
               </View>
               {roles?.map((role) => (
                 <View key={role._id} style={styles.roleCard}>
@@ -1051,6 +1141,53 @@ export default function OwnerSettingsContent({
                   <Text style={styles.errCardText}>{toggleBookingErr}</Text>
                 </View>
               ) : null}
+
+              <View style={styles.rowBetween}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.tableLabel}>Require booking coupon</Text>
+                  <Text style={styles.tableMeta}>
+                    Customers enter a coupon instead of card payment when booking
+                  </Text>
+                </View>
+                <Switch
+                  value={requireBookingCoupon}
+                  disabled={frozen}
+                  onValueChange={setRequireBookingCoupon}
+                  trackColor={{ false: colors.bg.tertiary, true: colors.accent.green }}
+                />
+              </View>
+              <Text style={styles.label}>Booking coupon code</Text>
+              <TextInput
+                style={styles.input}
+                value={bookingCouponCode}
+                onChangeText={(t) => setBookingCouponCode(t.toUpperCase())}
+                placeholder="e.g. TABLE50"
+                placeholderTextColor={colors.text.tertiary}
+                autoCapitalize="characters"
+                editable={!frozen}
+                maxLength={32}
+              />
+              <Pressable
+                style={styles.secondaryBtn}
+                disabled={frozen}
+                onPress={async () => {
+                  try {
+                    await updateBookingSettings({
+                      clubId: club.clubId,
+                      settings: {
+                        requireBookingCoupon,
+                        bookingCouponCode: bookingCouponCode.trim() || undefined,
+                      },
+                    });
+                    Alert.alert("Saved", "Booking coupon settings updated.");
+                  } catch (e) {
+                    Alert.alert(parseConvexError(e as Error).message);
+                  }
+                }}
+              >
+                <Text style={styles.secondaryBtnText}>Save coupon settings</Text>
+              </Pressable>
+
               {bookingPrecheck && !bookingPrecheck.allOk && !club.bookingSettings.enabled ? (
                 <View style={styles.warnCard}>
                   {bookingPrecheck.checks
@@ -1218,10 +1355,38 @@ export default function OwnerSettingsContent({
 
               <Text style={styles.label}>Bookable hours</Text>
               <Text style={styles.note}>Bookable hours must fall within your operating hours.</Text>
+              {club.operatingHours ? (
+                <Text style={styles.note}>
+                  Operating hours: {formatHhmm12h(club.operatingHours.open)}–
+                  {formatHhmm12h(club.operatingHours.close)} (
+                  {club.operatingHours.daysOfWeek
+                    .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
+                    .map((d) => DAY_LABELS[d])
+                    .join(", ")}
+                  )
+                </Text>
+              ) : (
+                <Text style={styles.warnCardText}>
+                  Set operating hours under Club Profile first, then save bookable
+                  hours here.
+                </Text>
+              )}
               <View style={styles.rowInput}>
-                <TextInput style={[styles.input, { flex: 1 }]} value={bhOpen} onChangeText={setBhOpen} editable={!frozen} />
-                <Text style={{ color: colors.text.secondary }}>to</Text>
-                <TextInput style={[styles.input, { flex: 1 }]} value={bhClose} onChangeText={setBhClose} editable={!frozen} />
+                <HhMmTimeField
+                  label="Opens"
+                  value={bhOpen}
+                  onChange={(t) => setBhOpen(normalizeHhmmInput(t))}
+                  disabled={frozen}
+                />
+                <Text style={{ color: colors.text.secondary, alignSelf: "flex-end", paddingBottom: spacing[3] }}>
+                  to
+                </Text>
+                <HhMmTimeField
+                  label="Closes"
+                  value={bhClose}
+                  onChange={(t) => setBhClose(normalizeHhmmInput(t))}
+                  disabled={frozen}
+                />
               </View>
               <View style={styles.chipWrap}>
                 {[1, 2, 3, 4, 5, 6, 0].map((d) => (
@@ -1244,26 +1409,182 @@ export default function OwnerSettingsContent({
                 disabled={frozen}
                 onPress={async () => {
                   setBookingErr(null);
+                  const bookableHours = {
+                    open: normalizeHhmmInput(bhOpen),
+                    close: normalizeHhmmInput(bhClose),
+                    daysOfWeek: bhDays,
+                  };
+                  if (club.operatingHours) {
+                    const check = validateBookableWithinOperating(
+                      club.operatingHours,
+                      bookableHours,
+                    );
+                    if (!check.ok) {
+                      setBookingErr(check.message);
+                      return;
+                    }
+                  }
                   try {
                     await updateBookingSettings({
                       clubId: club.clubId,
-                      settings: {
-                        bookableHours: { open: bhOpen, close: bhClose, daysOfWeek: bhDays },
-                      },
+                      settings: { bookableHours },
                     });
                     Alert.alert("Saved");
                   } catch (e) {
                     const msg = parseConvexError(e as Error).message;
-                    if (msg.includes("CLUB_004")) setBookingErr(msg);
-                    else Alert.alert(msg);
+                    if (msg.includes("CLUB_004")) {
+                      setBookingErr(msg.replace(/^CLUB_004:\s*/, ""));
+                    } else Alert.alert(msg);
                   }
                 }}
               >
                 <Text style={styles.secondaryBtnText}>Save bookable hours</Text>
               </Pressable>
-              {bookingErr?.includes("CLUB_004") ? (
-                <Text style={styles.errInline}>{bookingErr}</Text>
-              ) : null}
+              {bookingErr ? <Text style={styles.errInline}>{bookingErr}</Text> : null}
+            </View>
+          ) : null}
+        </View>
+
+        {/* GST settings */}
+        <View style={styles.card}>
+          {accordionHeader("gst", "GST Settings")}
+          {open.gst ? (
+            <View style={styles.accBody}>
+              <Text style={styles.note}>
+                Inputs for the estimate-only GST Report. Full income-tax reporting
+                will be added after CA consultation.
+              </Text>
+              <View style={styles.rowBetween}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>GST registered</Text>
+                  <Text style={styles.tableMeta}>
+                    When off, the GST Report shows zero output tax
+                  </Text>
+                </View>
+                <Switch
+                  value={gstRegistered}
+                  onValueChange={setGstRegistered}
+                  disabled={frozen}
+                />
+              </View>
+              <Text style={styles.label}>GSTIN (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={gstin}
+                onChangeText={(t) => setGstin(t.toUpperCase().replace(/\s/g, ""))}
+                placeholder="15-character GSTIN"
+                placeholderTextColor={colors.text.tertiary}
+                maxLength={15}
+                autoCapitalize="characters"
+                editable={!frozen}
+              />
+              <Text style={styles.label}>Supply type</Text>
+              <View style={styles.chipWrap}>
+                {(
+                  [
+                    { k: "intrastate" as const, label: "Intrastate (CGST + SGST)" },
+                    { k: "interstate" as const, label: "Interstate (IGST)" },
+                  ] as const
+                ).map((opt) => (
+                  <Pressable
+                    key={opt.k}
+                    disabled={frozen}
+                    onPress={() => setSupplyType(opt.k)}
+                    style={[styles.chip, supplyType === opt.k && styles.chipOn]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        supplyType === opt.k && styles.chipTextOn,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.label}>GST % on table time</Text>
+              <TextInput
+                style={styles.input}
+                value={tableGstPercent}
+                onChangeText={setTableGstPercent}
+                keyboardType="decimal-pad"
+                editable={!frozen}
+              />
+              <Text style={styles.label}>GST % on snacks</Text>
+              <TextInput
+                style={styles.input}
+                value={snacksGstPercent}
+                onChangeText={setSnacksGstPercent}
+                keyboardType="decimal-pad"
+                editable={!frozen}
+              />
+              <Text style={styles.label}>Monthly input tax credit estimate (optional)</Text>
+              <Text style={styles.note}>
+                Eligible ITC you expect per month; prorated on the GST Report
+              </Text>
+              <TextInput
+                style={styles.input}
+                value={monthlyItc}
+                onChangeText={setMonthlyItc}
+                keyboardType="decimal-pad"
+                placeholder="0"
+                placeholderTextColor={colors.text.tertiary}
+                editable={!frozen}
+              />
+              <Pressable
+                style={styles.secondaryBtn}
+                disabled={frozen || !club}
+                onPress={async () => {
+                  if (!club) return;
+                  setGstErr(null);
+                  const tablePct = Number(tableGstPercent);
+                  const snackPct = Number(snacksGstPercent);
+                  const itc =
+                    monthlyItc.trim() === "" ? undefined : Number(monthlyItc);
+                  if (!Number.isFinite(tablePct) || tablePct < 0 || tablePct > 100) {
+                    setGstErr("Table GST % must be between 0 and 100.");
+                    return;
+                  }
+                  if (!Number.isFinite(snackPct) || snackPct < 0 || snackPct > 100) {
+                    setGstErr("Snacks GST % must be between 0 and 100.");
+                    return;
+                  }
+                  if (itc != null && (!Number.isFinite(itc) || itc < 0)) {
+                    setGstErr("Monthly ITC must be a non-negative number.");
+                    return;
+                  }
+                  try {
+                    await updateGstSettings({
+                      clubId: club.clubId,
+                      gstRegistered,
+                      gstin: gstin.trim() || undefined,
+                      supplyType,
+                      tableTimeGstPercent: tablePct,
+                      snacksGstPercent: snackPct,
+                      monthlyInputTaxCredit: itc,
+                    });
+                    Alert.alert("Saved", "GST settings updated.");
+                  } catch (e) {
+                    setGstErr(parseConvexError(e as Error).message);
+                  }
+                }}
+              >
+                <Text style={styles.secondaryBtnText}>Save GST settings</Text>
+              </Pressable>
+              {gstErr ? <Text style={styles.errInline}>{gstErr}</Text> : null}
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.card}>
+          {accordionHeader("loyalty", "Loyalty Programme")}
+          {open.loyalty && club ? (
+            <View style={styles.accBody}>
+              <LoyaltyProgrammeSettings
+                clubId={club.clubId}
+                minBillMinutes={club.minBillMinutes}
+              />
             </View>
           ) : null}
         </View>
@@ -1412,11 +1733,23 @@ export default function OwnerSettingsContent({
                 <Text style={styles.secondaryBtnText}>Save amenities</Text>
               </Pressable>
 
-              <Text style={styles.label}>Operating hours (HH:MM)</Text>
+              <Text style={styles.label}>Operating hours</Text>
               <View style={styles.rowInput}>
-                <TextInput style={[styles.input, { flex: 1 }]} value={openTime} onChangeText={setOpenTime} editable={!frozen} />
-                <Text style={{ color: colors.text.secondary }}>to</Text>
-                <TextInput style={[styles.input, { flex: 1 }]} value={closeTime} onChangeText={setCloseTime} editable={!frozen} />
+                <HhMmTimeField
+                  label="Opens"
+                  value={openTime}
+                  onChange={(t) => setOpenTime(normalizeHhmmInput(t))}
+                  disabled={frozen}
+                />
+                <Text style={{ color: colors.text.secondary, alignSelf: "flex-end", paddingBottom: spacing[3] }}>
+                  to
+                </Text>
+                <HhMmTimeField
+                  label="Closes"
+                  value={closeTime}
+                  onChange={(t) => setCloseTime(normalizeHhmmInput(t))}
+                  disabled={frozen}
+                />
               </View>
               <View style={styles.chipWrap}>
                 {[1, 2, 3, 4, 5, 6, 0].map((d) => (
@@ -1443,7 +1776,11 @@ export default function OwnerSettingsContent({
                   try {
                     await updateOperatingHours({
                       clubId: club.clubId,
-                      operatingHours: { open: openTime, close: closeTime, daysOfWeek: opDays },
+                      operatingHours: {
+                        open: normalizeHhmmInput(openTime),
+                        close: normalizeHhmmInput(closeTime),
+                        daysOfWeek: opDays,
+                      },
                     });
                     Alert.alert("Saved");
                   } catch (e) {

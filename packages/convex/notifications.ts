@@ -398,6 +398,114 @@ export const getBookingForNotification = internalQuery({
   },
 });
 
+export const getKitchenOrderForNotification = internalQuery({
+  args: { orderId: v.id("kitchenOrders") },
+  handler: async (ctx, { orderId }) => {
+    const order = await ctx.db.get(orderId);
+    if (!order) return null;
+    const club = await ctx.db.get(order.clubId);
+    if (!club) return null;
+    const owner = await ctx.db.get(club.ownerId);
+    const table = await ctx.db.get(order.tableId);
+    return {
+      order,
+      club,
+      owner,
+      tableLabel: table?.label ?? "Table",
+    };
+  },
+});
+
+function formatKitchenItemSummary(
+  items: { name: string; qty: number }[],
+): string {
+  if (items.length === 0) return "Snacks";
+  const head = items
+    .slice(0, 3)
+    .map((i) => `${i.qty}× ${i.name}`)
+    .join(", ");
+  if (items.length > 3) return `${head}, +${items.length - 3} more`;
+  return head;
+}
+
+/** Owner account push — kitchen tablet + floor device if both registered. */
+export const notifyKitchenNewOrder = internalAction({
+  args: { orderId: v.id("kitchenOrders") },
+  handler: async (ctx, { orderId }) => {
+    const row = await ctx.runQuery(
+      internal.notifications.getKitchenOrderForNotification,
+      { orderId },
+    );
+    if (!row?.owner) return;
+    const tokens = row.owner.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+    const summary = formatKitchenItemSummary(row.order.items);
+    const body = `${row.tableLabel}: ${summary}`;
+    await ctx.runAction(internal.notifications.deliverFcm, {
+      tokens,
+      title: "New Kitchen Order",
+      body,
+      data: { screen: "kitchen" },
+    });
+  },
+});
+
+/** PRD v28 — owner-facing alert when food is ready to run to the table. */
+export const notifyKitchenOrderReady = internalAction({
+  args: { orderId: v.id("kitchenOrders") },
+  handler: async (ctx, { orderId }) => {
+    const row = await ctx.runQuery(
+      internal.notifications.getKitchenOrderForNotification,
+      { orderId },
+    );
+    if (!row?.owner) return;
+    const tokens = row.owner.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+    const summary = formatKitchenItemSummary(row.order.items);
+    const body = `${row.tableLabel} — ${summary}. Ready to serve.`;
+    await ctx.runAction(internal.notifications.deliverFcm, {
+      tokens,
+      title: "Kitchen Order Ready",
+      body,
+      data: { screen: "kitchen" },
+    });
+  },
+});
+
+/** PRD v29 — customer notified when free-visit credits are awarded. */
+export const notifyLoyaltyCreditAwarded = internalAction({
+  args: {
+    clubId: v.id("clubs"),
+    userId: v.id("users"),
+    creditsAwarded: v.number(),
+    newBalance: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(internal.notifications.getUserById, {
+      userId: args.userId,
+    });
+    if (!user) return;
+    const tokens = user.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+    const club = await ctx.runQuery(internal.deletion.getClubById, {
+      clubId: args.clubId,
+    });
+    const clubLabel = club?.name ?? "this club";
+    const plural = args.creditsAwarded === 1 ? "credit" : "credits";
+    await ctx.runAction(internal.notifications.deliverFcm, {
+      tokens,
+      title: "Loyalty reward earned!",
+      body: `You earned ${args.creditsAwarded} free-visit ${plural} at ${clubLabel}. You now have ${args.newBalance} available here (not at other clubs).`,
+      data: {
+        type: "loyalty_credit_awarded",
+        clubId: args.clubId,
+        creditsAwarded: String(args.creditsAwarded),
+        newBalance: String(args.newBalance),
+      },
+    });
+  },
+});
+
 export const cleanupStaleTokens = internalMutation({
   args: {},
   handler: async (_ctx) => {
@@ -948,5 +1056,26 @@ export const sendRenewalConfirmationEmail = internalAction({
         newExpiryDate,
       },
     );
+  },
+});
+
+export const notifyOwnerStreamForceEnded = internalAction({
+  args: {
+    clubId: v.id("clubs"),
+    reason: v.string(),
+  },
+  handler: async (ctx, { clubId, reason }) => {
+    const owner = await ctx.runQuery(internal.notifications.getClubOwner, { clubId });
+    if (!owner) return;
+    const tokens = owner.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+    const body =
+      reason.length > 120 ? `${reason.slice(0, 117)}…` : reason;
+    await ctx.runAction(internal.notifications.deliverFcm, {
+      tokens,
+      title: "Live stream ended by admin",
+      body: `Your broadcast was force-ended. Reason: ${body}`,
+      data: { screen: "livestream", endedReason: "admin_force_ended" },
+    });
   },
 });

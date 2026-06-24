@@ -25,7 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
 import { TabAccessDenied } from "../components/TabAccessDenied";
 import { uploadLocalFileToConvexStorage } from "../lib/uploadConvexStorage";
-import { useStaffRole, staffRoleQueryId } from "../lib/StaffRoleContext";
+import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../lib/StaffRoleContext";
 import { ownerTabBarTotalInset } from "../theme/ownerShell";
 
 const PREDEFINED_LABELS = [
@@ -107,9 +107,10 @@ export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
 
+  const documentsEnabled = useStaffTabQueriesEnabled("documents");
   const documents = useQuery(
     api.clubDocuments.listClubDocuments,
-    dashboard && roleId !== undefined
+    dashboard && documentsEnabled
       ? { clubId: dashboard.clubId, roleId: staffRoleQueryId(roleId) }
       : "skip",
   ) as ClubDocumentRow[] | undefined;

@@ -9,6 +9,7 @@ import { customerShell } from "../theme/customerShell";
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   home: "home",
   discover: "explore",
+  live: "videocam",
   bookings: "event",
   history: "history",
   profile: "person",
@@ -17,6 +18,7 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
 const TAB_LABELS: Record<string, string> = {
   home: "Home",
   discover: "Discover",
+  live: "Live",
   bookings: "Bookings",
   history: "History",
   profile: "Profile",

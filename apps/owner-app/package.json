@@ -7,9 +7,7 @@
     "prestart": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/stop-expo-dev.ps1",
     "start": "expo start --dev-client --tunnel",
     "start:lan": "expo start --dev-client --lan",
-    "preandroid": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/guard-no-spaces-in-path.ps1",
     "android": "expo run:android",
-    "android:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/build-owner-android-windows.ps1",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
@@ -47,6 +45,8 @@
     "react-native-screens": "~4.23.0",
     "react-native-svg": "15.15.3",
     "react-native-web": "~0.21.0",
+    "amazon-ivs-react-native-broadcast": "^1.2.1",
+    "expo-build-properties": "~55.0.5",
     "typescript": "^5.4.0"
   },
   "devDependencies": {
