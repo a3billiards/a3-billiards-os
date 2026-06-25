@@ -1,0 +1,81 @@
+import type { TranslationBundle } from "./types";
+
+export const ml: TranslationBundle = {
+  common: {
+    save: "സേവ്",
+    cancel: "റദ്ദാക്കുക",
+    loading: "ലോഡ് ചെയ്യുന്നു…",
+    retry: "വീണ്ടും ശ്രമിക്കുക",
+    close: "അടയ്ക്കുക",
+    confirm: "സ്ഥിരീകരിക്കുക",
+    error: "പിശക്",
+    success: "വിജയം",
+    yes: "അതെ",
+    no: "ഇല്ല",
+  },
+  settings: {
+    language: "ഭാഷ",
+    selectLanguage: "ഭാഷ തിരഞ്ഞെടുക്കുക",
+    languageHint: "ഈ ആപ്പിലെ മെനുകളും സന്ദേശങ്ങളും നിങ്ങൾ തിരഞ്ഞെടുത്ത ഭാഷയിൽ കാണിക്കും.",
+  },
+  tabs: {
+    customer: {
+      home: "ഹോം",
+      discover: "കണ്ടെത്തുക",
+      live: "ലൈവ്",
+      bookings: "ബുക്കിംഗ്",
+      history: "ചരിത്രം",
+      profile: "പ്രൊഫൈൽ",
+    },
+    owner: {
+      home: "ഹോം",
+      slots: "സ്ലോട്ടുകൾ",
+      snacks: "സ്നാക്സ്",
+      financials: "ധനകാര്യം",
+      complaints: "പരാതികൾ",
+      bookings: "ബുക്കിംഗ്",
+      documents: "രേഖകൾ",
+      kitchen: "അടുക്കള",
+      loyalty: "ലോയൽറ്റി",
+      livestream: "ലൈവ്",
+      settings: "സെറ്റിംഗ്സ്",
+    },
+    admin: {
+      index: "ഹോം",
+      users: "ഉപയോക്താക്കൾ",
+      complaints: "ഫ്ലാഗുകൾ",
+      "live-moderation": "ലൈവ്",
+      audit: "ഓഡിറ്റ്",
+      notifications: "അലേർട്ടുകൾ",
+    },
+  },
+  profile: {
+    title: "പ്രൊഫൈൽ",
+    memberSince: "{{date}} മുതൽ അംഗം",
+    profileUpdated: "പ്രൊഫൈൽ അപ്ഡേറ്റ് ചെയ്തു.",
+    signOut: "സൈൻ ഔട്ട്",
+    signOutConfirm: "നിങ്ങളുടെ അക്കൗണ്ടിൽ നിന്ന് സൈൻ ഔട്ട് ചെയ്യണോ?",
+  },
+  streaming: {
+    goLive: "ലൈവ് ആകുക",
+    endStream: "സ്ട്രീം അവസാനിപ്പിക്കുക",
+    waitingForBroadcaster: "ബ്രോഡ്‌കാസ്റ്ററിനായി കാത്തിരിക്കുന്നു…",
+    streamOffline: "സ്ട്രീം ഓഫ്‌ലൈൻ",
+    couldNotPlay: "സ്ട്രീം പ്ലേ ചെയ്യാൻ കഴിഞ്ഞില്ല",
+    retryPlayback: "വീണ്ടും ശ്രമിക്കുക",
+  },
+  config: {
+    missingConvexTitle: "കോൺഫിഗറേഷൻ പിശക്",
+    missingConvexBody:
+      "ഈ ബിൽഡിൽ EXPO_PUBLIC_CONVEX_URL കാണുന്നില്ല. ആപ്പ് ബാക്കെൻഡുമായി ബന്ധപ്പെടാൻ കഴിയില്ല. ഏറ്റവും പുതിയ ബിൽഡ് വീണ്ടും ഇൻസ്റ്റാൾ ചെയ്യുക അല്ലെങ്കിൽ support@a3billiards.com-ൽ ബന്ധപ്പെടുക.",
+  },
+  subscription: {
+    endedTitle: "സബ്‌സ്‌ക്രിപ്ഷൻ അവസാനിച്ചു",
+    endedBody:
+      "നിങ്ങളുടെ A3 Billiards OS സബ്‌സ്‌ക്രിപ്ഷൻ അവസാനിച്ചു. പൂർണ്ണ ആക്സസ് തിരിച്ചെടുക്കാൻ പുതുക്കുക. നിങ്ങളുടെ ഡാറ്റ, സെറ്റിംഗ്സ്, ചരിത്രം സുരക്ഷിതമാണ്.",
+    renew: "സബ്‌സ്‌ക്രിപ്ഷൻ പുതുക്കുക",
+    support: "ചോദ്യങ്ങൾ? support@a3billiards.com-ൽ ബന്ധപ്പെടുക",
+    graceBanner: "നിങ്ങളുടെ സബ്‌സ്‌ക്രിപ്ഷൻ ഉടൻ അവസാനിക്കും. തടസ്സം ഒഴിവാക്കാൻ ഇപ്പോൾ പുതുക്കുക.",
+    graceRenew: "പുതുക്കുക",
+  },
+};

@@ -18,6 +18,7 @@ import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { GlassPageBackground, LiquidGlassCard, GlassIconTile } from "@a3/ui/components";
+import { LanguagePicker } from "@a3/i18n";
 import { adminShell, adminTabBarTotalInset } from "../../theme/adminShell";
 import { useAdminAuth } from "../../lib/adminAuth";
 
@@ -325,6 +326,10 @@ export default function DashboardScreen(): React.JSX.Element {
               </>
             )}
           </DashboardErrorBoundary>
+
+          <LiquidGlassCard style={styles.languageCard} padding={16}>
+            <LanguagePicker />
+          </LiquidGlassCard>
         </ScrollView>
       </SafeAreaView>
     </GlassPageBackground>
@@ -530,4 +535,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.secondary,
   },
   retryBtnText: { ...typography.caption, color: colors.text.primary, fontWeight: "600" },
+  languageCard: {
+    marginTop: spacing[4],
+    width: "100%",
+  },
 });

@@ -285,6 +285,20 @@ export default defineSchema({
     customerRegisteredVia: v.optional(
       v.union(v.literal("app"), v.literal("desk")),
     ),
+    /** UI locale (i18n) — English default when unset. */
+    preferredLocale: v.optional(
+      v.union(
+        v.literal("en"),
+        v.literal("hi"),
+        v.literal("ar"),
+        v.literal("kn"),
+        v.literal("ml"),
+        v.literal("ta"),
+        v.literal("te"),
+        v.literal("fr"),
+        v.literal("de"),
+      ),
+    ),
     createdAt: v.number(),                        // Unix ms.
   })
     .index("by_phone", ["phone"])                 // Phone duplicate detection, OTP flow, customer lookup

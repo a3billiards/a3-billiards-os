@@ -19,9 +19,10 @@ import { api } from "@a3/convex/_generated/api";
 import { GlassPageBackground } from "@a3/ui/components";
 import { colors, typography, spacing, radius, layout, glass, iosKeyboardAvoidingProps, keyboardScrollDefaults } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { LanguagePicker, useTranslation } from "@a3/i18n";
 
-function formatMemberSince(createdAt: number): string {
-  return new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(
+function formatMemberSince(createdAt: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(
     new Date(createdAt),
   );
 }
@@ -38,6 +39,7 @@ function isValidEmailLoose(s: string): boolean {
 
 export default function ProfileScreen(): React.JSX.Element {
   const router = useRouter();
+  const { t, i18n } = useTranslation();
   const { signOut } = useAuthActions();
   const user = useQuery(api.users.getCurrentUser);
   const loyaltyByClub = useQuery(
@@ -170,7 +172,7 @@ export default function ProfileScreen(): React.JSX.Element {
       if (changedEmail && !changedName && !changedAge) {
         Alert.alert("Email updated.");
       } else {
-        Alert.alert("Profile updated.");
+        Alert.alert(t("profile.profileUpdated"));
       }
     } catch (e) {
       const parsed = parseConvexError(e as Error);
@@ -234,10 +236,10 @@ export default function ProfileScreen(): React.JSX.Element {
   }, [signOut, router]);
 
   const onSignOut = useCallback(() => {
-    Alert.alert("Sign out", "Sign out of your account?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("profile.signOut"), t("profile.signOutConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Sign out",
+        text: t("profile.signOut"),
         style: "destructive",
         onPress: async () => {
           try {
@@ -279,7 +281,11 @@ export default function ProfileScreen(): React.JSX.Element {
     <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll} {...keyboardScrollDefaults}>
-        <Text style={styles.screenTitle}>Profile</Text>
+        <Text style={styles.screenTitle}>{t("profile.title")}</Text>
+
+        <View style={styles.card}>
+          <LanguagePicker />
+        </View>
 
         <View style={styles.hero}>
           <View style={styles.avatar}>
@@ -287,7 +293,11 @@ export default function ProfileScreen(): React.JSX.Element {
           </View>
           <Text style={styles.heroName}>{user.name}</Text>
           <Text style={styles.heroMeta}>Customer</Text>
-          <Text style={styles.heroMeta}>Member since {formatMemberSince(user.createdAt)}</Text>
+          <Text style={styles.heroMeta}>
+            {t("profile.memberSince", {
+              date: formatMemberSince(user.createdAt, i18n.language),
+            })}
+          </Text>
         </View>
 
         {loyaltyByClub && loyaltyByClub.length > 0 ? (

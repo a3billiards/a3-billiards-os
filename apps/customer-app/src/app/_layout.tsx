@@ -8,6 +8,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
 import { colors, typography, glass } from "@a3/ui/theme";
+import { I18nProvider } from "@a3/i18n";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 try {
@@ -88,15 +89,17 @@ function RootLayout() {
   return (
     <SafeAreaProvider>
       <ConvexAuthProvider client={convex} storage={secureStorage}>
-        <SplashHider />
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: glass.pageBgBottom },
-            animation: "fade",
-          }}
-        />
+        <I18nProvider>
+          <SplashHider />
+          <StatusBar style="light" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: glass.pageBgBottom },
+              animation: "fade",
+            }}
+          />
+        </I18nProvider>
       </ConvexAuthProvider>
     </SafeAreaProvider>
   );

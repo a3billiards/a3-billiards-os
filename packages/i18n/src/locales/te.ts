@@ -1,0 +1,81 @@
+import type { TranslationBundle } from "./types";
+
+export const te: TranslationBundle = {
+  common: {
+    save: "సేవ్",
+    cancel: "రద్దు",
+    loading: "లోడ్ అవుతోంది…",
+    retry: "మళ్లీ ప్రయత్నించు",
+    close: "మూసివేయి",
+    confirm: "నిర్ధారించు",
+    error: "లోపం",
+    success: "విజయం",
+    yes: "అవును",
+    no: "కాదు",
+  },
+  settings: {
+    language: "భాష",
+    selectLanguage: "భాష ఎంచుకోండి",
+    languageHint: "ఈ యాప్ మెనూలు మరియు సందేశాలు మీరు ఎంచుకున్న భాషలో కనిపిస్తాయి.",
+  },
+  tabs: {
+    customer: {
+      home: "హోమ్",
+      discover: "కనుగొను",
+      live: "లైవ్",
+      bookings: "బుకింగ్",
+      history: "చరిత్ర",
+      profile: "ప్రొఫైల్",
+    },
+    owner: {
+      home: "హోమ్",
+      slots: "స్లాట్లు",
+      snacks: "స్నాక్స్",
+      financials: "ఆర్థికం",
+      complaints: "ఫిర్యాదులు",
+      bookings: "బుకింగ్",
+      documents: "పత్రాలు",
+      kitchen: "వంటగది",
+      loyalty: "లాయల్టీ",
+      livestream: "లైవ్",
+      settings: "సెట్టింగ్స్",
+    },
+    admin: {
+      index: "హోమ్",
+      users: "వినియోగదారులు",
+      complaints: "ఫ్లాగ్‌లు",
+      "live-moderation": "లైవ్",
+      audit: "ఆడిట్",
+      notifications: "అలర్ట్‌లు",
+    },
+  },
+  profile: {
+    title: "ప్రొఫైల్",
+    memberSince: "{{date}} నుండి సభ్యుడు",
+    profileUpdated: "ప్రొఫైల్ నవీకరించబడింది.",
+    signOut: "సైన్ అవుట్",
+    signOutConfirm: "మీ ఖాతా నుండి సైన్ అవుట్ చేయాలా?",
+  },
+  streaming: {
+    goLive: "లైవ్‌కు వెళ్ళు",
+    endStream: "స్ట్రీమ్ ముగించు",
+    waitingForBroadcaster: "ప్రసారకుడి కోసం వేచి ఉంది…",
+    streamOffline: "స్ట్రీమ్ ఆఫ్‌లైన్",
+    couldNotPlay: "స్ట్రీమ్ ప్లే చేయలేకపోయింది",
+    retryPlayback: "మళ్లీ ప్రయత్నించు",
+  },
+  config: {
+    missingConvexTitle: "కాన్ఫిగరేషన్ లోపం",
+    missingConvexBody:
+      "ఈ బిల్డ్‌లో EXPO_PUBLIC_CONVEX_URL లేదు. యాప్ బ్యాకెండ్‌కు కనెక్ట్ కాలేదు. తాజా బిల్డ్ మళ్లీ ఇన్‌స్టాల్ చేయండి లేదా support@a3billiards.comని సంప్రదించండి.",
+  },
+  subscription: {
+    endedTitle: "చందా ముగిసింది",
+    endedBody:
+      "మీ A3 Billiards OS చందా ముగిసింది. పూర్తి యాక్సెస్ కోసం నవీకరించండి. మీ డేటా, సెట్టింగ్స్ మరియు చరిత్ర సురక్షితంగా ఉన్నాయి.",
+    renew: "చందా నవీకరణ",
+    support: "ప్రశ్నలు? support@a3billiards.comని సంప్రదించండి",
+    graceBanner: "మీ చందా త్వరలో ముగుస్తుంది. అంతరాయం నివారించడానికి ఇప్పుడే నవీకరించండి.",
+    graceRenew: "నవీకరించు",
+  },
+};

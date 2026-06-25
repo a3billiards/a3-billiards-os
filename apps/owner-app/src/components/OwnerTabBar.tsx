@@ -4,6 +4,7 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, glass } from "@a3/ui/theme";
+import { useTranslation } from "@a3/i18n";
 import { ownerShell } from "../theme/ownerShell";
 import { useStaffRole } from "../lib/StaffRoleContext";
 
@@ -36,18 +37,18 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   settings: "settings",
 };
 
-const TAB_LABELS: Record<string, string> = {
-  home: "Home",
-  slots: "Slots",
-  snacks: "Snacks",
-  financials: "Finances",
-  complaints: "Complaints",
-  bookings: "Bookings",
-  documents: "Docs",
-  kitchen: "Kitchen",
-  loyalty: "Loyalty",
-  livestream: "Live",
-  settings: "Settings",
+const TAB_LABEL_KEYS: Record<string, string> = {
+  home: "tabs.owner.home",
+  slots: "tabs.owner.slots",
+  snacks: "tabs.owner.snacks",
+  financials: "tabs.owner.financials",
+  complaints: "tabs.owner.complaints",
+  bookings: "tabs.owner.bookings",
+  documents: "tabs.owner.documents",
+  kitchen: "tabs.owner.kitchen",
+  loyalty: "tabs.owner.loyalty",
+  livestream: "tabs.owner.livestream",
+  settings: "tabs.owner.settings",
 };
 
 export default function OwnerTabBar({
@@ -57,6 +58,7 @@ export default function OwnerTabBar({
 }: BottomTabBarProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const { canAccessTab, roleId } = useStaffRole();
+  const { t } = useTranslation();
 
   const visibleRoutes = state.routes.filter((route) => {
     if (HIDDEN_TAB_ROUTES.has(route.name)) return false;
@@ -85,7 +87,10 @@ export default function OwnerTabBar({
             const index = state.routes.findIndex((r) => r.key === route.key);
             const { options } = descriptors[route.key];
             const label =
-              (options.title as string | undefined) ?? TAB_LABELS[route.name] ?? route.name;
+              (options.title as string | undefined) ??
+              (TAB_LABEL_KEYS[route.name]
+                ? t(TAB_LABEL_KEYS[route.name])
+                : route.name);
             const isFocused = state.index === index;
             const iconName = TAB_ICONS[route.name] ?? "circle";
 

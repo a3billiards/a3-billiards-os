@@ -4,6 +4,7 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, glass } from "@a3/ui/theme";
+import { useTranslation } from "@a3/i18n";
 import { customerShell } from "../theme/customerShell";
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
@@ -15,13 +16,13 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   profile: "person",
 };
 
-const TAB_LABELS: Record<string, string> = {
-  home: "Home",
-  discover: "Discover",
-  live: "Live",
-  bookings: "Bookings",
-  history: "History",
-  profile: "Profile",
+const TAB_LABEL_KEYS: Record<string, string> = {
+  home: "tabs.customer.home",
+  discover: "tabs.customer.discover",
+  live: "tabs.customer.live",
+  bookings: "tabs.customer.bookings",
+  history: "tabs.customer.history",
+  profile: "tabs.customer.profile",
 };
 
 export default function CustomerTabBar({
@@ -30,6 +31,7 @@ export default function CustomerTabBar({
   navigation,
 }: BottomTabBarProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   return (
     <View
@@ -44,7 +46,10 @@ export default function CustomerTabBar({
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const label =
-            (options.title as string | undefined) ?? TAB_LABELS[route.name] ?? route.name;
+            (options.title as string | undefined) ??
+            (TAB_LABEL_KEYS[route.name]
+              ? t(TAB_LABEL_KEYS[route.name])
+              : route.name);
           const isFocused = state.index === index;
           const iconName = TAB_ICONS[route.name] ?? "circle";
 

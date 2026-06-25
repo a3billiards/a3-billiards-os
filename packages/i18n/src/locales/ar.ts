@@ -1,0 +1,81 @@
+import type { TranslationBundle } from "./types";
+
+export const ar: TranslationBundle = {
+  common: {
+    save: "حفظ",
+    cancel: "إلغاء",
+    loading: "جارٍ التحميل…",
+    retry: "إعادة المحاولة",
+    close: "إغلاق",
+    confirm: "تأكيد",
+    error: "خطأ",
+    success: "نجاح",
+    yes: "نعم",
+    no: "لا",
+  },
+  settings: {
+    language: "اللغة",
+    selectLanguage: "اختر اللغة",
+    languageHint: "ستُعرض القوائم والرسائل في هذا التطبيق باللغة المختارة.",
+  },
+  tabs: {
+    customer: {
+      home: "الرئيسية",
+      discover: "استكشاف",
+      live: "مباشر",
+      bookings: "الحجوزات",
+      history: "السجل",
+      profile: "الملف",
+    },
+    owner: {
+      home: "الرئيسية",
+      slots: "الطاولات",
+      snacks: "وجبات خفيفة",
+      financials: "المالية",
+      complaints: "الشكاوى",
+      bookings: "الحجوزات",
+      documents: "المستندات",
+      kitchen: "المطبخ",
+      loyalty: "الولاء",
+      livestream: "مباشر",
+      settings: "الإعدادات",
+    },
+    admin: {
+      index: "الرئيسية",
+      users: "المستخدمون",
+      complaints: "البلاغات",
+      "live-moderation": "مباشر",
+      audit: "التدقيق",
+      notifications: "التنبيهات",
+    },
+  },
+  profile: {
+    title: "الملف الشخصي",
+    memberSince: "عضو منذ {{date}}",
+    profileUpdated: "تم تحديث الملف الشخصي.",
+    signOut: "تسجيل الخروج",
+    signOutConfirm: "هل تريد تسجيل الخروج من حسابك؟",
+  },
+  streaming: {
+    goLive: "البث المباشر",
+    endStream: "إنهاء البث",
+    waitingForBroadcaster: "في انتظار المذيع…",
+    streamOffline: "البث غير متصل",
+    couldNotPlay: "تعذّر تشغيل البث",
+    retryPlayback: "إعادة المحاولة",
+  },
+  config: {
+    missingConvexTitle: "خطأ في الإعداد",
+    missingConvexBody:
+      "EXPO_PUBLIC_CONVEX_URL مفقود من هذا الإصدار. لا يمكن للتطبيق الاتصال بالخادم. يرجى إعادة تثبيت أحدث إصدار أو التواصل على support@a3billiards.com.",
+  },
+  subscription: {
+    endedTitle: "انتهت الاشتراك",
+    endedBody:
+      "انتهى اشتراكك في A3 Billiards OS. جدّد للاستعادة الكاملة. بياناتك وإعداداتك وسجلك محفوظة.",
+    renew: "تجديد الاشتراك",
+    support: "أسئلة؟ تواصل على support@a3billiards.com",
+    graceBanner: "اشتراكك ينتهي قريباً. جدّد الآن لتجنب الانقطاع.",
+    graceRenew: "تجديد",
+  },
+};

@@ -4,6 +4,7 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, glass } from "@a3/ui/theme";
+import { useTranslation } from "@a3/i18n";
 import { adminShell } from "../theme/adminShell";
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
@@ -15,13 +16,13 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   notifications: "notifications",
 };
 
-const TAB_LABELS: Record<string, string> = {
-  index: "Home",
-  users: "Users",
-  complaints: "Flags",
-  "live-moderation": "Live",
-  audit: "Audit",
-  notifications: "Alerts",
+const TAB_LABEL_KEYS: Record<string, string> = {
+  index: "tabs.admin.index",
+  users: "tabs.admin.users",
+  complaints: "tabs.admin.complaints",
+  "live-moderation": "tabs.admin.live-moderation",
+  audit: "tabs.admin.audit",
+  notifications: "tabs.admin.notifications",
 };
 
 export default function AdminTabBar({
@@ -30,6 +31,7 @@ export default function AdminTabBar({
   navigation,
 }: BottomTabBarProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   return (
     <View
@@ -46,7 +48,10 @@ export default function AdminTabBar({
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const label =
-            (options.title as string | undefined) ?? TAB_LABELS[route.name] ?? route.name;
+            (options.title as string | undefined) ??
+            (TAB_LABEL_KEYS[route.name]
+              ? t(TAB_LABEL_KEYS[route.name])
+              : route.name);
           const isFocused = state.index === index;
           const iconName = TAB_ICONS[route.name] ?? "circle";
 

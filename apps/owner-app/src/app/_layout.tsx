@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, glass } from "@a3/ui/theme";
+import { I18nProvider } from "@a3/i18n";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // Keep splash screen visible until the auth gate decides where to route.
@@ -184,8 +185,10 @@ function RootLayout() {
   return (
     <SafeAreaProvider>
       <ConvexAuthProvider client={convex} storage={secureStorage}>
-        <StatusBar style="light" />
-        <OwnerSubscriptionShell />
+        <I18nProvider>
+          <StatusBar style="light" />
+          <OwnerSubscriptionShell />
+        </I18nProvider>
       </ConvexAuthProvider>
     </SafeAreaProvider>
   );

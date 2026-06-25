@@ -1,0 +1,81 @@
+import type { TranslationBundle } from "./types";
+
+export const hi: TranslationBundle = {
+  common: {
+    save: "सहेजें",
+    cancel: "रद्द करें",
+    loading: "लोड हो रहा है…",
+    retry: "पुनः प्रयास",
+    close: "बंद करें",
+    confirm: "पुष्टि करें",
+    error: "त्रुटि",
+    success: "सफल",
+    yes: "हाँ",
+    no: "नहीं",
+  },
+  settings: {
+    language: "भाषा",
+    selectLanguage: "भाषा चुनें",
+    languageHint: "इस ऐप के मेनू और संदेश आपकी चुनी भाषा में दिखेंगे।",
+  },
+  tabs: {
+    customer: {
+      home: "होम",
+      discover: "खोजें",
+      live: "लाइव",
+      bookings: "बुकिंग",
+      history: "इतिहास",
+      profile: "प्रोफ़ाइल",
+    },
+    owner: {
+      home: "होम",
+      slots: "स्लॉट",
+      snacks: "स्नैक्स",
+      financials: "वित्त",
+      complaints: "शिकायतें",
+      bookings: "बुकिंग",
+      documents: "दस्तावेज़",
+      kitchen: "रसोई",
+      loyalty: "लॉयल्टी",
+      livestream: "लाइव",
+      settings: "सेटिंग्स",
+    },
+    admin: {
+      index: "होम",
+      users: "उपयोगकर्ता",
+      complaints: "फ़्लैग",
+      "live-moderation": "लाइव",
+      audit: "ऑडिट",
+      notifications: "अलर्ट",
+    },
+  },
+  profile: {
+    title: "प्रोफ़ाइल",
+    memberSince: "{{date}} से सदस्य",
+    profileUpdated: "प्रोफ़ाइल अपडेट हो गई।",
+    signOut: "साइन आउट",
+    signOutConfirm: "क्या आप अपने खाते से साइन आउट करना चाहते हैं?",
+  },
+  streaming: {
+    goLive: "लाइव जाएँ",
+    endStream: "स्ट्रीम समाप्त करें",
+    waitingForBroadcaster: "प्रसारक की प्रतीक्षा…",
+    streamOffline: "स्ट्रीम ऑफ़लाइन है",
+    couldNotPlay: "स्ट्रीम चल नहीं सकी",
+    retryPlayback: "पुनः प्रयास",
+  },
+  config: {
+    missingConvexTitle: "कॉन्फ़िगरेशन त्रुटि",
+    missingConvexBody:
+      "इस बिल्ड में EXPO_PUBLIC_CONVEX_URL गायब है। ऐप बैकएंड से कनेक्ट नहीं हो सकता। कृपया नवीनतम बिल्ड पुनः इंस्टॉल करें या support@a3billiards.com पर संपर्क करें।",
+  },
+  subscription: {
+    endedTitle: "सदस्यता समाप्त",
+    endedBody:
+      "आपकी A3 Billiards OS सदस्यता समाप्त हो गई है। पूर्ण एक्सेस के लिए नवीनीकरण करें। आपका डेटा, सेटिंग्स और इतिहास सुरक्षित हैं।",
+    renew: "सदस्यता नवीनीकरण",
+    support: "प्रश्न? support@a3billiards.com पर संपर्क करें",
+    graceBanner: "आपकी सदस्यता जल्द समाप्त होगी। रुकावट से बचने के लिए अभी नवीनीकरण करें।",
+    graceRenew: "नवीनीकरण",
+  },
+};

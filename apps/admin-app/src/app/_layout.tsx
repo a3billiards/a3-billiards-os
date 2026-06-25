@@ -13,6 +13,7 @@ import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
+import { I18nProvider } from "@a3/i18n";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AdminAuthProvider, useAdminAuth } from "../lib/adminAuth";
 
@@ -232,7 +233,9 @@ function RootLayout() {
   return (
     <SafeAreaProvider>
       <ConvexAuthProvider client={convex} storage={secureStorage}>
-        <AdminAuthShell />
+        <I18nProvider>
+          <AdminAuthShell />
+        </I18nProvider>
       </ConvexAuthProvider>
     </SafeAreaProvider>
   );

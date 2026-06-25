@@ -24,6 +24,7 @@ import { api } from "@a3/convex/_generated/api";
 import type { Doc, Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { LanguagePicker } from "@a3/i18n";
 import { getActiveRoleId, setActiveRoleId } from "../lib/activeRoleStorage";
 import { useStaffRole } from "../lib/StaffRoleContext";
 import { OwnerModePasscodeGate } from "./OwnerModePasscodeGate";
@@ -731,6 +732,10 @@ export default function OwnerSettingsContent({
 
       <ScrollView contentContainerStyle={[styles.pad, { paddingBottom: bottomPad }]}>
         <Text style={styles.screenTitle}>Settings</Text>
+
+        <View style={styles.card}>
+          <LanguagePicker />
+        </View>
 
         {/* Tables */}
         <View style={styles.card}>

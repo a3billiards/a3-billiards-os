@@ -1,0 +1,81 @@
+import type { TranslationBundle } from "./types";
+
+export const ta: TranslationBundle = {
+  common: {
+    save: "சேமி",
+    cancel: "ரத்து",
+    loading: "ஏற்றுகிறது…",
+    retry: "மீண்டும் முயற்சி",
+    close: "மூடு",
+    confirm: "உறுதிப்படுத்து",
+    error: "பிழை",
+    success: "வெற்றி",
+    yes: "ஆம்",
+    no: "இல்லை",
+  },
+  settings: {
+    language: "மொழி",
+    selectLanguage: "மொழியைத் தேர்ந்தெடுக்கவும்",
+    languageHint: "இந்த பயன்பாட்டின் மெனுக்கள் மற்றும் செய்திகள் நீங்கள் தேர்ந்தெடுத்த மொழியில் காட்டப்படும்.",
+  },
+  tabs: {
+    customer: {
+      home: "முகப்பு",
+      discover: "கண்டறி",
+      live: "நேரலை",
+      bookings: "முன்பதிவு",
+      history: "வரலாறு",
+      profile: "சுயவிவரம்",
+    },
+    owner: {
+      home: "முகப்பு",
+      slots: "ஸ்லாட்",
+      snacks: "சிற்றுண்டி",
+      financials: "நிதி",
+      complaints: "புகார்கள்",
+      bookings: "முன்பதிவு",
+      documents: "ஆவணங்கள்",
+      kitchen: "சமையலறை",
+      loyalty: "விசுவாசம்",
+      livestream: "நேரலை",
+      settings: "அமைப்புகள்",
+    },
+    admin: {
+      index: "முகப்பு",
+      users: "பயனர்கள்",
+      complaints: "கொடி",
+      "live-moderation": "நேரலை",
+      audit: "தணிக்கை",
+      notifications: "எச்சரிக்கை",
+    },
+  },
+  profile: {
+    title: "சுயவிவரம்",
+    memberSince: "{{date}} முதல் உறுப்பினர்",
+    profileUpdated: "சுயவிவரம் புதுப்பிக்கப்பட்டது.",
+    signOut: "வெளியேறு",
+    signOutConfirm: "உங்கள் கணக்கிலிருந்து வெளியேற வேண்டுமா?",
+  },
+  streaming: {
+    goLive: "நேரலைக்குச் செல்",
+    endStream: "ஸ்ட்ரீம் முடி",
+    waitingForBroadcaster: "ஒளிபரப்பாளருக்காகக் காத்திருக்கிறது…",
+    streamOffline: "ஸ்ட்ரீம் ஆஃப்லைன்",
+    couldNotPlay: "ஸ்ட்ரீம் இயக்க முடியவில்லை",
+    retryPlayback: "மீண்டும் முயற்சி",
+  },
+  config: {
+    missingConvexTitle: "கட்டமைப்பு பிழை",
+    missingConvexBody:
+      "இந்த பில்டில் EXPO_PUBLIC_CONVEX_URL இல்லை. பயன்பாடு பின்தளத்துடன் இணைக்க முடியாது. சமீபத்திய பில்டை மீண்டும் நிறுவவும் அல்லது support@a3billiards.com-ஐ தொடர்பு கொள்ளவும்.",
+  },
+  subscription: {
+    endedTitle: "சந்தா முடிந்தது",
+    endedBody:
+      "உங்கள் A3 Billiards OS சந்தா முடிந்துவிட்டது. முழு அணுகலுக்கு புதுப்பிக்கவும். உங்கள் தரவு, அமைப்புகள் மற்றும் வரலாறு பாதுகாப்பாக உள்ளன.",
+    renew: "சந்தா புதுப்பிப்பு",
+    support: "கேள்விகள்? support@a3billiards.com-ஐ தொடர்பு கொள்ளவும்",
+    graceBanner: "உங்கள் சந்தா விரைவில் முடியும். இடையூறு தவிர்க்க இப்போது புதுப்பிக்கவும்.",
+    graceRenew: "புதுப்பி",
+  },
+};

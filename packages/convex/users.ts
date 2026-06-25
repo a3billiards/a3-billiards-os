@@ -137,6 +137,30 @@ export const getCurrentUser = query({
   },
 });
 
+const preferredLocaleV = v.union(
+  v.literal("en"),
+  v.literal("hi"),
+  v.literal("ar"),
+  v.literal("kn"),
+  v.literal("ml"),
+  v.literal("ta"),
+  v.literal("te"),
+  v.literal("fr"),
+  v.literal("de"),
+);
+
+export const updatePreferredLocale = mutation({
+  args: { locale: preferredLocaleV },
+  handler: async (ctx, { locale }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throwErr("AUTH_001: Not authenticated");
+    }
+    await ctx.db.patch(userId, { preferredLocale: locale });
+    return { locale };
+  },
+});
+
 export const getUser = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId: targetId }) => {

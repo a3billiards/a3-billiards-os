@@ -1,0 +1,32 @@
+{
+  "name": "@a3/i18n",
+  "version": "1.0.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./provider": "./src/I18nProvider.tsx",
+    "./picker": "./src/LanguagePicker.tsx"
+  },
+  "dependencies": {
+    "@a3/ui": "workspace:*",
+    "@expo/vector-icons": "^15.0.3",
+    "i18next": "^25.5.2",
+    "react-i18next": "^15.7.3"
+  },
+  "peerDependencies": {
+    "expo-localization": "*",
+    "expo-secure-store": "*",
+    "react": "*",
+    "react-native": "*",
+    "convex": "*",
+    "@a3/convex": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.10",
+    "react": "19.2.0",
+    "react-native": "0.83.4",
+    "typescript": "^5.4.0"
+  }
+}
