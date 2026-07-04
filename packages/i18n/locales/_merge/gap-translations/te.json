@@ -1,0 +1,478 @@
+{
+  "adminApp": {
+    "bookings": {
+      "estimatedCost": "అంచనా {{amount}}"
+    },
+    "complaints": {
+      "dateFormatHint": "YYYY-MM-DD",
+      "statusActive": "సక్రియం"
+    },
+    "moderation": {
+      "live": "LIVE"
+    },
+    "notifications": {
+      "messageLabel": "సందేశం",
+      "required": " *"
+    },
+    "roles": {
+      "admin": "అడ్మిన్"
+    },
+    "userProfile": {
+      "actionsSection": "చర్యలు",
+      "club": "క్లబ్: {{name}}",
+      "confirmPlaceholder": "CONFIRM",
+      "namePlaceholder": "పేరు",
+      "phonePlaceholder": "+919876543210"
+    },
+    "users": {
+      "filterAdmins": "అడ్మిన్‌లు"
+    }
+  },
+  "auth": {
+    "admin": {
+      "login": {
+        "emailPlaceholder": "admin@example.com"
+      }
+    },
+    "customer": {
+      "register": {
+        "agePlaceholder": "18",
+        "emailOptional": "(ఐచ్ఛికం)",
+        "emailPlaceholder": "you@example.com",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      }
+    },
+    "owner": {
+      "changePasscode": {
+        "ok": "సరే"
+      },
+      "login": {
+        "emailPlaceholder": "owner@example.com",
+        "logo": "A3"
+      },
+      "passcode": {
+        "ok": "సరే"
+      },
+      "register": {
+        "agePlaceholder": "18",
+        "emailPlaceholder": "you@example.com",
+        "logo": "A3",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      },
+      "verifyPhone": {
+        "logo": "A3"
+      }
+    },
+    "phone": {
+      "countryCode": "దేశ కోడ్",
+      "number": "ఫోన్ నంబర్",
+      "selectCountry": "దేశం ఎంచుకోండి"
+    }
+  },
+  "common": {
+    "amenityPresets": {
+      "ac": "AC",
+      "lounge": "లౌంజ్",
+      "parking": "పార్కింగ్",
+      "wifi": "WiFi"
+    },
+    "arrowSeparator": " → ",
+    "chartMonths": {
+      "dec": "Dec",
+      "feb": "Feb",
+      "jan": "Jan",
+      "mar": "Mar",
+      "nov": "Nov",
+      "oct": "Oct"
+    },
+    "confirmKeyword": "CONFIRM",
+    "deleteKeyword": "DELETE",
+    "detailsLabel": "వివరాలు",
+    "emDash": "—",
+    "inbox": {
+      "alertLater": "తర్వాత",
+      "alertView": "చూడండి",
+      "bellAccessibility": "నోటిఫికేషన్‌లు",
+      "empty": "ఇంకా నోటిఫికేషన్‌లు లేవు.",
+      "fromAdmin": "A3 Billiards",
+      "loadMore": "మరిన్ని లోడ్ చేయండి",
+      "markAllRead": "అన్నీ చదివినట్లు గుర్తించండి",
+      "subtitle": "A3 Billiards నుండి సందేశాలు",
+      "title": "నోటిఫికేషన్‌లు"
+    },
+    "loadingEllipsis": "…",
+    "logoA3": "A3",
+    "mapsClubFallback": "క్లబ్",
+    "minSuffix": " నిమి",
+    "ok": "సరే",
+    "passcodeMask": "••••••",
+    "passwordMask": "••••••••",
+    "placeholderOtp": "000000",
+    "placeholderZero": "0",
+    "pushChannelName": "A3 Billiards",
+    "questionMark": "?",
+    "slotDurationChips": {
+      "min30": "30 నిమి"
+    },
+    "tableTypes": {
+      "americanPool": "American Pool",
+      "eightBall": "8-Ball",
+      "frenchBilliards": "French Billiards",
+      "nineBall": "9-Ball",
+      "snooker": "Snooker"
+    },
+    "tabs": {
+      "admin": {
+        "audit": "ఆడిట్",
+        "live-moderation": "లైవ్"
+      },
+      "customer": {
+        "live": "లైవ్"
+      },
+      "owner": {
+        "documents": "పత్రాలు",
+        "financials": "ఆర్థికాలు",
+        "livestream": "లైవ్",
+        "snacks": "స్నాక్స్"
+      }
+    },
+    "timesSeparator": " × ",
+    "typeLabel": "రకం"
+  },
+  "customerApp": {
+    "booking": {
+      "durations": {
+        "chipFallback": "{{count}}ని",
+        "d120": {
+          "chip": "2గం"
+        },
+        "d180": {
+          "chip": "3గం"
+        },
+        "d30": {
+          "chip": "30ని",
+          "summary": "30 నిమిషాలు"
+        },
+        "d60": {
+          "chip": "1గం"
+        },
+        "summaryFallback": "{{count}} నిమిషాలు"
+      },
+      "emDash": "—",
+      "noDatesAvailable": "బుక్ చేయగల తేదీలు లేవు. క్లబ్ తమ షెడ్యూల్‌ను అప్‌డేట్ చేయాల్సి ఉండవచ్చు.",
+      "noTablesEmpty": "ఈ రకానికి సక్రియ టేబుల్‌లు లేవు. సెట్టింగ్‌లలో టేబుల్ సెటప్ చెక్ చేయమని క్లబ్‌ను అడగండి.",
+      "notesCounter": "{{count}}/200",
+      "pickDate": "మీరు ఎప్పుడు ఆడాలనుకుంటున్నారు?",
+      "steps": {
+        "date": "తేదీ",
+        "table": "టేబుల్",
+        "type": "రకం"
+      },
+      "summaryDate": "తేదీ",
+      "summaryTable": "టేబుల్",
+      "today": "ఈరోజు",
+      "whichTable": "ఏ టేబుల్?"
+    },
+    "bookingDetail": {
+      "date": "తేదీ",
+      "durationMin": "{{count}} నిమి",
+      "estimatedCostValue": "అంచనా {{symbol}}{{amount}}"
+    },
+    "checkInPayload": "a3customer:{{userId}}",
+    "clubProfile": {
+      "perMin": "/నిమి",
+      "tablePlural": "టేబుల్‌లు",
+      "tableSingular": "టేబుల్",
+      "tables": "టేబుల్‌లు"
+    },
+    "discovery": {
+      "title": "కనుగొనండి"
+    },
+    "history": {
+      "minAtRate": "{{minutes}} నిమి @ {{rate}}/నిమి",
+      "snacks": "స్నాక్స్",
+      "total": "మొత్తం",
+      "upi": "UPI"
+    },
+    "home": {
+      "discover": "కనుగొనండి"
+    },
+    "live": {
+      "title": "లైవ్"
+    },
+    "loyalty": {
+      "profile": {
+        "checkInCode": "క్లబ్ చెక్-ఇన్ కోడ్",
+        "checkInCodeHint": "వేగవంతమైన స్లాట్ కేటాయింపు కోసం కౌంటర్‌లో ఇది చూపించండి. కోడ్: a3customer:{{id}}",
+        "deletePlaceholder": "DELETE",
+        "name": "పేరు"
+      }
+    },
+    "profile": {
+      "checkInCode": "క్లబ్ చెక్-ఇన్ కోడ్",
+      "checkInCodeHint": "వేగవంతమైన స్లాట్ కేటాయింపు కోసం కౌంటర్‌లో ఇది చూపించండి. కోడ్: a3customer:{{id}}",
+      "deletePlaceholder": "DELETE",
+      "name": "పేరు"
+    },
+    "screens": {
+      "discover": "కనుగొనండి",
+      "live": "లైవ్"
+    },
+    "streaming": {
+      "mute": "మ్యూట్",
+      "otherLive": "ఇతర లైవ్ స్ట్రీమ్‌లు",
+      "unmute": "అన్‌మ్యూట్"
+    }
+  },
+  "notifications": {
+    "fallback": "నోటిఫికేషన్"
+  },
+  "ownerApp": {
+    "documents": {
+      "pdf": "PDF",
+      "title": "పత్రాలు"
+    },
+    "financials": {
+      "cgst": "CGST",
+      "gstin": "GSTIN",
+      "igst": "IGST",
+      "minutes": "{{count}} నిమి",
+      "session_one": "{{count}} సెషన్",
+      "sessions": "{{count}} సెషన్‌లు",
+      "sgst": "SGST",
+      "snackLine": "{{name}} × {{qty}} = {{amount}}",
+      "snacks": "స్నాక్స్",
+      "sortByDate": "తేదీ",
+      "tableLine": "{{minutes}} @ {{rate}}/min = {{subtotal}}",
+      "upi": "UPI"
+    },
+    "gstReport": {
+      "financialsGst": {
+        "cgst": "CGST",
+        "gstin": "GSTIN",
+        "igst": "IGST",
+        "sgst": "SGST"
+      }
+    },
+    "home": {
+      "tileDocuments": "పత్రాలు",
+      "tileSlots": "స్లాట్‌లు",
+      "tileSnacks": "స్నాక్స్"
+    },
+    "kitchen": {
+      "table": "టేబుల్ {{label}}"
+    },
+    "livestream": {
+      "flipCamera": "కెమెరా తిప్పండి",
+      "liveBadge": "LIVE",
+      "micMute": "మైక్రోఫోన్ మ్యూట్ చేయండి",
+      "micUnmute": "మైక్రోఫోన్ అన్‌మ్యూట్ చేయండి",
+      "otherClubStreams": "మీ క్లబ్‌లోని ఇతర లైవ్ టేబుల్‌లు",
+      "placeholderTable": "టేబుల్ 4",
+      "selectTable": "స్ట్రీమ్ చేయడానికి టేబుల్"
+    },
+    "loyalty": {
+      "awardLine": "{{date}} — +{{count}} క్రెడిట్(లు) ({{tier}})",
+      "creditsCount": "{{count}} క్రెడిట్‌లు",
+      "programmeNamePlaceholder": "A3 Regulars",
+      "statusLine": "స్థితి: {{status}}"
+    },
+    "settings": {
+      "chefRoleName": "చెఫ్",
+      "content": {
+        "acceptOnlineBookings": "ఆన్‌లైన్ బుకింగ్‌లను అంగీకరించండి",
+        "addAmenity": "జోడించండి",
+        "addChefRole": "+ చెఫ్ పాత్ర జోడించండి",
+        "addEmailFirst": "ముందు ఇమెయిల్ జోడించండి",
+        "addPhoto": "+ ఫోటో జోడించండి",
+        "addRole": "పాత్ర జోడించండి",
+        "addTable": "+ టేబుల్ జోడించండి",
+        "allTables": "అన్ని టేబుల్‌లు",
+        "amenities": "సౌకర్యాలు",
+        "approvalDeadline": "ఆమోద గడువు (నిమిషాలు)",
+        "approvalDeadlineNote": "బుకింగ్ గడువు ముగిసే ముందు ఆమోదించాల్సిన నిమిషాలు",
+        "bookableHours": "బుక్ చేయగల గంటలు",
+        "bookableHoursMustBeWithin": "బుక్ చేయగల గంటలు ఆపరేటింగ్ గంటల లోపల ఉండాలి. ముందు బుక్ చేయగల గంటలను అప్‌డేట్ చేయండి.",
+        "bookableHoursNote": "బుక్ చేయగల గంటలు మీ ఆపరేటింగ్ గంటల లోపల ఉండాలి.",
+        "bookableTableTypes": "బుక్ చేయగల టేబుల్ రకాలు",
+        "bookableTableTypesMismatch": "కొన్ని బుక్ చేయగల టేబుల్ రకాలకు సక్రియ టేబుల్‌లు లేవు.",
+        "bookableTableTypesNote": "ఎంచుకున్న రకాలు మాత్రమే కస్టమర్ బుకింగ్ ఫ్లోలో కనిపిస్తాయి.",
+        "bookingCouponCode": "బుకింగ్ కూపన్ కోడ్",
+        "bookingsDisabledDesc": "కస్టమర్‌లు మీ క్లబ్‌ను ఆన్‌లైన్‌లో కనుగొనలేరు లేదా బుక్ చేయలేరు",
+        "bookingsEnabledDesc": "మీ క్లబ్ ఆన్‌లైన్ బుకింగ్‌లను అంగీకరిస్తోంది",
+        "canApplyDiscount": "డిస్కౌంట్ వర్తింపజేయవచ్చు",
+        "canApplyDiscountMax": "డిస్కౌంట్ వర్తింపజేయవచ్చు (గరిష్ఠ {{pct}}%)",
+        "canFileComplaints": "ఫిర్యాదులు దాఖలు చేయవచ్చు",
+        "cancellationWindow": "రద్దు విండో (నిమిషాలు)",
+        "cancellationWindowNote": "ఆలస్య రద్దు కోసం ప్రారంభ సమయానికి ముందు నిమిషాలు",
+        "changeAccountPassword": "ఖాతా పాస్‌వర్డ్ మార్చండి",
+        "changeSettingsPasscode": "సెట్టింగ్‌ల పాస్‌కోడ్ మార్చండి",
+        "chefRoleCreated": "చెఫ్ పాత్ర సృష్టించబడింది",
+        "chefRoleCreatedBody": "కిచెన్ ట్యాబ్ మాత్రమే. కిచెన్ స్టాఫ్‌కు పరికరం ఇచ్చేటప్పుడు దీన్ని కేటాయించండి.",
+        "chefRoleExists": "చెఫ్ పాత్ర ఇప్పటికే ఉంది",
+        "chefRoleExistsBody": "అవసరమైతే స్టాఫ్ పాత్రల కింద ఎడిట్ చేయండి.",
+        "closes": "మూసివేస్తుంది",
+        "couponDescription": "బుకింగ్ చేసేటప్పుడు కస్టమర్‌లు కార్డ్ చెల్లింపు బదులు కూపన్ నమోదు చేస్తారు",
+        "customAmenities": "కస్టమ్ సౌకర్యాలు",
+        "customAmenityPlaceholder": "కస్టమ్ సౌకర్యం",
+        "deleteRoleBody": "ఈ పాత్ర పరికరంలో ప్రస్తుతం సక్రియంగా ఉంటే, అది ఓనర్ మోడ్‌కు తిరిగి వస్తుంది.",
+        "deleteRoleConfirm": "తొలగించండి",
+        "deleteRoleTitle": "పాత్రను తొలగించాలా?",
+        "descriptionMax": "వివరణ (గరిష్ఠ 500)",
+        "discoverable": "కనుగొనదగినది",
+        "downloadMyData": "నా డేటాను డౌన్‌లోడ్ చేయండి",
+        "editRole": "పాత్ర ఎడిట్ చేయండి",
+        "exportClubMembers": "క్లబ్ సభ్యుల డేటాను డౌన్‌లోడ్ చేయండి",
+        "exportDownload": "డౌన్‌లోడ్",
+        "exportMembersBody": "మీ క్లబ్‌లో బుక్ చేసిన, ఆడిన లేదా లాయల్టీలో చేరిన కస్టమర్‌లతో Excel లేదా Google Sheets కోసం స్ప్రెడ్‌షీట్ (CSV) డౌన్‌లోడ్ చేయండి. క్లబ్-స్కోప్ ఫీల్డ్‌లు మాత్రమే ఉంటాయి.",
+        "exportMembersTitle": "క్లబ్ సభ్యులను ఎగుమతి చేయాలా?",
+        "exportingMembers": "ఎగుమతి చేస్తోంది…",
+        "gstItcError": "నెలవారీ ITC ప్రతికూలం కాని సంఖ్య అయి ఉండాలి.",
+        "gstNote": "అంచనా-మాత్రమే GST రిపోర్ట్ కోసం ఇన్‌పుట్‌లు. CA సంప్రదింపు తర్వాత పూర్తి ఆదాయపు పన్ను రిపోర్టింగ్ జోడించబడుతుంది.",
+        "gstRegistered": "GST నమోదు",
+        "gstRegisteredNote": "ఆఫ్‌లో ఉన్నప్పుడు, GST రిపోర్ట్ సున్నా అవుట్‌పుట్ పన్నును చూపిస్తుంది",
+        "gstSnacks": "స్నాక్స్‌పై GST %",
+        "gstSnacksError": "స్నాక్స్ GST % 0 మరియు 100 మధ్య ఉండాలి.",
+        "gstTableError": "టేబుల్ GST % 0 మరియు 100 మధ్య ఉండాలి.",
+        "gstTableTime": "టేబుల్ సమయంపై GST %",
+        "gstin": "GSTIN (ఐచ్ఛికం)",
+        "hidden": "దాచబడింది",
+        "locationPin": "లొకేషన్ పిన్",
+        "locationSaved": "లొకేషన్ సేవ్ అయింది",
+        "manageTables": "బిలియర్డ్స్ టేబుల్‌లను నిర్వహించండి",
+        "maxAdvanceDays": "గరిష్ఠ ముందస్తు రోజులు",
+        "maxAdvanceDaysNote": "కస్టమర్‌లు ఎంత ముందుగా బుక్ చేయవచ్చు",
+        "minAdvanceMinutes": "కనీస ముందస్తు నిమిషాలు",
+        "minAdvanceMinutesNote": "బుకింగ్ ప్రారంభానికి ముందు కనీస లీడ్ టైమ్",
+        "monthlyItc": "నెలవారీ ఇన్‌పుట్ టాక్స్ క్రెడిట్ అంచనా (ఐచ్ఛికం)",
+        "opens": "తెరుస్తుంది",
+        "operatingHours": "ఆపరేటింగ్ గంటలు",
+        "operatingHoursPrefix": "ఆపరేటింగ్ గంటలు:",
+        "ownerModeLabel": "ఓనర్ మోడ్ (అనియంత్రితం)",
+        "photos": "ఫోటోలు",
+        "requestDataExportBody": "మీ డేటా ఎగుమతి (పేరు, ఫోన్, ఇమెయిల్, క్లబ్ పేరు, సబ్‌స్క్రిప్షన్ చరిత్ర) 72 గంటలలోపు {{email}}కు పంపబడుతుంది.",
+        "requestDataExportTitle": "డేటా ఎగుమతి అభ్యర్థించాలా?",
+        "requestSubmitted": "అభ్యర్థన సమర్పించబడింది",
+        "requireBookingCoupon": "బుకింగ్ కూపన్ అవసరం",
+        "saveAmenities": "సౌకర్యాలను సేవ్ చేయండి",
+        "saveBookableHours": "బుక్ చేయగల గంటలను సేవ్ చేయండి",
+        "saveBookableTypes": "బుక్ చేయగల రకాలను సేవ్ చేయండి",
+        "saveBookingRules": "బుకింగ్ నియమాలను సేవ్ చేయండి",
+        "saveCouponSettings": "కూపన్ సెట్టింగ్‌లను సేవ్ చేయండి",
+        "saveDescription": "వివరణ సేవ్ చేయండి",
+        "saveGst": "GST సెట్టింగ్‌లను సేవ్ చేయండి",
+        "saveLocation": "లొకేషన్ సేవ్ చేయండి",
+        "saveOperatingHours": "ఆపరేటింగ్ గంటలను సేవ్ చేయండి",
+        "saveSlotDurations": "స్లాట్ వ్యవధులను సేవ్ చేయండి",
+        "selectAtLeastOneTab": "కనీసం ఒక ట్యాబ్ ఎంచుకోండి.",
+        "selectAtLeastOneTable": "నిర్దిష్ట టేబుల్‌లు ఉపయోగించేటప్పుడు కనీసం ఒక టేబుల్ ఎంచుకోండి.",
+        "selectSlotDuration": "కనీసం ఒక స్లాట్ వ్యవధి ఎంచుకోండి.",
+        "setOperatingHoursFirst": "ముందు క్లబ్ ప్రొఫైల్ కింద ఆపరేటింగ్ గంటలను సెట్ చేయండి, తర్వాత ఇక్కడ బుక్ చేయగల గంటలను సేవ్ చేయండి.",
+        "showClubInSearch": "కస్టమర్ శోధనలో క్లబ్‌ను చూపించండి",
+        "slotDurationOptions": "స్లాట్ వ్యవధి ఎంపికలు",
+        "specificTables": "{{count}} నిర్దిష్ట టేబుల్‌లు",
+        "supplyInterstate": "ఇంటర్‌స్టేట్ (IGST)",
+        "supplyIntrastate": "ఇంట్రా‌స్టేట్ (CGST + SGST)",
+        "supplyType": "సరఫరా రకం",
+        "tableActive": "సక్రియం",
+        "tableDisabled": "నిష్క్రియం",
+        "timeTo": "నుండి",
+        "uploading": "అప్‌లోడ్ అవుతోంది…"
+      },
+      "hhmmStart": "HH:MM start",
+      "labelField": "లేబుల్",
+      "labelPlaceholder": "లేబుల్ *",
+      "passcode": {
+        "ok": "సరే"
+      },
+      "sections": {
+        "tables": "టేబుల్‌లు"
+      },
+      "timezonePlaceholder": "Asia/Kolkata"
+    },
+    "slots": {
+      "addTeammate": "ఆటగాడిని జోడించండి",
+      "addTeammatePhone": "ఆటగాడి ఫోన్",
+      "age18Plus": "18+",
+      "assignBothSides": "ప్రతి వైపున కనీసం ఒక ఆటగాడిని కేటాయించండి.",
+      "billBreakdown": "బిల్ వివరాలు",
+      "checkInCode": "చెక్-ఇన్ కోడ్",
+      "checkoutCounterSnacks": "కౌంటర్ స్నాక్స్",
+      "checkoutDiscount": "డిస్కౌంట్ ({{percent}}%)",
+      "checkoutItemLine": "{{name}} × {{qty}}",
+      "checkoutKitchenItems": "కిచెన్ అంశాలు",
+      "checkoutSectionSubtotal": "ఉపమొత్తం",
+      "checkoutTableRate": "{{minutes}} నిమి @ {{rate}}/నిమి",
+      "checkoutTableTime": "టేబుల్ సమయం",
+      "checkoutTableTotal": "టేబుల్ మొత్తం",
+      "continueToGroup": "కొనసాగించండి",
+      "customerNamePlaceholder": "కస్టమర్ పేరు టైప్ చేయండి…",
+      "customerNameSearch": "లేదా పేరుతో శోధించండి",
+      "groupSetupHint": "ఈ టేబుల్‌లో ఆడే ఆటగాళ్లను జోడించండి. ప్రతి కొత్త ఆటగాడు WhatsApp ద్వారా ఫోన్ ధృవీకరించాలి.",
+      "groupSetupTitle": "ఈ టేబుల్‌లోని ఆటగాళ్లు",
+      "losersPay": "ఓడినవారు చెల్లిస్తారు",
+      "losersPayBadge": "ఓడినవారు చెల్లిస్తారు",
+      "losersPayCheckoutNote": "ఓడినవారు చెల్లిస్తారు — బిల్ ఓడిన వైపుకు రికార్డ్ చేయబడింది.",
+      "losersPayHint": "చెక్‌ఔట్‌లో ఏ వైపు ఓడింది, టేబుల్ బిల్ ఎవరు చెల్లిస్తారో రికార్డ్ చేయండి.",
+      "mobileWhatsApp": "మొబైల్ (WhatsApp)",
+      "needTwoForVersus": "వెర్సస్ ఆట కోసం కనీసం ఒక ఆటగాడిని జోడించండి.",
+      "openQrScanner": "QR కోడ్ స్కాన్ చేయండి",
+      "paymentUpi": "UPI",
+      "playVersus": "వెర్సస్ ఆట",
+      "playVersusHint": "పోటీ మ్యాచ్ కోసం ఆటగాళ్లను Side A మరియు Side B గా విభజించండి.",
+      "playersCount": "{{count}} ఆటగాళ్లు",
+      "primaryPlayer": "ప్రాథమిక ఆటగాడు",
+      "qrAllowCamera": "కెమెరా అనుమతించండి",
+      "qrCameraPermission": "కస్టమర్ చెక్-ఇన్ కోడ్‌లను స్కాన్ చేయడానికి కెమెరా యాక్సెస్ అవసరం.",
+      "qrPlaceholder": "QR పేలోడ్ అతికించండి లేదా కౌంటర్‌లో స్కాన్ చేయండి",
+      "qrScannerHint": "కస్టమర్ ప్రొఫైల్‌లోని చెక్-ఇన్ QR వైపు చూపించండి",
+      "qrScannerTitle": "కస్టమర్ QR స్కాన్ చేయండి",
+      "registerTeammateWhatsApp": "ఆటగాడిని నమోదు — WhatsApp OTP",
+      "removePlayer": "తొలగించండి",
+      "scanQrCode": "స్కాన్ / చెక్-ఇన్ కోడ్ అతికించండి",
+      "selectLosingSide": "ఏ వైపు ఓడింది?",
+      "sideA": "Side A",
+      "sideB": "Side B",
+      "snacksCharge": "స్నాక్స్",
+      "tableCharge": "టేబుల్",
+      "teammateAlreadyAdded": "ఈ ఆటగాడు ఇప్పటికే టేబుల్‌లో ఉన్నారు.",
+      "teammates": "ఆటగాళ్లు",
+      "versusBadge": "వెర్సస్"
+    },
+    "snacks": {
+      "name": "పేరు"
+    }
+  },
+  "sharedUi": {
+    "bookingCard": {
+      "duration30": "30 నిమి",
+      "durationMinutes": "{{min}} నిమి",
+      "estimated": "అంచనా {{amount}}"
+    },
+    "clubCard": {
+      "kmAway": "{{km}} కి.మీ"
+    },
+    "liveStreamCard": {
+      "liveBadge": "LIVE"
+    },
+    "placeholders": {
+      "billModal": "BillModal",
+      "networkGuard": "NetworkGuard",
+      "offlineScreen": "OfflineScreen",
+      "passcodeSetupModal": "PasscodeSetupModal",
+      "sessionTimer": "SessionTimer",
+      "userSelector": "UserSelector"
+    },
+    "safeLocationPicker": {
+      "latitude": "అక్షాంశం",
+      "longitude": "రేఖాంశం"
+    },
+    "tableGrid": {
+      "a11yTable": "{{label}}, {{status}}{{tag}}",
+      "tableFallback": "టేబుల్"
+    },
+    "tableTypePicker": {
+      "ratePerMin": "{{rate}}/నిమి"
+    }
+  }
+}

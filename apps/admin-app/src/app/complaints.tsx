@@ -10,6 +10,7 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -20,6 +21,8 @@ import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
 import { adminTabBarTotalInset } from "../theme/adminShell";
 import { parseConvexError } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
 type ComplaintType =
   | "violent_behaviour"
@@ -48,20 +51,28 @@ type ComplaintRow = {
   sessionId: string | null;
 };
 
-function filedAgo(createdAt: number): string {
+function filedAgo(
+  createdAt: number,
+  tr: (key: string, opts?: Record<string, unknown>) => string,
+): string {
   const d = Math.floor((Date.now() - createdAt) / 86_400_000);
-  if (d <= 0) return "today";
-  if (d === 1) return "1 day ago";
-  if (d < 7) return `${d} days ago`;
+  if (d <= 0) return tr("adminApp.complaints.timeToday");
+  if (d === 1) return tr("adminApp.complaints.timeOneDayAgo");
+  if (d < 7) return tr("adminApp.complaints.timeDaysAgo", { count: d });
   const w = Math.floor(d / 7);
-  if (w === 1) return "1 week ago";
-  if (w < 5) return `${w} weeks ago`;
+  if (w === 1) return tr("adminApp.complaints.timeOneWeekAgo");
+  if (w < 5) return tr("adminApp.complaints.timeWeeksAgo", { count: w });
   const m = Math.floor(d / 30);
-  return m <= 1 ? "about 1 month ago" : `${m} months ago`;
+  return m <= 1
+    ? tr("adminApp.complaints.timeAboutOneMonthAgo")
+    : tr("adminApp.complaints.timeMonthsAgo", { count: m });
 }
 
-function dismissedAgo(removedAt: number): string {
-  return filedAgo(removedAt);
+function dismissedAgo(
+  removedAt: number,
+  tr: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  return filedAgo(removedAt, tr);
 }
 
 function parseYmdUtcStart(s: string): number | null {
@@ -92,38 +103,41 @@ function formatRangeLabel(fromMs: number, toMs: number): string {
     day: "numeric",
     timeZone: "UTC",
   };
-  return `${a.toLocaleDateString("en-US", o)} – ${b.toLocaleDateString("en-US", o)}`;
+  return `${a.toLocaleDateString(getCurrentLanguage(), o)} – ${b.toLocaleDateString(getCurrentLanguage(), o)}`;
 }
 
-function typeBadgeStyle(t: ComplaintType): {
+function typeBadgeStyle(
+  complaintType: ComplaintType,
+  tr: (key: string) => string,
+): {
   bg: string;
   fg: string;
   short: string;
 } {
-  switch (t) {
+  switch (complaintType) {
     case "violent_behaviour":
       return {
         bg: colors.status.error,
         fg: colors.text.primary,
-        short: "Violent Behaviour",
+        short: tr("adminApp.complaints.typeViolentBehaviour"),
       };
     case "theft":
       return {
         bg: colors.accent.amber,
         fg: colors.text.primary,
-        short: "Theft",
+        short: tr("adminApp.complaints.typeTheft"),
       };
     case "runaway_without_payment":
       return {
         bg: colors.accent.amberLight,
         fg: "#0D1117",
-        short: "Runaway",
+        short: tr("adminApp.complaints.typeRunaway"),
       };
     case "late_credit_payment":
       return {
         bg: colors.status.info,
         fg: colors.text.primary,
-        short: "Late Credit",
+        short: tr("adminApp.complaints.typeLateCredit"),
       };
     default:
       return {
@@ -135,16 +149,17 @@ function typeBadgeStyle(t: ComplaintType): {
 }
 
 export default function ComplaintsScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [statusTab, setStatusTab] = useState<StatusTab>("active");
   const [typeFilter, setTypeFilter] = useState<ComplaintType | "all">("all");
   const [clubId, setClubId] = useState<Id<"clubs"> | undefined>(undefined);
-  const [clubLabel, setClubLabel] = useState<string>("All Clubs");
+  const [clubLabel, setClubLabel] = useState<string>(() => t("adminApp.complaints.allClubs"));
   const [dateFromMs, setDateFromMs] = useState<number | undefined>(undefined);
   const [dateToMs, setDateToMs] = useState<number | undefined>(undefined);
-  const [dateChipLabel, setDateChipLabel] = useState<string>("Any Date");
+  const [dateChipLabel, setDateChipLabel] = useState<string>(() => t("adminApp.complaints.anyDate"));
 
   const [fetchCursor, setFetchCursor] = useState<string | undefined>(undefined);
   const [rows, setRows] = useState<ComplaintRow[]>([]);
@@ -204,6 +219,13 @@ export default function ComplaintsScreen(): React.JSX.Element {
     setFetchCursor(page.nextCursor);
   }, [page?.nextCursor, fetchCursor, rows.length]);
 
+  const { refreshing, onRefresh } = usePullToRefresh(
+    useCallback(() => {
+      setFetchCursor(undefined);
+      setRows([]);
+    }, []),
+  );
+
   const hasNonDefaultFilters =
     typeFilter !== "all" ||
     clubId !== undefined ||
@@ -214,15 +236,17 @@ export default function ComplaintsScreen(): React.JSX.Element {
     const p: string[] = [];
     if (statusTab !== "active") {
       p.push(
-        statusTab === "dismissed" ? "Dismissed" : "All statuses",
+        statusTab === "dismissed"
+          ? t("adminApp.complaints.statusDismissed")
+          : t("adminApp.complaints.summaryAllStatuses"),
       );
     }
     if (typeFilter !== "all") {
       const map: Record<string, string> = {
-        violent_behaviour: "Violent Behaviour",
-        theft: "Theft",
-        runaway_without_payment: "Runaway",
-        late_credit_payment: "Late Credit",
+        violent_behaviour: t("adminApp.complaints.typeViolentBehaviour"),
+        theft: t("adminApp.complaints.typeTheft"),
+        runaway_without_payment: t("adminApp.complaints.typeRunaway"),
+        late_credit_payment: t("adminApp.complaints.typeLateCredit"),
       };
       p.push(map[typeFilter] ?? typeFilter);
     }
@@ -233,23 +257,26 @@ export default function ComplaintsScreen(): React.JSX.Element {
       p.push(dateChipLabel);
     }
     return p;
-  }, [statusTab, typeFilter, clubId, clubLabel, dateFromMs, dateToMs, dateChipLabel]);
+  }, [statusTab, typeFilter, clubId, clubLabel, dateFromMs, dateToMs, dateChipLabel, t]);
 
   const clearAllFilters = () => {
     setStatusTab("active");
     setTypeFilter("all");
     setClubId(undefined);
-    setClubLabel("All Clubs");
+    setClubLabel(t("adminApp.complaints.allClubs"));
     setDateFromMs(undefined);
     setDateToMs(undefined);
-    setDateChipLabel("Any Date");
+    setDateChipLabel(t("adminApp.complaints.anyDate"));
   };
 
   const applyDateRange = () => {
     const a = parseYmdUtcStart(dateFromStr);
     const b = parseYmdUtcEnd(dateToStr);
     if (a === null || b === null || a > b) {
-      Alert.alert("Invalid range", "Use YYYY-MM-DD for From and To (UTC).");
+      Alert.alert(
+        t("adminApp.complaints.invalidRangeTitle"),
+        t("adminApp.complaints.invalidRangeBody"),
+      );
       return;
     }
     setDateFromMs(a);
@@ -270,9 +297,9 @@ export default function ComplaintsScreen(): React.JSX.Element {
       });
       setDismissTarget(null);
       setDismissReason("");
-      Alert.alert("Complaint dismissed.");
+      Alert.alert(t("adminApp.complaints.dismissedAlert"));
     } catch (e) {
-      Alert.alert("Error", parseConvexError(e as Error).message);
+      Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
     } finally {
       setDismissLoading(false);
     }
@@ -292,11 +319,9 @@ export default function ComplaintsScreen(): React.JSX.Element {
       if (anyFilter) {
         return (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>
-              No complaints match your current filters.
-            </Text>
+            <Text style={styles.emptyTitle}>{t("adminApp.complaints.emptyFiltered")}</Text>
             <Pressable style={styles.clearBtn} onPress={clearAllFilters}>
-              <Text style={styles.clearBtnText}>Clear Filters</Text>
+              <Text style={styles.clearBtnText}>{t("adminApp.complaints.clearFilters")}</Text>
             </Pressable>
           </View>
         );
@@ -308,9 +333,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
             size={48}
             color={colors.text.secondary}
           />
-          <Text style={styles.emptyTitle}>
-            No complaints have been filed on the platform yet.
-          </Text>
+          <Text style={styles.emptyTitle}>{t("adminApp.complaints.emptyNone")}</Text>
         </View>
       );
     }
@@ -324,32 +347,28 @@ export default function ComplaintsScreen(): React.JSX.Element {
               size={48}
               color={colors.accent.green}
             />
-            <Text style={styles.emptyTitle}>
-              No active complaints. All complaints have been reviewed.
-            </Text>
+            <Text style={styles.emptyTitle}>{t("adminApp.complaints.emptyAllReviewed")}</Text>
           </View>
         );
       }
       if (statusTab === "dismissed") {
         return (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>No dismissed complaints yet.</Text>
+            <Text style={styles.emptyTitle}>{t("adminApp.complaints.emptyDismissed")}</Text>
           </View>
         );
       }
       return (
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>
-            No complaints match your current filters.
-          </Text>
+          <Text style={styles.emptyTitle}>{t("adminApp.complaints.emptyFiltered")}</Text>
           <Pressable style={styles.clearBtn} onPress={clearAllFilters}>
-            <Text style={styles.clearBtnText}>Clear Filters</Text>
+            <Text style={styles.clearBtnText}>{t("adminApp.complaints.clearFilters")}</Text>
           </Pressable>
         </View>
       );
     }
     return null;
-  }, [page, statusTab, typeFilter, clubId, dateFromMs]);
+  }, [page, statusTab, typeFilter, clubId, dateFromMs, t]);
 
   const filteredClubs = useMemo(() => {
     if (!clubs) return [];
@@ -360,22 +379,22 @@ export default function ComplaintsScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <Text style={styles.screenTitle}>Complaints</Text>
+      <Text style={styles.screenTitle}>{t("adminApp.complaints.title")}</Text>
 
       <View style={styles.statsRow}>
         <View style={[styles.statPill, styles.statPillTotal]}>
           <Text style={styles.statPillTextTotal}>
-            {page?.totalCount ?? "—"} Total
+            {t("adminApp.complaints.total", { count: page?.totalCount ?? "—" })}
           </Text>
         </View>
         <View style={[styles.statPill, styles.statPillActive]}>
           <Text style={styles.statPillTextOn}>
-            {page?.activeCount ?? "—"} Active
+            {t("adminApp.complaints.active", { count: page?.activeCount ?? "—" })}
           </Text>
         </View>
         <View style={[styles.statPill, styles.statPillDismissed]}>
           <Text style={styles.statPillTextOn}>
-            {page?.dismissedCount ?? "—"} Dismissed
+            {t("adminApp.complaints.dismissed", { count: page?.dismissedCount ?? "—" })}
           </Text>
         </View>
       </View>
@@ -388,9 +407,9 @@ export default function ComplaintsScreen(): React.JSX.Element {
         <View style={styles.filterGroup}>
           {(
             [
-              ["active", "Active"],
-              ["dismissed", "Dismissed"],
-              ["all", "All"],
+              ["active", t("adminApp.complaints.tabActive")],
+              ["dismissed", t("adminApp.complaints.tabDismissed")],
+              ["all", t("adminApp.complaints.tabAll")],
             ] as const
           ).map(([k, label]) => (
             <Pressable
@@ -415,11 +434,11 @@ export default function ComplaintsScreen(): React.JSX.Element {
         <View style={styles.filterGroup}>
           {(
             [
-              ["all", "All Types"],
-              ["violent_behaviour", "Violent Behaviour"],
-              ["theft", "Theft"],
-              ["runaway_without_payment", "Runaway"],
-              ["late_credit_payment", "Late Credit"],
+              ["all", t("adminApp.complaints.allTypes")],
+              ["violent_behaviour", t("adminApp.complaints.typeViolentBehaviour")],
+              ["theft", t("adminApp.complaints.typeTheft")],
+              ["runaway_without_payment", t("adminApp.complaints.typeRunaway")],
+              ["late_credit_payment", t("adminApp.complaints.typeLateCredit")],
             ] as const
           ).map(([k, label]) => (
             <Pressable
@@ -483,10 +502,10 @@ export default function ComplaintsScreen(): React.JSX.Element {
       {hasNonDefaultFilters ? (
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText} numberOfLines={2}>
-            Showing: {summaryParts.join(" · ")}
+            {t("adminApp.complaints.showing", { summary: summaryParts.join(" · ") })}
           </Text>
           <Pressable onPress={clearAllFilters} style={styles.clearLinkWrap}>
-            <Text style={styles.clearLink}>Clear All</Text>
+            <Text style={styles.clearLink}>{t("adminApp.complaints.clearAll")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -513,6 +532,9 @@ export default function ComplaintsScreen(): React.JSX.Element {
             styles.listPad,
             { paddingBottom: adminTabBarTotalInset(insets.bottom) },
           ]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
           onEndReached={loadMore}
           onEndReachedThreshold={0.35}
           ListFooterComponent={
@@ -524,7 +546,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
             ) : null
           }
           renderItem={({ item }) => {
-            const tb = typeBadgeStyle(item.type);
+            const tb = typeBadgeStyle(item.type, t);
             const isOpen = expanded[item._id];
             return (
               <View style={styles.card}>
@@ -548,7 +570,9 @@ export default function ComplaintsScreen(): React.JSX.Element {
                       ]}
                     />
                     <Text style={styles.statusTxt}>
-                      {item.status === "active" ? "Active" : "Dismissed"}
+                      {item.status === "active"
+                        ? t("adminApp.complaints.statusActive")
+                        : t("adminApp.complaints.statusDismissed")}
                     </Text>
                   </View>
                 </View>
@@ -602,22 +626,28 @@ export default function ComplaintsScreen(): React.JSX.Element {
                     }
                   >
                     <Text style={styles.showMore}>
-                      {isOpen ? "Show less" : "Show more"}
+                      {isOpen ? t("adminApp.complaints.showLess") : t("adminApp.complaints.showMore")}
                     </Text>
                   </Pressable>
                 ) : null}
 
                 <Text style={styles.filed}>
-                  Filed {filedAgo(item.createdAt)}
+                  {t("adminApp.complaints.filed", { time: filedAgo(item.createdAt, t) })}
                 </Text>
 
                 {item.status === "dismissed" && item.removedAt != null ? (
                   <View style={styles.dismissedFoot}>
                     <Text style={styles.dismissedMeta}>
-                      Dismissed {dismissedAgo(item.removedAt)}
                       {item.dismissedBy
-                        ? ` by ${item.dismissedBy.name} (${item.dismissedBy.role === "owner" ? "Owner" : "Admin"})`
-                        : ""}
+                        ? t("adminApp.complaints.dismissedMeta", {
+                            time: dismissedAgo(item.removedAt, t),
+                            name: item.dismissedBy.name,
+                            role:
+                              item.dismissedBy.role === "owner"
+                                ? t("adminApp.roles.owner")
+                                : t("adminApp.roles.admin"),
+                          })
+                        : `${t("adminApp.complaints.statusDismissed")} ${dismissedAgo(item.removedAt, t)}`}
                     </Text>
                     {item.dismissalReason ? (
                       <Text style={styles.dismissedReason} numberOfLines={2}>
@@ -635,7 +665,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
                       setDismissTarget(item);
                     }}
                   >
-                    <Text style={styles.dismissBtnTxt}>Dismiss</Text>
+                    <Text style={styles.dismissBtnTxt}>{t("adminApp.complaints.dismiss")}</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -647,10 +677,10 @@ export default function ComplaintsScreen(): React.JSX.Element {
       <Modal visible={clubSheetOpen} animationType="slide" transparent>
         <View style={styles.sheetBackdrop}>
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Select club</Text>
+            <Text style={styles.sheetTitle}>{t("adminApp.complaints.selectClub")}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Search clubs…"
+              placeholder={t("adminApp.complaints.searchClubs")}
               placeholderTextColor={colors.text.secondary}
               value={clubSearch}
               onChangeText={setClubSearch}
@@ -664,11 +694,11 @@ export default function ComplaintsScreen(): React.JSX.Element {
                   style={styles.sheetRow}
                   onPress={() => {
                     setClubId(undefined);
-                    setClubLabel("All Clubs");
+                    setClubLabel(t("adminApp.complaints.allClubs"));
                     setClubSheetOpen(false);
                   }}
                 >
-                  <Text style={styles.sheetRowTxt}>All Clubs</Text>
+                  <Text style={styles.sheetRowTxt}>{t("adminApp.complaints.allClubs")}</Text>
                 </Pressable>
               }
               renderItem={({ item }) => (
@@ -688,7 +718,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
               style={styles.sheetCancel}
               onPress={() => setClubSheetOpen(false)}
             >
-              <Text style={styles.sheetCancelTxt}>Close</Text>
+              <Text style={styles.sheetCancelTxt}>{t("adminApp.complaints.close")}</Text>
             </Pressable>
           </View>
         </View>
@@ -697,32 +727,32 @@ export default function ComplaintsScreen(): React.JSX.Element {
       <Modal visible={dateSheetOpen} animationType="slide" transparent>
         <View style={styles.sheetBackdrop}>
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Date range (UTC)</Text>
-            <Text style={styles.sheetHint}>YYYY-MM-DD</Text>
-            <Text style={styles.inputLabel}>From</Text>
+            <Text style={styles.sheetTitle}>{t("adminApp.complaints.dateRangeTitle")}</Text>
+            <Text style={styles.sheetHint}>{t("adminApp.complaints.dateFormatHint")}</Text>
+            <Text style={styles.inputLabel}>{t("adminApp.complaints.from")}</Text>
             <TextInput
               style={styles.input}
               value={dateFromStr}
               onChangeText={setDateFromStr}
-              placeholder="2026-04-01"
+              placeholder={t("adminApp.complaints.dateFormatHint")}
               placeholderTextColor={colors.text.secondary}
               autoCapitalize="none"
             />
-            <Text style={styles.inputLabel}>To</Text>
+            <Text style={styles.inputLabel}>{t("adminApp.complaints.to")}</Text>
             <TextInput
               style={styles.input}
               value={dateToStr}
               onChangeText={setDateToStr}
-              placeholder="2026-04-15"
+              placeholder={t("adminApp.complaints.dateFormatHint")}
               placeholderTextColor={colors.text.secondary}
               autoCapitalize="none"
             />
             <View style={styles.sheetActions}>
               <Pressable onPress={() => setDateSheetOpen(false)}>
-                <Text style={styles.sheetCancelTxt}>Cancel</Text>
+                <Text style={styles.sheetCancelTxt}>{t("adminApp.complaints.cancel")}</Text>
               </Pressable>
               <Pressable onPress={applyDateRange}>
-                <Text style={styles.applyTxt}>Apply</Text>
+                <Text style={styles.applyTxt}>{t("adminApp.complaints.apply")}</Text>
               </Pressable>
             </View>
           </View>
@@ -732,28 +762,27 @@ export default function ComplaintsScreen(): React.JSX.Element {
       <Modal visible={dismissTarget !== null} animationType="slide" transparent>
         <View style={styles.sheetBackdrop}>
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Dismiss Complaint</Text>
-            <Text style={styles.sheetSub}>
-              Mark this complaint as reviewed and invalid. The flag will be
-              removed from the customer&apos;s record.
-            </Text>
+            <Text style={styles.sheetTitle}>{t("adminApp.complaints.dismissTitle")}</Text>
+            <Text style={styles.sheetSub}>{t("adminApp.complaints.dismissSubtitle")}</Text>
             {dismissTarget ? (
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryType}>{dismissTarget.typeLabel}</Text>
                 <Text style={styles.summaryLine}>{dismissTarget.customer.name}</Text>
                 <Text style={styles.summaryLine}>{dismissTarget.club.name}</Text>
                 <Text style={styles.summaryLine}>
-                  Filed {new Date(dismissTarget.createdAt).toLocaleDateString()}
+                  {t("adminApp.complaints.filed", {
+                    time: new Date(dismissTarget.createdAt).toLocaleDateString(getCurrentLanguage()),
+                  })}
                 </Text>
               </View>
             ) : null}
-            <Text style={styles.inputLabel}>Reason for dismissal</Text>
+            <Text style={styles.inputLabel}>{t("adminApp.complaints.reasonLabel")}</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               multiline
               value={dismissReason}
               onChangeText={setDismissReason}
-              placeholder="Explain why this complaint is being dismissed…"
+              placeholder={t("adminApp.complaints.reasonPlaceholder")}
               placeholderTextColor={colors.text.secondary}
               maxLength={500}
             />
@@ -767,7 +796,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
                   setDismissReason("");
                 }}
               >
-                <Text style={styles.sheetCancelTxt}>Cancel</Text>
+                <Text style={styles.sheetCancelTxt}>{t("adminApp.complaints.cancel")}</Text>
               </Pressable>
               <Pressable
                 onPress={onConfirmDismiss}
@@ -784,7 +813,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
                       dismissReason.trim().length === 0 && { opacity: 0.4 },
                     ]}
                   >
-                    Confirm Dismiss
+                    {t("adminApp.complaints.confirmDismiss")}
                   </Text>
                 )}
               </Pressable>

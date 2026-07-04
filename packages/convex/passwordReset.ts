@@ -21,15 +21,44 @@ export const getUserForPasswordReset = internalQuery({
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", normalized))
       .unique();
-    if (!user) return null;
+    if (!user || !user.email) return null;
     const acc = await ctx.db
       .query("authAccounts")
       .withIndex("userIdAndProvider", (q) =>
         q.eq("userId", user._id).eq("provider", "password"),
       )
       .unique();
+    return {
+      userId: user._id,
+      providerAccountId: acc?.providerAccountId ?? normalized,
+      deliveryEmail: normalized,
+    };
+  },
+});
+
+/** Customer accounts may use E.164 phone as password provider id (no email on file). */
+export const getUserForPasswordResetByUserId = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get(userId);
+    if (!user) return null;
+    const acc = await ctx.db
+      .query("authAccounts")
+      .withIndex("userIdAndProvider", (q) =>
+        q.eq("userId", userId).eq("provider", "password"),
+      )
+      .unique();
     if (!acc) return null;
-    return { userId: user._id, providerAccountId: acc.providerAccountId };
+
+    const email = user.email?.trim().toLowerCase();
+    if (email && email.includes("@")) {
+      return {
+        userId,
+        providerAccountId: acc.providerAccountId,
+        deliveryEmail: email,
+      };
+    }
+    return null;
   },
 });
 

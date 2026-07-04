@@ -1,7 +1,7 @@
 "use node";
 
 /**
- * FCM via firebase-admin + Resend HTML emails (@react-email).
+ * FCM via firebase-admin + Resend HTML emails (plain HTML templates).
  * Secrets: FIREBASE_PROJECT_ID, FIREBASE_SERVICE_ACCOUNT_JSON, RESEND_API_KEY.
  */
 
@@ -11,6 +11,19 @@ import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
+import {
+  customerWelcomeHtml,
+  dataExportHtml,
+  deletionConfirmationHtml,
+  mfaCodeHtml,
+  onboardingWelcomeHtml,
+  ownerEmailVerificationHtml,
+  passcodeResetHtml,
+  passwordResetHtml,
+  renewalConfirmationHtml,
+  subscriptionGracePeriodHtml,
+  subscriptionReminderHtml,
+} from "./model/transactionalEmailHtml";
 
 // Ensure a3billiards.com is verified in your Resend dashboard before deployment.
 const RESEND_FROM = "A3 Billiards OS <noreply@a3billiards.com>";
@@ -141,75 +154,43 @@ async function sendEmail({ to, subject, html, text, attachments }: SendEmailOpts
 export const sendPasswordResetEmail = internalAction({
   args: { email: v.string(), resetLink: v.string() },
   handler: async (_ctx, { email, resetLink }) => {
-    const { render } = await import("@react-email/render");
-    const { PasswordReset } = await import("../../emails/templates/PasswordReset");
-    const html = await render(PasswordReset({ resetLink }));
+    const html = passwordResetHtml(resetLink);
     const text = `Reset your A3 Billiards OS password (expires in 1 hour): ${resetLink}\n\nIf you didn't request this, ignore this email.`;
-    await sendEmail({
-      to: email,
-      subject: "Reset your A3 Billiards OS password",
-      html,
-      text,
-    });
+    await sendEmail({ to: email, subject: "Reset your A3 Billiards OS password", html, text });
   },
 });
 
 export const sendPasscodeResetEmail = internalAction({
   args: { email: v.string(), resetLink: v.string() },
   handler: async (_ctx, { email, resetLink }) => {
-    const { render } = await import("@react-email/render");
-    const { PasscodeReset } = await import("../../emails/templates/PasscodeReset");
-    const html = await render(PasscodeReset({ resetLink }));
+    const html = passcodeResetHtml(resetLink);
     const text = `Reset your settings PIN: ${resetLink}`;
-    await sendEmail({
-      to: email,
-      subject: "Reset your A3 Billiards OS settings PIN",
-      html,
-      text,
-    });
+    await sendEmail({ to: email, subject: "Reset your A3 Billiards OS settings PIN", html, text });
   },
 });
 
 export const sendMfaEmail = internalAction({
   args: { email: v.string(), code: v.string() },
   handler: async (_ctx, { email, code }) => {
-    const { render } = await import("@react-email/render");
-    const { AdminMfa } = await import("../../emails/templates/AdminMfa");
-    const html = await render(AdminMfa({ code }));
+    const html = mfaCodeHtml(code);
     const text = `Your A3 Billiards OS verification code: ${code}. Expires in 10 minutes.`;
-    await sendEmail({
-      to: email,
-      subject: "Your A3 Billiards OS verification code",
-      html,
-      text,
-    });
+    await sendEmail({ to: email, subject: "Your A3 Billiards OS verification code", html, text });
   },
 });
 
 export const sendOwnerEmailVerificationEmail = internalAction({
   args: { email: v.string(), code: v.string() },
   handler: async (_ctx, { email, code }) => {
-    const { render } = await import("@react-email/render");
-    const { OwnerEmailVerification } = await import(
-      "../../emails/templates/OwnerEmailVerification"
-    );
-    const html = await render(OwnerEmailVerification({ code }));
+    const html = ownerEmailVerificationHtml(code);
     const text = `Your A3 Billiards owner email verification code: ${code}. Expires in 10 minutes.`;
-    await sendEmail({
-      to: email,
-      subject: "Verify your A3 Billiards owner email",
-      html,
-      text,
-    });
+    await sendEmail({ to: email, subject: "Verify your A3 Billiards owner email", html, text });
   },
 });
 
 export const sendCustomerWelcomeEmail = internalAction({
   args: { email: v.string() },
   handler: async (_ctx, { email }) => {
-    const { render } = await import("@react-email/render");
-    const { CustomerWelcome } = await import("../../emails/templates/CustomerWelcome");
-    const html = await render(CustomerWelcome());
+    const html = customerWelcomeHtml();
     await sendEmail({
       to: email,
       subject: "Welcome to A3 Billiards OS",
@@ -226,11 +207,7 @@ export const sendOnboardingWelcomeEmail = internalAction({
     subscriptionExpiryLabel: v.string(),
   },
   handler: async (_ctx, { email, clubName, subscriptionExpiryLabel }) => {
-    const { render } = await import("@react-email/render");
-    const { OnboardingWelcome } = await import("../../emails/templates/OnboardingWelcome");
-    const html = await render(
-      OnboardingWelcome({ clubName, subscriptionExpiryLabel }),
-    );
+    const html = onboardingWelcomeHtml(clubName, subscriptionExpiryLabel);
     await sendEmail({
       to: email,
       subject: "Your club is live on A3 Billiards OS",
@@ -248,11 +225,7 @@ export const sendSubscriptionReminderEmail = internalAction({
     daysUntil: v.number(),
   },
   handler: async (_ctx, { email, clubName, expiryDate, daysUntil }) => {
-    const { render } = await import("@react-email/render");
-    const { SubscriptionReminder } = await import("../../emails/templates/SubscriptionReminder");
-    const html = await render(
-      SubscriptionReminder({ clubName, expiryDate, daysUntil }),
-    );
+    const html = subscriptionReminderHtml(clubName, expiryDate, daysUntil);
     const dayLabel = daysUntil === 1 ? "1 day" : `${daysUntil} days`;
     await sendEmail({
       to: email,
@@ -270,13 +243,7 @@ export const sendSubscriptionGracePeriodEmail = internalAction({
     freezeTime: v.string(),
   },
   handler: async (_ctx, { email, clubName, freezeTime }) => {
-    const { render } = await import("@react-email/render");
-    const { SubscriptionGracePeriod } = await import(
-      "../../emails/templates/SubscriptionGracePeriod"
-    );
-    const html = await render(
-      SubscriptionGracePeriod({ clubName, freezeTime }),
-    );
+    const html = subscriptionGracePeriodHtml(clubName, freezeTime);
     await sendEmail({
       to: email,
       subject: "Action required: renew your A3 Billiards OS subscription",
@@ -293,11 +260,7 @@ export const sendDeletionConfirmationEmail = internalAction({
     role: v.string(),
   },
   handler: async (_ctx, { email, cancelLink, role }) => {
-    const { render } = await import("@react-email/render");
-    const { DeletionConfirmation } = await import(
-      "../../emails/templates/DeletionConfirmation"
-    );
-    const html = await render(DeletionConfirmation({ cancelLink, role }));
+    const html = deletionConfirmationHtml(cancelLink, role);
     await sendEmail({
       to: email,
       subject: "Your A3 Billiards OS account deletion is scheduled",
@@ -314,11 +277,7 @@ export const sendRenewalConfirmationEmail = internalAction({
     newExpiryDate: v.string(),
   },
   handler: async (_ctx, { email, clubName, newExpiryDate }) => {
-    const { render } = await import("@react-email/render");
-    const { RenewalConfirmation } = await import(
-      "../../emails/templates/RenewalConfirmation"
-    );
-    const html = await render(RenewalConfirmation({ clubName, newExpiryDate }));
+    const html = renewalConfirmationHtml(clubName, newExpiryDate);
     await sendEmail({
       to: email,
       subject: "Subscription renewed — you're all set",
@@ -331,9 +290,7 @@ export const sendRenewalConfirmationEmail = internalAction({
 export const sendDataExportEmailWithJson = internalAction({
   args: { email: v.string(), json: v.string(), readableText: v.string() },
   handler: async (_ctx, { email, json, readableText }) => {
-    const { render } = await import("@react-email/render");
-    const { DataExport } = await import("../../emails/templates/DataExport");
-    const html = await render(DataExport({ attached: true, summary: readableText }));
+    const html = dataExportHtml(readableText);
     const b64 = Buffer.from(json, "utf8").toString("base64");
     await sendEmail({
       to: email,

@@ -6,6 +6,7 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -14,12 +15,14 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius } from "@a3/ui/theme";
 import { TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
 import {
   addCalendarDaysYmd,
   normalizeIanaTimeZone,
   timeZoneAbbreviation,
 } from "@a3/utils/timezone";
 import { formatCurrency } from "@a3/utils/billing";
+import { useTranslation } from "@a3/i18n";
 import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../lib/StaffRoleContext";
 import { TabAccessDenied } from "../components/TabAccessDenied";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
@@ -28,9 +31,6 @@ import {
   useFinancialDateRangeInvalid,
 } from "../components/FinancialDateRangeBar";
 import { ownerTabBarTotalInset } from "../theme/ownerShell";
-
-const DISCLAIMER =
-  "This report provides estimates for your own bookkeeping convenience only. It is not tax, legal, or accounting advice, and is not a substitute for a qualified Chartered Accountant or tax filing software.";
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -41,6 +41,8 @@ function formatMoney(amount: number, currency: string): string {
 }
 
 function GstReportContent(): React.JSX.Element {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
@@ -101,7 +103,7 @@ function GstReportContent(): React.JSX.Element {
   }
 
   if (roleId !== undefined && !canAccessTab("financials")) {
-    return <TabAccessDenied tabLabel="Financials" />;
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.financials")} />;
   }
 
   if (access === undefined) {
@@ -122,12 +124,12 @@ function GstReportContent(): React.JSX.Element {
           style={styles.backRow}
         >
           <MaterialIcons name="arrow-back" size={22} color={colors.text.primary} />
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.backText}>{t("ownerApp.financials.back")}</Text>
         </Pressable>
         <View style={styles.deniedBox}>
           <MaterialIcons name="lock" size={48} color={colors.text.secondary} />
           <Text style={styles.deniedTitle}>
-            {"You don't have permission to view financial data."}
+            {t("ownerApp.financials.noPermission")}
           </Text>
         </View>
       </SafeAreaView>
@@ -151,15 +153,18 @@ function GstReportContent(): React.JSX.Element {
           style={styles.backRow}
         >
           <MaterialIcons name="arrow-back" size={22} color={colors.text.primary} />
-          <Text style={styles.backText}>Financials</Text>
+          <Text style={styles.backText}>{t("ownerApp.financials.title")}</Text>
         </Pressable>
-        <Text style={styles.title}>GST Report</Text>
-        <Text style={styles.sub}>Estimated GST breakdown for your records</Text>
+        <Text style={styles.title}>{t("ownerApp.financials.gstReport")}</Text>
+        <Text style={styles.sub}>{t("ownerApp.financials.gstReportSub")}</Text>
       </View>
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <View style={styles.disclaimerBox} accessibilityRole="text">
           <MaterialIcons
@@ -169,8 +174,8 @@ function GstReportContent(): React.JSX.Element {
             style={styles.disclaimerIcon}
           />
           <View style={styles.disclaimerTextWrap}>
-            <Text style={styles.disclaimerTitle}>Estimate only — not tax advice</Text>
-            <Text style={styles.disclaimerBody}>{DISCLAIMER}</Text>
+            <Text style={styles.disclaimerTitle}>{t("ownerApp.financials.gstDisclaimerTitle")}</Text>
+            <Text style={styles.disclaimerBody}>{t("ownerApp.financials.gstDisclaimerBody")}</Text>
           </View>
         </View>
 
@@ -191,7 +196,7 @@ function GstReportContent(): React.JSX.Element {
           >
             <MaterialIcons name="settings" size={20} color={colors.accent.green} />
             <Text style={styles.settingsHintText}>
-              Configure GST Settings in Settings before running this report.
+              {t("ownerApp.financials.gstConfigureHint")}
             </Text>
             <MaterialIcons name="chevron-right" size={22} color={colors.text.secondary} />
           </Pressable>
@@ -200,40 +205,39 @@ function GstReportContent(): React.JSX.Element {
         {report === undefined ? (
           <ActivityIndicator color={colors.accent.green} style={styles.loader} />
         ) : report.invalidRange ? (
-          <Text style={styles.errText}>Invalid date range.</Text>
+          <Text style={styles.errText}>{t("ownerApp.financials.gstInvalidRange")}</Text>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>Period summary</Text>
+            <Text style={styles.sectionTitle}>{t("ownerApp.financials.gstPeriodSummary")}</Text>
             <View style={styles.card}>
               <Row
-                label="Period"
+                label={t("ownerApp.financials.gstPeriod")}
                 value={`${report.dateFrom} → ${report.dateTo}`}
               />
-              <Row label="Sessions (realised revenue)" value={String(report.sessionCount)} />
-              {report.gstin ? <Row label="GSTIN" value={report.gstin} /> : null}
+              <Row label={t("ownerApp.financials.gstSessionsRealised")} value={String(report.sessionCount)} />
+              {report.gstin ? <Row label={t("ownerApp.financials.gstin")} value={report.gstin} /> : null}
             </View>
 
             {!report.gstRegistered ? (
               <View style={styles.card}>
                 <Text style={styles.mutedNote}>
-                  GST is marked as not registered in your GST Settings. Output tax
-                  lines are shown as zero. Update Settings if you are GST-registered.
+                  {t("ownerApp.financials.gstNotRegisteredNote")}
                 </Text>
               </View>
             ) : (
               <>
-                <Text style={styles.sectionTitle}>Taxable revenue (ex-GST)</Text>
+                <Text style={styles.sectionTitle}>{t("ownerApp.financials.gstTaxableRevenue")}</Text>
                 <View style={styles.card}>
                   <Row
-                    label="Table time (after discounts)"
+                    label={t("ownerApp.financials.gstTableTimeAfterDiscounts")}
                     value={formatMoney(report.taxableTableRevenue, currency)}
                   />
                   <Row
-                    label="Snacks"
+                    label={t("ownerApp.financials.snacks")}
                     value={formatMoney(report.taxableSnackRevenue, currency)}
                   />
                   <Row
-                    label="Total taxable"
+                    label={t("ownerApp.financials.gstTotalTaxable")}
                     value={formatMoney(
                       report.taxableTableRevenue + report.taxableSnackRevenue,
                       currency,
@@ -242,40 +246,40 @@ function GstReportContent(): React.JSX.Element {
                   />
                 </View>
 
-                <Text style={styles.sectionTitle}>Output GST (estimate)</Text>
+                <Text style={styles.sectionTitle}>{t("ownerApp.financials.gstOutputEstimate")}</Text>
                 <View style={styles.card}>
                   <Row
-                    label="GST on table time"
+                    label={t("ownerApp.financials.gstOnTableTime")}
                     value={formatMoney(report.outputGstOnTable, currency)}
                   />
                   <Row
-                    label="GST on snacks"
+                    label={t("ownerApp.financials.gstOnSnacks")}
                     value={formatMoney(report.outputGstOnSnacks, currency)}
                   />
                   <Row
-                    label="Total output GST"
+                    label={t("ownerApp.financials.gstTotalOutput")}
                     value={formatMoney(report.totalOutputGst, currency)}
                     bold
                   />
                   {report.cgst > 0 ? (
-                    <Row label="CGST" value={formatMoney(report.cgst, currency)} />
+                    <Row label={t("ownerApp.financials.cgst")} value={formatMoney(report.cgst, currency)} />
                   ) : null}
                   {report.sgst > 0 ? (
-                    <Row label="SGST" value={formatMoney(report.sgst, currency)} />
+                    <Row label={t("ownerApp.financials.sgst")} value={formatMoney(report.sgst, currency)} />
                   ) : null}
                   {report.igst > 0 ? (
-                    <Row label="IGST" value={formatMoney(report.igst, currency)} />
+                    <Row label={t("ownerApp.financials.igst")} value={formatMoney(report.igst, currency)} />
                   ) : null}
                 </View>
 
-                <Text style={styles.sectionTitle}>Net GST payable (estimate)</Text>
+                <Text style={styles.sectionTitle}>{t("ownerApp.financials.gstNetPayableEstimate")}</Text>
                 <View style={styles.card}>
                   <Row
-                    label={`Input tax credit (${report.periodDays}d prorated)`}
+                    label={t("ownerApp.financials.gstInputTaxCredit", { days: report.periodDays })}
                     value={formatMoney(report.inputTaxCreditEstimate, currency)}
                   />
                   <Row
-                    label="Net GST payable"
+                    label={t("ownerApp.financials.gstNetPayable")}
                     value={formatMoney(report.netGstPayableEstimate, currency)}
                     bold
                     accent
@@ -285,8 +289,7 @@ function GstReportContent(): React.JSX.Element {
             )}
 
             <Text style={styles.footnote}>
-              Revenue includes paid sessions and resolved credits, attributed by session
-              end date. Full income-tax and P&L reporting will be added after CA review.
+              {t("ownerApp.financials.gstFootnote")}
             </Text>
           </>
         )}
@@ -323,8 +326,9 @@ function Row({
 }
 
 export default function GstReportScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   return (
-    <TabErrorBoundary tabName="GST Report">
+    <TabErrorBoundary tabName={t("ownerApp.financials.gstReport")}>
       <GstReportContent />
     </TabErrorBoundary>
   );

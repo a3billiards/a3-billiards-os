@@ -78,4 +78,15 @@ export const kn: TranslationBundle = {
     graceBanner: "ನಿಮ್ಮ ಚಂದಾದಾರಿಕೆ ಶೀಘ್ರದಲ್ಲೇ ಮುಗಿಯುತ್ತದೆ. ಅಡಚಣೆ ತಪ್ಪಿಸಲು ಈಗ ನವೀಕರಿಸಿ.",
     graceRenew: "ನವೀಕರಿಸಿ",
   },
+  inbox: {
+    title: "Notifications",
+    subtitle: "Messages from A3 Billiards",
+    empty: "No notifications yet.",
+    markAllRead: "Mark all read",
+    alertView: "View",
+    alertLater: "Later",
+    fromAdmin: "A3 Billiards",
+    bellAccessibility: "Notifications",
+    loadMore: "Load more",
+  },
 };

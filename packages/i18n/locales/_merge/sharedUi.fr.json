@@ -1,0 +1,194 @@
+{
+  "passcodeGate": {
+    "title": "Paramètres",
+    "subtitle": "Saisissez votre code d'accès à 6 chiffres pour continuer.",
+    "invalidFormat": "Saisissez votre code d'accès à 6 chiffres.",
+    "invalidPasscode": "Code d'accès invalide.",
+    "unlock": "Déverrouiller",
+    "cancel": "Annuler"
+  },
+  "tablePicker": {
+    "title": "Quelle table ?",
+    "empty": "Aucune table active pour ce type. Demandez au club de vérifier la configuration des tables dans les Paramètres."
+  },
+  "tableTypeSelect": {
+    "customName": "Nom du type personnalisé",
+    "custom": "Personnalisé"
+  },
+  "timeSlotGrid": {
+    "loading": "Chargement des créneaux…",
+    "noSlots": "Aucun créneau horaire pour cette date et cette durée.",
+    "pickStart": "Choisir une heure de début",
+    "noTimesOpen": "Aucun horaire disponible pour cette date et cette durée. Essayez une autre date, une session plus courte ou un autre type de table.",
+    "unavailable": "Indisponible",
+    "realtimeNote": "La disponibilité est mise à jour en temps réel — revérifiez votre sélection avant de valider."
+  },
+  "dateStrip": {
+    "heading": "Quand souhaitez-vous jouer ?",
+    "today": "Aujourd'hui",
+    "noBookableDates": "Aucune date réservable dans les {{maxAdvanceDays}} prochains jours. Le club devra peut-être mettre à jour les jours ou heures réservables dans les Paramètres."
+  },
+  "tableTypePicker": {
+    "heading": "Quel type de table ?",
+    "oneTable": "1 table disponible",
+    "tablesAvailable": "{{count}} tables disponibles",
+    "ratePerMin": "{{rate}}/min"
+  },
+  "tableGrid": {
+    "tableFallback": "Table",
+    "disabled": "Désactivée",
+    "occupied": "Occupée",
+    "free": "Libre",
+    "a11yTable": "{{label}}, {{status}}{{tag}}"
+  },
+  "clubCard": {
+    "hoursNotSet": "Horaires non définis",
+    "kmAway": "{{km}} km",
+    "moreAmenities": "+{{overflow}} de plus",
+    "bookableOnline": "Réservable en ligne"
+  },
+  "liveStreamCard": {
+    "watchA11y": "Regarder le direct de {{clubName}}",
+    "liveBadge": "LIVE",
+    "viewer": "{{count}} spectateur",
+    "viewers": "{{count}} spectateurs"
+  },
+  "complaintBanner": {
+    "warning": "⚠ Le client a une ou plusieurs réclamations actives",
+    "filedBy": "Déposée par {{clubName}}",
+    "justNow": "à l'instant",
+    "minAgo": "il y a {{min}} min",
+    "hoursAgo": "il y a {{hr}} heure",
+    "hoursAgo_other": "il y a {{hr}} heures",
+    "daysAgo": "il y a {{day}} jour",
+    "daysAgo_other": "il y a {{day}} jours",
+    "monthsAgo": "il y a {{mo}} mois",
+    "monthsAgo_other": "il y a {{mo}} mois",
+    "advisory": "Ceci est un avertissement consultatif. Vous pouvez continuer ou annuler la session.",
+    "cancel": "Annuler",
+    "acknowledge": "Accepter et continuer"
+  },
+  "snackPicker": {
+    "counterTitle": "Snacks au comptoir",
+    "counterDesc": "Prêts à la caisse — ajoutés à la facture uniquement.",
+    "counterEmpty": "Aucun snack au comptoir dans le menu. Ajoutez-les dans Snacks → Comptoir.",
+    "kitchenTitle": "Articles cuisine",
+    "kitchenDesc": "Envoyés à l'écran cuisine pour préparation.",
+    "kitchenEmpty": "Aucun article cuisine dans le menu. Ajoutez-les dans Snacks → Cuisine.",
+    "unableTitle": "Impossible d'ajouter des articles",
+    "unableBody": "Cette session ne peut plus être modifiée.",
+    "addFailed": "Impossible d'ajouter les articles.",
+    "addFailedTitle": "Échec de l'ajout des articles",
+    "addToBill": "Ajouter à la facture",
+    "heading": "Que souhaitez-vous ajouter pour cette table ?",
+    "counterSnack": "Snack au comptoir",
+    "counterSnackDesc": "Chips, boissons, etc. au comptoir — facture uniquement, pas de cuisine.",
+    "kitchenItem": "Article cuisine",
+    "kitchenItemDesc": "Nourriture préparée en cuisine — affichée sur l'écran cuisine.",
+    "cancel": "Annuler",
+    "changeType": "← Changer de type",
+    "loadingMenu": "Chargement du menu...",
+    "each": "l'unité",
+    "decreaseA11y": "Diminuer {{name}}",
+    "increaseA11y": "Augmenter {{name}}",
+    "subtotal": "Sous-total",
+    "adding": "Ajout en cours...",
+    "addToBillButton": "Ajouter à la facture"
+  },
+  "bookingCard": {
+    "customerFallback": "Client",
+    "tableLabel": "Table : {{label}}",
+    "reasonLabel": "Motif : {{reason}}",
+    "estimated": "Est. {{amount}}",
+    "requestedTable": "Table demandée : {{label}}",
+    "assignedTable": "Attribuée : {{label}}",
+    "statsAtClub": "Dans ce club : {{bookings}} réservations, {{noShows}} absences | Sur la plateforme : {{platformBookings}} réservations, {{platformNoShows}} absences",
+    "cancel": "Annuler",
+    "approve": "Approuver",
+    "reject": "Refuser",
+    "startSession": "Démarrer la session",
+    "statusPending": "En attente",
+    "statusConfirmed": "Confirmée",
+    "statusDeclined": "Refusée",
+    "statusCancelled": "Annulée",
+    "statusCancelledByClub": "Annulée par le club",
+    "statusExpired": "Expirée",
+    "statusCompleted": "Terminée",
+    "awaitingApproval": "En attente d'approbation",
+    "duration30": "30 min",
+    "duration1Hour": "1 heure",
+    "durationHours": "{{count}} heures",
+    "durationMinutes": "{{min}} min"
+  },
+  "passwordStrength": {
+    "weak": "Faible",
+    "good": "Correct",
+    "strong": "Fort",
+    "hint": "Au moins 8 caractères avec une majuscule, une minuscule, un chiffre et un caractère spécial.",
+    "minLength": "Le mot de passe doit comporter au moins {{min}} caractères.",
+    "uppercase": "Le mot de passe doit inclure au moins une lettre majuscule.",
+    "lowercase": "Le mot de passe doit inclure au moins une lettre minuscule.",
+    "number": "Le mot de passe doit inclure au moins un chiffre.",
+    "special": "Le mot de passe doit inclure au moins un caractère spécial."
+  },
+  "shareExport": {
+    "tooLargeTitle": "Export trop volumineux",
+    "tooLargeBody": "Le fichier est trop volumineux pour être partagé en texte sur cet appareil. Réduisez la plage de filtrage et réessayez.",
+    "shareTitle": "Partager l'export",
+    "saveShare": "Enregistrer et partager le fichier",
+    "savedTitle": "Enregistré",
+    "savedBody": "Export enregistré. Installez un gestionnaire de fichiers ou une application tableur pour l'ouvrir.",
+    "failedTitle": "Échec de l'export",
+    "couldNotShare": "Impossible de partager le fichier enregistré.",
+    "couldNotOpenSheet": "Impossible d'ouvrir la feuille de partage.",
+    "shareAsText": "Partager en texte",
+    "cancel": "Annuler",
+    "readyTitle": "Export prêt",
+    "readyBody": "Choisissez comment enregistrer ou partager vos données."
+  },
+  "financialDateRange": {
+    "datesInTz": "Dates en {{tzAbbr}}",
+    "from": "Du",
+    "to": "Au",
+    "fromDate": "Date de début",
+    "toDate": "Date de fin",
+    "done": "Terminé",
+    "last7Days": "7 derniers jours",
+    "last30Days": "30 derniers jours",
+    "thisMonth": "Ce mois-ci",
+    "lastMonth": "Mois dernier",
+    "endBeforeStart": "La date de fin ne peut pas être antérieure à la date de début.",
+    "largeRangeWarning": "Les grandes plages de dates peuvent prendre un moment à charger."
+  },
+  "timeField": {
+    "pickTime": "Choisir l'heure",
+    "done": "Terminé",
+    "pickATime": "Choisir une heure"
+  },
+  "safeLocationPicker": {
+    "mapUnavailable": "Carte indisponible",
+    "fallbackInstructions": "Ouvrez Google Maps, recherchez l'adresse de votre club, appuyez longuement sur l'épingle et copiez les coordonnées affichées en bas.",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "latError": "La latitude doit être un nombre entre -90 et 90.",
+    "lngError": "La longitude doit être un nombre entre -180 et 180.",
+    "useCoordinates": "Utiliser ces coordonnées"
+  },
+  "safeBarChart": {
+    "noData": "Aucune donnée à afficher pour cette période.",
+    "unavailable": "Graphique indisponible. Veuillez réessayer."
+  },
+  "broadcastPermissions": {
+    "cameraMic": "L'accès à la caméra et au microphone est requis pour passer en direct.",
+    "cameraOnly": "L'accès à la caméra est requis pour passer en direct.",
+    "micOnly": "L'accès au microphone est requis pour inclure l'audio dans la diffusion."
+  },
+  "placeholders": {
+    "offlineScreen": "OfflineScreen",
+    "passcodeSetupModal": "PasscodeSetupModal",
+    "billModal": "BillModal",
+    "networkGuard": "NetworkGuard",
+    "sessionTimer": "SessionTimer",
+    "userSelector": "UserSelector"
+  }
+}

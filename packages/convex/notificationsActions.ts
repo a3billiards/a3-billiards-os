@@ -99,9 +99,7 @@ export const sendAdminBroadcast = action({
       },
     );
 
-    const recipientCount = recipientRows.length;
-
-    const { notificationId } = await ctx.runMutation(
+    const { notificationId, inboxCount } = await ctx.runMutation(
       internal.notifications.internalInsertAdminBroadcast,
       {
         sentByAdminId: adminId,
@@ -113,6 +111,8 @@ export const sendAdminBroadcast = action({
         createdAt: Date.now(),
       },
     );
+
+    const recipientCount = inboxCount;
 
     const tokenMap = recipientRows.map((row) => ({
       userId: row.userId.toString(),

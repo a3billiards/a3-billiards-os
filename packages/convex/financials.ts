@@ -894,6 +894,54 @@ export const updateBaseRate = mutation({
   },
 });
 
+function normalizeTypeKey(tableType: string): string {
+  return tableType.trim().toLowerCase();
+}
+
+export const setTypeBaseRate = mutation({
+  args: {
+    clubId: v.id("clubs"),
+    tableType: v.string(),
+    baseRatePerMin: v.number(),
+  },
+  handler: async (ctx, { clubId, tableType, baseRatePerMin }) => {
+    const club = await requireOwnerClubWritableFinancial(ctx, clubId);
+    if (baseRatePerMin <= 0) {
+      throw new Error("DATA_002: Rate must be greater than 0");
+    }
+    const key = normalizeTypeKey(tableType);
+    if (!key) {
+      throw new Error("DATA_002: Table type is required");
+    }
+    const existing = [...(club.typeBaseRates ?? [])];
+    const idx = existing.findIndex((r) => normalizeTypeKey(r.tableType) === key);
+    const row = { tableType: key, baseRatePerMin };
+    if (idx >= 0) {
+      existing[idx] = row;
+    } else {
+      existing.push(row);
+    }
+    await ctx.db.patch(clubId, { typeBaseRates: existing });
+    return { ok: true as const };
+  },
+});
+
+export const removeTypeBaseRate = mutation({
+  args: {
+    clubId: v.id("clubs"),
+    tableType: v.string(),
+  },
+  handler: async (ctx, { clubId, tableType }) => {
+    const club = await requireOwnerClubWritableFinancial(ctx, clubId);
+    const key = normalizeTypeKey(tableType);
+    const next = (club.typeBaseRates ?? []).filter(
+      (r) => normalizeTypeKey(r.tableType) !== key,
+    );
+    await ctx.db.patch(clubId, { typeBaseRates: next });
+    return { ok: true as const };
+  },
+});
+
 export const updateMinBillMinutes = mutation({
   args: {
     clubId: v.id("clubs"),

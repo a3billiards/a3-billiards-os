@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { parseIndiaE164OrThrow, throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
+import { parseGenericE164OrThrow, throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
 
 export const assertOwnerHasClub = internalQuery({
   args: { userId: v.id("users") },
@@ -42,7 +42,7 @@ export const insertDeskRegisteredCustomer = internalMutation({
       throw new Error("DATA_001: Name is required");
     }
 
-    const normalized = parseIndiaE164OrThrow(phone);
+    const normalized = parseGenericE164OrThrow(phone);
     const existing = await ctx.db
       .query("users")
       .withIndex("by_phone", (q) => q.eq("phone", normalized))

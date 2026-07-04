@@ -7,6 +7,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +22,8 @@ import type { Id } from "@a3/convex/_generated/dataModel";
 import { GlassPageBackground } from "@a3/ui/components";
 import { colors, glass, layout, radius, spacing, typography } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
 import { TabAccessDenied } from "../components/TabAccessDenied";
@@ -28,14 +31,16 @@ import { uploadLocalFileToConvexStorage } from "../lib/uploadConvexStorage";
 import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../lib/StaffRoleContext";
 import { ownerTabBarTotalInset } from "../theme/ownerShell";
 
-const PREDEFINED_LABELS = [
-  "Trade License",
-  "GST Registration",
-  "Shop & Establishment",
-  "Fire Safety Certificate",
-  "Rent Agreement / Lease",
-  "Insurance",
+const PREDEFINED_LABEL_KEYS = [
+  "tradeLicense",
+  "gstRegistration",
+  "shopEstablishment",
+  "fireSafety",
+  "rentAgreement",
+  "insurance",
 ] as const;
+
+type PredefinedLabelKey = (typeof PREDEFINED_LABEL_KEYS)[number];
 
 const CUSTOM_LABEL = "__custom__";
 
@@ -61,7 +66,9 @@ type ViewerState = {
   isPdf: boolean;
 };
 
-async function pickPdfFile(): Promise<{ uri: string; mimeType: string } | null> {
+async function pickPdfFile(
+  onUnavailable: (title: string, body: string) => void,
+): Promise<{ uri: string; mimeType: string } | null> {
   if (Platform.OS === "web") {
     return await new Promise((resolve) => {
       const input = document.createElement("input");
@@ -93,15 +100,14 @@ async function pickPdfFile(): Promise<{ uri: string; mimeType: string } | null> 
     const asset = result.assets[0];
     return { uri: asset.uri, mimeType: asset.mimeType ?? "application/pdf" };
   } catch {
-    Alert.alert(
-      "PDF picker unavailable",
-      "Install dependencies (pnpm install) and rebuild the dev client, then try again.",
-    );
+    onUnavailable("ownerApp.documents.pdfPickerUnavailable", "ownerApp.documents.pdfPickerHint");
     return null;
   }
 }
 
 export default function DocumentsScreen() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const { roleId, canAccessTab } = useStaffRole();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const insets = useSafeAreaInsets();
@@ -123,7 +129,7 @@ export default function DocumentsScreen() {
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   const [pendingViewId, setPendingViewId] = useState<Id<"clubDocuments"> | null>(null);
   const [form, setForm] = useState<AddForm>({
-    labelKey: PREDEFINED_LABELS[0],
+    labelKey: PREDEFINED_LABEL_KEYS[0],
     customLabel: "",
     notes: "",
   });
@@ -134,8 +140,8 @@ export default function DocumentsScreen() {
     if (form.labelKey === CUSTOM_LABEL) {
       return form.customLabel.trim();
     }
-    return form.labelKey;
-  }, [form.customLabel, form.labelKey]);
+    return t(`ownerApp.documents.labels.${form.labelKey as PredefinedLabelKey}`);
+  }, [form.customLabel, form.labelKey, t]);
 
   useEffect(() => {
     if (!pendingViewId || !documents) return;
@@ -161,7 +167,7 @@ export default function DocumentsScreen() {
   const openViewer = (doc: ClubDocumentRow) => {
     const url = doc.fileUrl ?? doc.imageUrl;
     if (!url) {
-      Alert.alert("Unavailable", "This file could not be loaded.");
+      Alert.alert(t("ownerApp.documents.unavailable"), t("ownerApp.documents.fileNotLoaded"));
       return;
     }
     setViewer({
@@ -175,12 +181,12 @@ export default function DocumentsScreen() {
     try {
       const supported = await Linking.canOpenURL(url);
       if (!supported) {
-        Alert.alert("Cannot open file", "No app on this device can open this file.");
+        Alert.alert(t("ownerApp.documents.cannotOpen"), t("ownerApp.documents.noAppToOpen"));
         return;
       }
       await Linking.openURL(url);
     } catch {
-      Alert.alert("Cannot open file", "Try again later.");
+      Alert.alert(t("ownerApp.documents.cannotOpen"), t("ownerApp.documents.tryAgainLater"));
     }
   };
 
@@ -188,7 +194,7 @@ export default function DocumentsScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.accent.green} />
-        <Text style={styles.centerText}>Loading documents...</Text>
+        <Text style={styles.centerText}>{t("common.loading")}</Text>
       </View>
     );
   }
@@ -198,21 +204,21 @@ export default function DocumentsScreen() {
   }
 
   if (roleId !== undefined && !canAccessTab("documents")) {
-    return <TabAccessDenied tabLabel="Documents" />;
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.documents")} />;
   }
 
   if (documents === undefined) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.accent.green} />
-        <Text style={styles.centerText}>Loading documents...</Text>
+        <Text style={styles.centerText}>{t("common.loading")}</Text>
       </View>
     );
   }
 
   const openAdd = () => {
     setForm({
-      labelKey: PREDEFINED_LABELS[0],
+      labelKey: PREDEFINED_LABEL_KEYS[0],
       customLabel: "",
       notes: "",
     });
@@ -258,7 +264,7 @@ export default function DocumentsScreen() {
   const pickAndUpload = async (source: "camera" | "library" | "pdf") => {
     if (busy) return;
     if (!resolvedLabel) {
-      setFormError("Choose a label or enter a custom one.");
+      setFormError(t("ownerApp.documents.chooseLabel"));
       return;
     }
 
@@ -266,7 +272,9 @@ export default function DocumentsScreen() {
     setFormError(null);
     try {
       if (source === "pdf") {
-        const picked = await pickPdfFile();
+        const picked = await pickPdfFile((titleKey, bodyKey) => {
+          Alert.alert(t(titleKey), t(bodyKey));
+        });
         if (!picked) return;
         await uploadFile(picked.uri, picked.mimeType);
         return;
@@ -278,10 +286,10 @@ export default function DocumentsScreen() {
           : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
-          "Permission needed",
+          t("ownerApp.documents.permissionNeeded"),
           source === "camera"
-            ? "Allow camera access to photograph a document."
-            : "Allow photo library access to upload a document.",
+            ? t("ownerApp.documents.cameraPermission")
+            : t("ownerApp.documents.libraryPermission"),
         );
         return;
       }
@@ -310,17 +318,17 @@ export default function DocumentsScreen() {
   };
 
   const confirmDelete = (documentId: Id<"clubDocuments">, label: string) => {
-    Alert.alert("Delete document?", `Remove "${label}" permanently?`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("ownerApp.documents.deleteTitle"), t("ownerApp.documents.deleteBody", { label }), [
+      { text: t("ownerApp.documents.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("ownerApp.documents.delete"),
         style: "destructive",
         onPress: () => {
           void deleteDocument({
             documentId,
             roleId: staffRoleQueryId(roleId),
           }).catch((e) => {
-            Alert.alert("Could not delete", parseConvexError(e as Error).message);
+            Alert.alert(t("ownerApp.documents.couldNotDelete"), parseConvexError(e as Error).message);
           });
         },
       },
@@ -331,26 +339,28 @@ export default function DocumentsScreen() {
     <GlassPageBackground>
       <View style={[styles.screen, { paddingBottom: bottomPad }]}>
         <View style={styles.header}>
-          <Text style={styles.title}>Documents</Text>
-          <Text style={styles.subtitle}>
-            Store club licenses and paperwork (photos or PDFs). Not visible to customers.
-          </Text>
+          <Text style={styles.title}>{t("ownerApp.documents.title")}</Text>
+          <Text style={styles.subtitle}>{t("ownerApp.documents.subtitle")}</Text>
           <Pressable style={styles.addBtn} onPress={openAdd}>
             <MaterialIcons name="add" size={20} color="#000" />
-            <Text style={styles.addBtnText}>Add Document</Text>
+            <Text style={styles.addBtnText}>{t("ownerApp.documents.addDocument")}</Text>
           </Pressable>
         </View>
 
         {documents.length === 0 ? (
           <View style={styles.empty}>
             <MaterialIcons name="folder-open" size={48} color={colors.text.secondary} />
-            <Text style={styles.emptyTitle}>No documents yet</Text>
-            <Text style={styles.emptyBody}>
-              Add photos or PDFs of trade licenses, GST certificates, and other club paperwork.
-            </Text>
+            <Text style={styles.emptyTitle}>{t("ownerApp.documents.emptyTitle")}</Text>
+            <Text style={styles.emptyBody}>{t("ownerApp.documents.emptyBody")}</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
             {documents.map((doc) => (
               <Pressable
                 key={doc.documentId}
@@ -360,7 +370,7 @@ export default function DocumentsScreen() {
                 {doc.isPdf ? (
                   <View style={[styles.thumb, styles.pdfThumb]}>
                     <MaterialIcons name="picture-as-pdf" size={36} color={colors.status.error} />
-                    <Text style={styles.pdfThumbText}>PDF</Text>
+                    <Text style={styles.pdfThumbText}>{t("ownerApp.documents.pdf")}</Text>
                   </View>
                 ) : doc.fileUrl ?? doc.imageUrl ? (
                   <Image
@@ -383,7 +393,7 @@ export default function DocumentsScreen() {
                   <View style={styles.cardActions}>
                     <Pressable style={styles.viewBtn} onPress={() => openViewer(doc)}>
                       <MaterialIcons name="visibility" size={18} color={glass.ctaBg} />
-                      <Text style={styles.viewBtnText}>View</Text>
+                      <Text style={styles.viewBtnText}>{t("ownerApp.documents.view")}</Text>
                     </Pressable>
                     <Pressable
                       style={styles.deleteBtn}
@@ -393,7 +403,7 @@ export default function DocumentsScreen() {
                       }}
                     >
                       <MaterialIcons name="delete-outline" size={18} color={colors.status.error} />
-                      <Text style={styles.deleteBtnText}>Delete</Text>
+                      <Text style={styles.deleteBtnText}>{t("ownerApp.documents.delete")}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -405,18 +415,20 @@ export default function DocumentsScreen() {
         <Modal visible={addVisible} animationType="slide" transparent onRequestClose={closeAdd}>
           <View style={styles.modalBackdrop}>
             <View style={[styles.modalCard, { paddingBottom: insets.bottom + spacing[4] }]}>
-              <Text style={styles.modalTitle}>Add Document</Text>
-              <Text style={styles.modalHint}>Label</Text>
+              <Text style={styles.modalTitle}>{t("ownerApp.documents.addModalTitle")}</Text>
+              <Text style={styles.modalHint}>{t("ownerApp.documents.label")}</Text>
               <View style={styles.chipWrap}>
-                {PREDEFINED_LABELS.map((label) => {
-                  const selected = form.labelKey === label;
+                {PREDEFINED_LABEL_KEYS.map((labelKey) => {
+                  const selected = form.labelKey === labelKey;
                   return (
                     <Pressable
-                      key={label}
+                      key={labelKey}
                       style={[styles.chip, selected && styles.chipOn]}
-                      onPress={() => setForm((f) => ({ ...f, labelKey: label }))}
+                      onPress={() => setForm((f) => ({ ...f, labelKey }))}
                     >
-                      <Text style={[styles.chipText, selected && styles.chipTextOn]}>{label}</Text>
+                      <Text style={[styles.chipText, selected && styles.chipTextOn]}>
+                        {t(`ownerApp.documents.labels.${labelKey}`)}
+                      </Text>
                     </Pressable>
                   );
                 })}
@@ -430,24 +442,24 @@ export default function DocumentsScreen() {
                       form.labelKey === CUSTOM_LABEL && styles.chipTextOn,
                     ]}
                   >
-                    Custom label
+                    {t("ownerApp.documents.customLabel")}
                   </Text>
                 </Pressable>
               </View>
               {form.labelKey === CUSTOM_LABEL ? (
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter document label"
+                  placeholder={t("ownerApp.documents.customLabelPlaceholder")}
                   placeholderTextColor={colors.text.secondary}
                   value={form.customLabel}
                   onChangeText={(customLabel) => setForm((f) => ({ ...f, customLabel }))}
                   maxLength={80}
                 />
               ) : null}
-              <Text style={styles.modalHint}>Notes (optional)</Text>
+              <Text style={styles.modalHint}>{t("ownerApp.documents.notesOptional")}</Text>
               <TextInput
                 style={[styles.input, styles.notesInput]}
-                placeholder="Expiry date, registration number, etc."
+                placeholder={t("ownerApp.documents.notesPlaceholder")}
                 placeholderTextColor={colors.text.secondary}
                 value={form.notes}
                 onChangeText={(notes) => setForm((f) => ({ ...f, notes }))}
@@ -466,7 +478,7 @@ export default function DocumentsScreen() {
                   ) : (
                     <>
                       <MaterialIcons name="photo-camera" size={18} color={glass.ctaBg} />
-                      <Text style={styles.modalBtnSecondaryText}>Take photo</Text>
+                      <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.documents.takePhoto")}</Text>
                     </>
                   )}
                 </Pressable>
@@ -480,7 +492,7 @@ export default function DocumentsScreen() {
                   ) : (
                     <>
                       <MaterialIcons name="photo-library" size={18} color="#000" />
-                      <Text style={styles.modalBtnPrimaryText}>Choose image</Text>
+                      <Text style={styles.modalBtnPrimaryText}>{t("ownerApp.documents.chooseImage")}</Text>
                     </>
                   )}
                 </Pressable>
@@ -495,12 +507,12 @@ export default function DocumentsScreen() {
                 ) : (
                   <>
                     <MaterialIcons name="picture-as-pdf" size={20} color={colors.text.primary} />
-                    <Text style={styles.modalBtnPdfText}>Choose PDF</Text>
+                    <Text style={styles.modalBtnPdfText}>{t("ownerApp.documents.choosePdf")}</Text>
                   </>
                 )}
               </Pressable>
               <Pressable style={styles.cancelLink} disabled={busy} onPress={closeAdd}>
-                <Text style={styles.cancelLinkText}>Cancel</Text>
+                <Text style={styles.cancelLinkText}>{t("ownerApp.documents.cancel")}</Text>
               </Pressable>
             </View>
           </View>
@@ -534,13 +546,13 @@ export default function DocumentsScreen() {
                 <View style={styles.pdfViewerBody}>
                   <MaterialIcons name="picture-as-pdf" size={72} color={colors.status.error} />
                   <Text style={styles.pdfViewerText}>
-                    Open this PDF in your device&apos;s viewer.
+                    {t("ownerApp.documents.openPdfHint")}
                   </Text>
                   <Pressable
                     style={styles.openPdfBtn}
                     onPress={() => viewer && void openExternalFile(viewer.fileUrl)}
                   >
-                    <Text style={styles.openPdfBtnText}>Open PDF</Text>
+                    <Text style={styles.openPdfBtnText}>{t("ownerApp.documents.openPdf")}</Text>
                   </Pressable>
                 </View>
               )

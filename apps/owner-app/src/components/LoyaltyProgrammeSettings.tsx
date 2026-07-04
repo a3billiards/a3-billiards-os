@@ -13,6 +13,7 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, radius, spacing, typography } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { useTranslation } from "@a3/i18n";
 
 export function LoyaltyProgrammeSettings({
   clubId,
@@ -21,6 +22,7 @@ export function LoyaltyProgrammeSettings({
   clubId: Id<"clubs">;
   minBillMinutes: number;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const settings = useQuery(api.loyalty.getProgrammeSettings, { clubId });
   const saveProgramme = useMutation(api.loyalty.saveProgramme);
   const archiveProgramme = useMutation(api.loyalty.archiveProgramme);
@@ -60,9 +62,12 @@ export function LoyaltyProgrammeSettings({
         thresholdMinutes: Number(thresholdMinutes),
         creditsAwarded: Number(creditsAwarded),
       });
-      Alert.alert("Saved", activate ? "Loyalty programme is now active." : "Draft saved.");
+      Alert.alert(
+        t("ownerApp.settings.content.saved"),
+        activate ? t("ownerApp.loyalty.savedActive") : t("ownerApp.loyalty.savedDraft"),
+      );
     } catch (e) {
-      Alert.alert("Could not save", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.loyalty.couldNotSave"), parseConvexError(e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -75,21 +80,26 @@ export function LoyaltyProgrammeSettings({
   return (
     <View style={styles.wrap}>
       <Text style={styles.hint}>
-        Reward regulars at this club only — credits earned here cannot be used at other
-        clubs. Example: play 300 minutes (5 hours) within 30 days → earn 1 free visit (up
-        to {freeVisitMax || "60"} min table time). Min free-visit cap: {minBillMinutes}{" "}
-        min.
+        {t("ownerApp.loyalty.rewardHint", {
+          freeVisitMax: freeVisitMax || "60",
+          minBillMinutes,
+        })}
       </Text>
-      <Text style={styles.label}>Programme name</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="A3 Regulars" />
-      <Text style={styles.label}>Free visit max minutes</Text>
+      <Text style={styles.label}>{t("ownerApp.loyalty.programmeName")}</Text>
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder={t("ownerApp.loyalty.programmeNamePlaceholder")}
+      />
+      <Text style={styles.label}>{t("ownerApp.loyalty.freeVisitMax")}</Text>
       <TextInput
         style={styles.input}
         value={freeVisitMax}
         onChangeText={setFreeVisitMax}
         keyboardType="number-pad"
       />
-      <Text style={styles.label}>Rolling window (days)</Text>
+      <Text style={styles.label}>{t("ownerApp.loyalty.rollingWindow")}</Text>
       <TextInput
         style={styles.input}
         value={windowDays}
@@ -97,7 +107,7 @@ export function LoyaltyProgrammeSettings({
         keyboardType="number-pad"
         placeholder="30"
       />
-      <Text style={styles.label}>Play minutes needed for reward</Text>
+      <Text style={styles.label}>{t("ownerApp.loyalty.playMinutesNeeded")}</Text>
       <TextInput
         style={styles.input}
         value={thresholdMinutes}
@@ -105,7 +115,7 @@ export function LoyaltyProgrammeSettings({
         keyboardType="number-pad"
         placeholder="300"
       />
-      <Text style={styles.label}>Free visits earned</Text>
+      <Text style={styles.label}>{t("ownerApp.loyalty.freeVisitsEarned")}</Text>
       <TextInput
         style={styles.input}
         value={creditsAwarded}
@@ -119,14 +129,16 @@ export function LoyaltyProgrammeSettings({
           disabled={busy}
           onPress={() => void save(false)}
         >
-          <Text style={styles.secondaryText}>Save draft</Text>
+          <Text style={styles.secondaryText}>{t("ownerApp.loyalty.saveDraft")}</Text>
         </Pressable>
         <Pressable
           style={[styles.btn, styles.primary]}
           disabled={busy}
           onPress={() => void save(true)}
         >
-          <Text style={styles.primaryText}>{busy ? "Saving…" : "Activate"}</Text>
+          <Text style={styles.primaryText}>
+            {busy ? t("ownerApp.slots.saving") : t("ownerApp.loyalty.activate")}
+          </Text>
         </Pressable>
       </View>
       {settings.active ? (
@@ -134,15 +146,15 @@ export function LoyaltyProgrammeSettings({
           style={[styles.btn, styles.secondary, { marginTop: spacing[2] }]}
           onPress={() => {
             Alert.alert(
-              "Archive programme?",
-              "No new credits will be awarded. Existing balances stay redeemable.",
+              t("ownerApp.loyalty.archiveTitle"),
+              t("ownerApp.loyalty.archiveBody"),
               [
-                { text: "Cancel", style: "cancel" },
+                { text: t("common.cancel"), style: "cancel" },
                 {
-                  text: "Archive",
+                  text: t("ownerApp.loyalty.archive"),
                   onPress: () => {
                     void archiveProgramme({ programmeId: settings.active!._id }).catch((e) =>
-                      Alert.alert("Failed", parseConvexError(e as Error).message),
+                      Alert.alert(t("ownerApp.loyalty.failed"), parseConvexError(e as Error).message),
                     );
                   },
                 },
@@ -150,7 +162,7 @@ export function LoyaltyProgrammeSettings({
             );
           }}
         >
-          <Text style={styles.secondaryText}>Archive active programme</Text>
+          <Text style={styles.secondaryText}>{t("ownerApp.loyalty.archiveActive")}</Text>
         </Pressable>
       ) : null}
     </View>

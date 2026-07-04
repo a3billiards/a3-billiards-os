@@ -11,6 +11,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useAction } from "convex/react";
@@ -20,6 +21,8 @@ import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, layout, radius, zIndex, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { adminTabBarTotalInset } from "../theme/adminShell";
 import { parseConvexError } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
 type MainTab = "compose" | "history";
 
@@ -68,51 +71,63 @@ function initials(name: string): string {
   return t.slice(0, 1).toUpperCase();
 }
 
-function formatRelativeTime(ts: number): string {
+function formatRelativeTime(
+  ts: number,
+  tr: (key: string, opts?: Record<string, unknown>) => string,
+): string {
   const now = Date.now();
   const diff = Math.max(0, now - ts);
-  const min = Math.floor(diff / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return tr("adminApp.notifications.timeJustNow");
+  if (min < 60) return tr("adminApp.notifications.timeMinutesAgo", { count: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
+  if (hr < 24) return tr("adminApp.notifications.timeHoursAgo", { count: hr });
   const startToday = new Date(now);
   startToday.setHours(0, 0, 0, 0);
   const startMsg = new Date(ts);
   startMsg.setHours(0, 0, 0, 0);
   const dayDiff = Math.round(
-    (startToday.getTime() - startMsg.getTime()) / 86_400_000,
+    (startToday.getTime() - startMsg.getTime()) / 86400000,
   );
-  if (dayDiff === 1) return "Yesterday";
-  if (dayDiff < 7) return `${dayDiff} day${dayDiff === 1 ? "" : "s"} ago`;
-  return new Date(ts).toLocaleDateString();
+  if (dayDiff === 1) return tr("adminApp.notifications.yesterday");
+  if (dayDiff < 7)
+    return tr("adminApp.notifications.timeDaysAgo", { count: dayDiff });
+  return new Date(ts).toLocaleDateString(getCurrentLanguage());
 }
 
 function formatResetClock(resetsAt: number): string {
-  return new Date(resetsAt).toLocaleTimeString(undefined, {
+  return new Date(resetsAt).toLocaleTimeString(getCurrentLanguage(), {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function targetDescription(mode: TargetMode, selectedCount: number): string {
-  if (mode.kind === "all") return "All Users";
-  if (mode.kind === "role" && mode.role === "owner") return "All Owners";
-  if (mode.kind === "role" && mode.role === "customer") return "All Customers";
-  return `${selectedCount} selected user${selectedCount === 1 ? "" : "s"}`;
+function targetDescription(
+  mode: TargetMode,
+  selectedCount: number,
+  tr: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  if (mode.kind === "all") return tr("adminApp.notifications.targetAllUsersShort");
+  if (mode.kind === "role" && mode.role === "owner")
+    return tr("adminApp.notifications.targetAllOwnersShort");
+  if (mode.kind === "role" && mode.role === "customer")
+    return tr("adminApp.notifications.targetAllCustomersShort");
+  return tr("adminApp.notifications.targetSelected", { count: selectedCount });
 }
 
 function RoleMini({
   role,
+  tr,
 }: {
   role: "admin" | "owner" | "customer";
+  tr: (key: string) => string;
 }): React.JSX.Element {
   const cfg =
     role === "admin"
-      ? { label: "Admin", bg: colors.status.info }
+      ? { label: tr("adminApp.roles.admin"), bg: colors.status.info }
       : role === "owner"
-        ? { label: "Owner", bg: colors.accent.amber }
-        : { label: "Customer", bg: colors.bg.tertiary };
+        ? { label: tr("adminApp.roles.owner"), bg: colors.accent.amber }
+        : { label: tr("adminApp.roles.customer"), bg: colors.bg.tertiary };
   return (
     <View style={[styles.roleMini, { backgroundColor: cfg.bg }]}>
       <Text style={styles.roleMiniText}>{cfg.label}</Text>
@@ -122,27 +137,29 @@ function RoleMini({
 
 function TargetPill({
   row,
+  tr,
 }: {
   row: HistoryRow;
+  tr: (key: string, opts?: Record<string, unknown>) => string;
 }): React.JSX.Element {
   if (row.targetType === "all") {
     return (
       <View style={[styles.pill, { backgroundColor: colors.status.disabled }]}>
-        <Text style={styles.pillTextDark}>All Users</Text>
+        <Text style={styles.pillTextDark}>{tr("adminApp.notifications.targetAllUsersShort")}</Text>
       </View>
     );
   }
   if (row.targetType === "role" && row.targetRole === "owner") {
     return (
       <View style={[styles.pill, { backgroundColor: colors.accent.amber }]}>
-        <Text style={styles.pillTextDark}>All Owners</Text>
+        <Text style={styles.pillTextDark}>{tr("adminApp.notifications.targetAllOwnersShort")}</Text>
       </View>
     );
   }
   if (row.targetType === "role" && row.targetRole === "customer") {
     return (
       <View style={[styles.pill, { backgroundColor: colors.status.info }]}>
-        <Text style={styles.pillTextDark}>All Customers</Text>
+        <Text style={styles.pillTextDark}>{tr("adminApp.notifications.targetAllCustomersShort")}</Text>
       </View>
     );
   }
@@ -150,7 +167,7 @@ function TargetPill({
   return (
     <View style={[styles.pill, { backgroundColor: "#26A69A" }]}>
       <Text style={styles.pillTextDark}>
-        {n} Selected User{n === 1 ? "" : "s"}
+        {tr("adminApp.notifications.targetSelected", { count: n })}
       </Text>
     </View>
   );
@@ -160,10 +177,12 @@ function HistoryCard({
   row,
   expanded,
   onToggle,
+  tr,
 }: {
   row: HistoryRow;
   expanded: boolean;
   onToggle: () => void;
+  tr: (key: string, opts?: Record<string, unknown>) => string;
 }): React.JSX.Element {
   const [showFullBody, setShowFullBody] = useState(false);
   const breakdown = useQuery(
@@ -183,7 +202,7 @@ function HistoryCard({
         <Text style={styles.historyTitle} numberOfLines={2}>
           {row.title}
         </Text>
-        <Text style={styles.historyWhen}>{formatRelativeTime(row.createdAt)}</Text>
+        <Text style={styles.historyWhen}>{formatRelativeTime(row.createdAt, tr)}</Text>
       </View>
       <Text
         style={styles.historyBody}
@@ -199,31 +218,31 @@ function HistoryCard({
           }}
           hitSlop={8}
         >
-          <Text style={styles.showMore}>{showFullBody ? "Show less" : "Show more"}</Text>
+          <Text style={styles.showMore}>{showFullBody ? tr("adminApp.notifications.showLess") : tr("adminApp.notifications.showMore")}</Text>
         </Pressable>
       ) : null}
       <View style={styles.pillRow}>
-        <TargetPill row={row} />
+        <TargetPill row={row} tr={tr} />
       </View>
       <View style={styles.statsRow}>
         <Text style={styles.statOk}>
-          ✓ {row.sentCount} delivered
+          {tr("adminApp.notifications.historyDelivered", { count: row.sentCount })}
         </Text>
         {row.failedCount > 0 ? (
-          <Text style={styles.statBad}>✕ {row.failedCount} failed</Text>
+          <Text style={styles.statBad}>{tr("adminApp.notifications.historyFailed", { count: row.failedCount })}</Text>
         ) : null}
-        <Text style={styles.statMuted}>{row.totalRecipients} total</Text>
+        <Text style={styles.statMuted}>{tr("adminApp.notifications.historyTotal", { count: row.totalRecipients })}</Text>
       </View>
-      <Text style={styles.sentBySmall}>Sent by {row.sentByName}</Text>
+      <Text style={styles.sentBySmall}>{tr("adminApp.notifications.sentBy", { name: row.sentByName })}</Text>
       {expanded ? (
         <View style={styles.expandPanel}>
           {breakdown === undefined ? (
             <ActivityIndicator color={colors.accent.green} />
           ) : breakdown === null ? (
-            <Text style={styles.statMuted}>Unable to load recipients.</Text>
+            <Text style={styles.statMuted}>{tr("adminApp.notifications.unableLoadRecipients")}</Text>
           ) : (
             <>
-              <Text style={styles.expandHeading}>Delivered</Text>
+              <Text style={styles.expandHeading}>{tr("adminApp.notifications.expandDelivered")}</Text>
               {breakdown.delivered.map((r) => (
                 <Text key={r.userId} style={styles.expandName}>
                   {r.name}
@@ -231,20 +250,20 @@ function HistoryCard({
               ))}
               {breakdown.moreDelivered > 0 ? (
                 <Text style={styles.moreHint}>
-                  + {breakdown.moreDelivered} more
+                  {tr("adminApp.notifications.moreRecipients", { count: breakdown.moreDelivered })}
                 </Text>
               ) : null}
               <Text style={[styles.expandHeading, { marginTop: spacing[3] }]}>
-                Failed
+                {tr("adminApp.notifications.expandFailed")}
               </Text>
               {breakdown.failed.map((r) => (
                 <Text key={r.userId} style={styles.expandName}>
                   {r.name}
-                  <Text style={styles.tokenInvalid}> — Token invalid</Text>
+                  <Text style={styles.tokenInvalid}>{tr("adminApp.notifications.tokenInvalid")}</Text>
                 </Text>
               ))}
               {breakdown.moreFailed > 0 ? (
-                <Text style={styles.moreHint}>+ {breakdown.moreFailed} more</Text>
+                <Text style={styles.moreHint}>{tr("adminApp.notifications.moreRecipients", { count: breakdown.moreFailed })}</Text>
               ) : null}
             </>
           )}
@@ -255,6 +274,8 @@ function HistoryCard({
 }
 
 export default function NotificationCenterScreen(): React.JSX.Element {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const insets = useSafeAreaInsets();
   const tabBarBottomPad = adminTabBarTotalInset(insets.bottom);
   const user = useQuery(api.users.getCurrentUser, {});
@@ -401,13 +422,17 @@ export default function NotificationCenterScreen(): React.JSX.Element {
       resetForm();
       if (res.sentCount === 0 && res.recipientCount > 0) {
         Alert.alert(
-          "Saved — push not delivered",
-          `Broadcast recorded for ${res.recipientCount} recipient(s), but no push was delivered. Configure Firebase on Convex and reopen customer/owner apps to register device tokens.`,
+          t("adminApp.notifications.savedNoPushTitle"),
+          t("adminApp.notifications.savedNoPushBody", { count: res.recipientCount }),
         );
       } else {
         Alert.alert(
-          "Sent",
-          `Notification sent to ${res.recipientCount} recipient(s) (${res.sentCount} device${res.sentCount === 1 ? "" : "s"}).`,
+          t("adminApp.notifications.sentTitle"),
+          t("adminApp.notifications.sentBody", {
+            recipients: res.recipientCount,
+            devices: res.sentCount,
+            count: res.sentCount,
+          }),
         );
       }
     } catch (e) {
@@ -419,11 +444,10 @@ export default function NotificationCenterScreen(): React.JSX.Element {
       } else if (parsed.code === "PUSH_001" || msg.includes("PUSH_001")) {
         setConfirmOpen(false);
         setSheetError(
-          msg.replace(/^PUSH_001:\s*/i, "") ||
-            "Push notifications are not configured on the server (Firebase).",
+          msg.replace(/^PUSH_001:\s*/i, "") || t("adminApp.notifications.pushNotConfigured"),
         );
       } else {
-        setSheetError(msg || "Failed to send. Please try again.");
+        setSheetError(msg || t("adminApp.notifications.sendFailed"));
       }
     } finally {
       setSendLoading(false);
@@ -506,8 +530,8 @@ export default function NotificationCenterScreen(): React.JSX.Element {
       <KeyboardAvoidingView style={styles.flex} {...iosKeyboardAvoidingProps}>
         <View style={styles.topSection}>
           <View style={styles.hero}>
-            <Text style={styles.screenTitle}>Notification Center</Text>
-            <Text style={styles.screenSub}>Broadcast messages to users</Text>
+            <Text style={styles.screenTitle}>{t("adminApp.notifications.title")}</Text>
+            <Text style={styles.screenSub}>{t("adminApp.notifications.subtitle")}</Text>
           </View>
 
           <View style={styles.tabBar}>
@@ -524,7 +548,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                   mainTab === "compose" && styles.tabBtnTextOn,
                 ]}
               >
-                Compose
+                {t("adminApp.notifications.tabCompose")}
               </Text>
             </Pressable>
             <Pressable
@@ -540,7 +564,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                   mainTab === "history" && styles.tabBtnTextOn,
                 ]}
               >
-                History
+                {t("adminApp.notifications.tabHistory")}
               </Text>
             </Pressable>
           </View>
@@ -555,6 +579,9 @@ export default function NotificationCenterScreen(): React.JSX.Element {
             ]}
             keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
           >
               {rate && rate.allowed && rate.remainingCount < 10 ? (
                 <View style={styles.rateInfo}>
@@ -564,16 +591,14 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                     color={colors.accent.amber}
                   />
                   <Text style={styles.rateInfoText}>
-                    {rate.remainingCount} of 10 broadcasts remaining this hour.
-                    Resets at {formatResetClock(rate.resetsAt)}.
+                    {t("adminApp.notifications.rateRemaining", { remaining: rate.remainingCount, time: formatResetClock(rate.resetsAt) })}
                   </Text>
                 </View>
               ) : null}
               {rate && !rate.allowed ? (
                 <View style={styles.rateBlock}>
                   <Text style={styles.rateBlockText}>
-                    ⛔ Broadcast limit reached. Next send available in{" "}
-                    {minutesLeft} minute{minutesLeft === 1 ? "" : "s"}.
+                    {t("adminApp.notifications.rateBlocked", { count: minutesLeft, minutes: minutesLeft })}
                   </Text>
                 </View>
               ) : null}
@@ -584,19 +609,19 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                     onPress={() => setComposeRateError(null)}
                     style={styles.dismissErr}
                   >
-                    <Text style={styles.dismissErrText}>Dismiss</Text>
+                    <Text style={styles.dismissErrText}>{t("adminApp.notifications.dismiss")}</Text>
                   </Pressable>
                 </View>
               ) : null}
 
               <View style={styles.fieldBlock}>
                 <Text style={styles.label}>
-                  Notification Title<Text style={styles.req}> *</Text>
+                  {t("adminApp.notifications.titleLabel")}<Text style={styles.req}>{t("adminApp.notifications.required")}</Text>
                 </Text>
                 <TextInput
                   value={title}
                   onChangeText={setTitle}
-                  placeholder="e.g. Important update from A3 Billiards"
+                  placeholder={t("adminApp.notifications.titlePlaceholder")}
                   placeholderTextColor={colors.text.tertiary}
                   style={styles.input}
                   maxLength={100}
@@ -608,12 +633,12 @@ export default function NotificationCenterScreen(): React.JSX.Element {
 
               <View style={styles.fieldBlock}>
                 <Text style={styles.label}>
-                  Message<Text style={styles.req}> *</Text>
+                  {t("adminApp.notifications.messageLabel")}<Text style={styles.req}>{t("adminApp.notifications.required")}</Text>
                 </Text>
                 <TextInput
                   value={body}
                   onChangeText={setBody}
-                  placeholder="Write your message here..."
+                  placeholder={t("adminApp.notifications.messagePlaceholder")}
                   placeholderTextColor={colors.text.tertiary}
                   style={[styles.input, styles.textArea]}
                   maxLength={500}
@@ -623,37 +648,37 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                 <Text style={styles.counter}>{body.length}/500</Text>
               </View>
 
-              <Text style={styles.label}>Send To</Text>
+              <Text style={styles.label}>{t("adminApp.notifications.sendTo")}</Text>
               <View style={styles.targetGrid}>
                 {renderTargetCard(
                   "all",
                   <MaterialIcons name="campaign" size={22} color={colors.text.primary} />,
-                  "All Users",
-                  "Everyone on the platform",
+                  t("adminApp.notifications.targetAllUsers"),
+                  t("adminApp.notifications.targetAllUsersSub"),
                   target.kind === "all",
                   () => setTarget({ kind: "all" }),
                 )}
                 {renderTargetCard(
                   "owners",
                   <MaterialIcons name="business" size={22} color={colors.text.primary} />,
-                  "All Owners",
-                  "Club owners and staff",
+                  t("adminApp.notifications.targetAllOwners"),
+                  t("adminApp.notifications.targetAllOwnersSub"),
                   target.kind === "role" && target.role === "owner",
                   () => setTarget({ kind: "role", role: "owner" }),
                 )}
                 {renderTargetCard(
                   "customers",
                   <MaterialIcons name="groups" size={22} color={colors.text.primary} />,
-                  "All Customers",
-                  "Registered players",
+                  t("adminApp.notifications.targetAllCustomers"),
+                  t("adminApp.notifications.targetAllCustomersSub"),
                   target.kind === "role" && target.role === "customer",
                   () => setTarget({ kind: "role", role: "customer" }),
                 )}
                 {renderTargetCard(
                   "sel",
                   <MaterialIcons name="touch-app" size={22} color={colors.text.primary} />,
-                  "Select Users",
-                  "Choose specific accounts",
+                  t("adminApp.notifications.targetSelectUsers"),
+                  t("adminApp.notifications.targetSelectUsersSub"),
                   target.kind === "selected",
                   () => {
                     setSelectedNames({});
@@ -665,8 +690,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
               {target.kind === "selected" ? (
                 <View style={styles.selectPanel}>
                   <Text style={styles.selectedCount}>
-                    {selectedIds.length} user{selectedIds.length === 1 ? "" : "s"}{" "}
-                    selected
+                    {t("adminApp.notifications.selectedCount", { count: selectedIds.length })}
                   </Text>
                   <ScrollView
                     horizontal
@@ -674,7 +698,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                     contentContainerStyle={styles.chipsScroll}
                   >
                     {selectedIds.map((id) => {
-                      const name = selectedNames[id] ?? "User";
+                      const name = selectedNames[id] ?? t("adminApp.notifications.defaultUserName");
                       return (
                         <View key={id} style={styles.chip}>
                           <View style={styles.chipAv}>
@@ -704,7 +728,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                     <TextInput
                       value={search}
                       onChangeText={setSearch}
-                      placeholder="Search by name, phone, or email..."
+                      placeholder={t("adminApp.notifications.searchPlaceholder")}
                       placeholderTextColor={colors.text.secondary}
                       style={styles.searchInput}
                       autoCapitalize="none"
@@ -717,7 +741,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                       color={colors.accent.green}
                     />
                   ) : (searchPage.users as SearchUserRow[]).length === 0 ? (
-                    <Text style={styles.hitEmpty}>No matches.</Text>
+                    <Text style={styles.hitEmpty}>{t("adminApp.notifications.noMatches")}</Text>
                   ) : (
                     (searchPage.users as SearchUserRow[]).map((item) => {
                       const selected = selectedIds.includes(item._id);
@@ -745,12 +769,12 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                             <View
                               style={{ flexDirection: "row", gap: 8, marginTop: 4 }}
                             >
-                              <RoleMini role={item.role} />
+                              <RoleMini role={item.role} tr={t} />
                               {item.isFrozen ? (
-                                <Text style={styles.frozenBadge}>⚠ Frozen</Text>
+                                <Text style={styles.frozenBadge}>{t("adminApp.notifications.frozenBadge")}</Text>
                               ) : null}
                               {!item.hasPushToken ? (
-                                <Text style={styles.noPushBadge}>No push</Text>
+                                <Text style={styles.noPushBadge}>{t("adminApp.notifications.noPushBadge")}</Text>
                               ) : null}
                             </View>
                           </View>
@@ -773,15 +797,15 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                   <ActivityIndicator size="small" color={colors.accent.green} />
                 ) : (
                   <Text style={styles.previewText}>
-                    {recipientCount} recipients will receive this notification
+                    {t("adminApp.notifications.recipientsPreview", { count: recipientCount })}
                   </Text>
                 )}
               </View>
               {recipientCount === 0 && !recipientLoading && canQuery ? (
                 <Text style={styles.warnZero}>
                   {matchingUsers > 0
-                    ? `⚠ ${matchingUsers} user(s) match this target, but none have push enabled. They must open the customer or owner app on a dev/production build, allow notifications when prompted, then try again.`
-                    : "⚠ No users match this target."}
+                    ? t("adminApp.notifications.warnNoPush", { count: matchingUsers })
+                    : t("adminApp.notifications.warnNoMatch")}
                 </Text>
               ) : null}
 
@@ -794,7 +818,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                   pressed && canSend && { opacity: 0.9 },
                 ]}
               >
-                <Text style={styles.sendBtnText}>Send Notification</Text>
+                <Text style={styles.sendBtnText}>{t("adminApp.notifications.sendNotification")}</Text>
               </Pressable>
           </ScrollView>
         ) : (
@@ -813,13 +837,15 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                   styles.historyList,
                   { paddingBottom: tabBarBottomPad },
                 ]}
+                refreshControl={
+                  <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                }
                 onEndReached={loadMoreHistory}
                 onEndReachedThreshold={0.35}
                 ListEmptyComponent={
                   histPage && histRows.length === 0 ? (
                     <Text style={styles.emptyHist}>
-                      No notifications sent yet. Use the Compose tab to send your first
-                      broadcast.
+                      {t("adminApp.notifications.emptyHistory")}
                     </Text>
                   ) : null
                 }
@@ -838,6 +864,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                     onToggle={() =>
                       setExpandedId((id) => (id === item._id ? null : item._id))
                     }
+                    tr={t}
                   />
                 )}
               />
@@ -856,24 +883,21 @@ export default function NotificationCenterScreen(): React.JSX.Element {
             onPress={() => (!sendLoading ? setConfirmOpen(false) : null)}
           >
             <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.sheetTitle}>Confirm Broadcast</Text>
+              <Text style={styles.sheetTitle}>{t("adminApp.notifications.confirmTitle")}</Text>
               <View style={styles.summaryCard}>
-                <Text style={styles.sumLabel}>Title:</Text>
+                <Text style={styles.sumLabel}>{t("adminApp.notifications.confirmTitleLabel")}</Text>
                 <Text style={styles.sumVal}>{titleTrim}</Text>
                 <Text style={[styles.sumLabel, { marginTop: spacing[2] }]}>
-                  Message:
+                  {t("adminApp.notifications.confirmMessageLabel")}
                 </Text>
                 <Text style={styles.sumVal} numberOfLines={3}>
                   {bodyTrim}
                 </Text>
                 <Text style={[styles.sumLabel, { marginTop: spacing[2] }]}>
-                  Recipients:
+                  {t("adminApp.notifications.confirmRecipientsLabel")}
                 </Text>
                 <Text style={styles.sumVal}>
-                  {targetDescription(
-                    target,
-                    target.kind === "selected" ? selectedIds.length : 0,
-                  )}{" "}
+                  {targetDescription(target, target.kind === "selected" ? selectedIds.length : 0, t)}{" "}
                   ({recipientCount})
                 </Text>
               </View>
@@ -886,7 +910,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                   onPress={() => setConfirmOpen(false)}
                   style={[styles.sheetBtnSec, sendLoading && { opacity: 0.5 }]}
                 >
-                  <Text style={styles.sheetBtnSecText}>Cancel</Text>
+                  <Text style={styles.sheetBtnSecText}>{t("adminApp.notifications.cancel")}</Text>
                 </Pressable>
                 <Pressable
                   onPress={onConfirmSend}
@@ -903,7 +927,7 @@ export default function NotificationCenterScreen(): React.JSX.Element {
                         color={colors.text.primary}
                         style={{ marginRight: 8 }}
                       />
-                      <Text style={styles.sheetBtnPriText}>Send Now</Text>
+                      <Text style={styles.sheetBtnPriText}>{t("adminApp.notifications.sendNow")}</Text>
                     </>
                   )}
                 </Pressable>

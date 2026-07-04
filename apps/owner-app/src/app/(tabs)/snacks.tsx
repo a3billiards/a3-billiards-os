@@ -4,6 +4,7 @@ import {
   Alert,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +15,9 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 import { formatCurrency } from "@a3/utils/billing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
@@ -28,7 +31,9 @@ type FormState = {
   fulfillmentType: "counter" | "kitchen";
 };
 
-export default function SnacksScreen() {
+function SnacksScreenContent() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const { roleId, canAccessTab } = useStaffRole();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const insets = useSafeAreaInsets();
@@ -59,7 +64,7 @@ export default function SnacksScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.accent.green} />
-        <Text style={styles.centerText}>Loading snack menu...</Text>
+        <Text style={styles.centerText}>{t("ownerApp.snacks.loading")}</Text>
       </View>
     );
   }
@@ -69,14 +74,14 @@ export default function SnacksScreen() {
   }
 
   if (roleId !== undefined && !canAccessTab("snacks")) {
-    return <TabAccessDenied tabLabel="Snacks" />;
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.snacks")} />;
   }
 
   if (snacks === undefined) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.accent.green} />
-        <Text style={styles.centerText}>Loading snack menu...</Text>
+        <Text style={styles.centerText}>{t("ownerApp.snacks.loading")}</Text>
       </View>
     );
   }
@@ -111,11 +116,11 @@ export default function SnacksScreen() {
     const name = form.name.trim();
     const price = Number(form.price);
     if (!name) {
-      setError("Name is required.");
+      setError(t("ownerApp.snacks.nameRequired"));
       return;
     }
     if (!Number.isFinite(price) || price <= 0) {
-      setError("Price must be a positive number.");
+      setError(t("ownerApp.snacks.pricePositive"));
       return;
     }
     setSaving(true);
@@ -148,24 +153,24 @@ export default function SnacksScreen() {
     try {
       await toggleSnackAvailability({ snackId });
     } catch (e) {
-      Alert.alert("Unable to update", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.snacks.unableToUpdate"), parseConvexError(e as Error).message);
     }
   };
 
   const onDelete = (snackId: Id<"snacks">) => {
     Alert.alert(
-      "Remove this item?",
-      "It will no longer appear on the menu. Historical orders are preserved.",
+      t("ownerApp.snacks.removeTitle"),
+      t("ownerApp.snacks.removeBody"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("ownerApp.snacks.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("ownerApp.snacks.delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await deleteSnack({ snackId });
             } catch (e) {
-              Alert.alert("Delete failed", parseConvexError(e as Error).message);
+              Alert.alert(t("ownerApp.snacks.deleteFailed"), parseConvexError(e as Error).message);
             }
           },
         },
@@ -176,25 +181,28 @@ export default function SnacksScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Snacks</Text>
+        <Text style={styles.title}>{t("ownerApp.snacks.menuTitle")}</Text>
         <Pressable
           onPress={openCreate}
           style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}
           accessibilityRole="button"
-          accessibilityLabel="Add snack item"
+          accessibilityLabel={t("ownerApp.snacks.addItem")}
         >
-          <Text style={styles.addBtnText}>+ Add Item</Text>
+          <Text style={styles.addBtnText}>{t("ownerApp.snacks.addSnack")}</Text>
         </Pressable>
       </View>
 
       {snacks.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>
-            {`No snack items yet. Tap '+ Add Item' to create your menu.`}
-          </Text>
+          <Text style={styles.emptyText}>{t("ownerApp.snacks.empty")}</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}>
+        <ScrollView
+          contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
           {snacks.map((snack) => (
             <View key={snack._id} style={styles.card}>
               <View style={styles.cardTop}>
@@ -205,8 +213,8 @@ export default function SnacksScreen() {
                   </Text>
                   <Text style={styles.snackType}>
                     {(snack.fulfillmentType ?? "counter") === "kitchen"
-                      ? "Kitchen item"
-                      : "Counter snack"}
+                      ? t("ownerApp.snacks.kitchenItem")
+                      : t("ownerApp.snacks.counterSnack")}
                   </Text>
                 </View>
                 <View
@@ -216,7 +224,9 @@ export default function SnacksScreen() {
                   ]}
                 >
                   <Text style={styles.badgeText}>
-                    {snack.isAvailable ? "Available" : "Unavailable"}
+                    {snack.isAvailable
+                      ? t("ownerApp.snacks.available")
+                      : t("ownerApp.snacks.unavailable")}
                   </Text>
                 </View>
               </View>
@@ -226,14 +236,16 @@ export default function SnacksScreen() {
                   style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
                   onPress={() => openEdit(snack._id)}
                 >
-                  <Text style={styles.actionText}>Edit</Text>
+                  <Text style={styles.actionText}>{t("common.edit")}</Text>
                 </Pressable>
                 <Pressable
                   style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
                   onPress={() => void onToggle(snack._id)}
                 >
                   <Text style={styles.actionText}>
-                    {snack.isAvailable ? "Mark Unavailable" : "Mark Available"}
+                    {snack.isAvailable
+                      ? t("ownerApp.snacks.markUnavailable")
+                      : t("ownerApp.snacks.markAvailable")}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -244,7 +256,7 @@ export default function SnacksScreen() {
                   ]}
                   onPress={() => onDelete(snack._id)}
                 >
-                  <Text style={styles.deleteText}>Delete</Text>
+                  <Text style={styles.deleteText}>{t("ownerApp.snacks.delete")}</Text>
                 </Pressable>
               </View>
             </View>
@@ -261,19 +273,19 @@ export default function SnacksScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>
-              {editingSnack ? "Edit Snack Item" : "Add Snack Item"}
+              {editingSnack ? t("ownerApp.snacks.editItem") : t("ownerApp.snacks.addSnackItem")}
             </Text>
 
-            <Text style={styles.label}>Name</Text>
+            <Text style={styles.label}>{t("ownerApp.snacks.name")}</Text>
             <TextInput
               value={form.name}
               onChangeText={(name) => setForm((prev) => ({ ...prev, name }))}
-              placeholder="e.g. Nachos"
+              placeholder={t("ownerApp.snacks.namePlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               style={styles.input}
             />
 
-            <Text style={styles.label}>Price</Text>
+            <Text style={styles.label}>{t("ownerApp.snacks.price")}</Text>
             <TextInput
               value={form.price}
               onChangeText={(price) => setForm((prev) => ({ ...prev, price }))}
@@ -283,7 +295,7 @@ export default function SnacksScreen() {
               style={styles.input}
             />
 
-            <Text style={styles.label}>Type</Text>
+            <Text style={styles.label}>{t("common.typeLabel")}</Text>
             <View style={styles.typeRow}>
               <Pressable
                 onPress={() =>
@@ -300,7 +312,7 @@ export default function SnacksScreen() {
                     form.fulfillmentType === "counter" && styles.typeChipTextActive,
                   ]}
                 >
-                  Counter snack
+                  {t("ownerApp.snacks.counterSnack")}
                 </Text>
               </Pressable>
               <Pressable
@@ -318,7 +330,7 @@ export default function SnacksScreen() {
                     form.fulfillmentType === "kitchen" && styles.typeChipTextActive,
                   ]}
                 >
-                  Kitchen item
+                  {t("ownerApp.snacks.kitchenItem")}
                 </Text>
               </Pressable>
             </View>
@@ -330,7 +342,7 @@ export default function SnacksScreen() {
                 onPress={closeEditor}
                 style={[styles.modalBtn, styles.modalCancel]}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t("ownerApp.snacks.cancel")}</Text>
               </Pressable>
               <Pressable
                 onPress={() => void saveSnack()}
@@ -338,7 +350,7 @@ export default function SnacksScreen() {
                 style={[styles.modalBtn, styles.modalConfirm, saving && styles.disabled]}
               >
                 <Text style={styles.modalConfirmText}>
-                  {saving ? "Saving..." : "Save"}
+                  {saving ? t("ownerApp.snacks.saving") : t("ownerApp.snacks.save")}
                 </Text>
               </Pressable>
             </View>
@@ -575,3 +587,12 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 });
+
+export default function SnacksScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.owner.snacks")}>
+      <SnacksScreenContent />
+    </TabErrorBoundary>
+  );
+}

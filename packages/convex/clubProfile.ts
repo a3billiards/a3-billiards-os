@@ -57,6 +57,7 @@ export const getMyClubProfile = query({
       currency: club.currency,
       timezone: club.timezone,
       specialRates: club.specialRates ?? [],
+      typeBaseRates: club.typeBaseRates ?? [],
     };
   },
 });

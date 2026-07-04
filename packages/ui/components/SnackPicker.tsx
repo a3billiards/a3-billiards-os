@@ -9,33 +9,38 @@ import {
   Text,
   View,
 } from "react-native";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@a3/convex/_generated/api";
-import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors } from "../theme/colors";
 import { layout, radius, spacing } from "../theme/spacing";
 import { typography } from "../theme/typography";
 import { formatCurrency } from "@a3/utils/billing";
-import { parseConvexError } from "../errors";
 
 type SessionStatus = "active" | "completed" | "cancelled";
 type PaymentStatus = "pending" | "paid" | "credit";
-type FulfillmentType = "counter" | "kitchen";
+export type SnackFulfillmentType = "counter" | "kitchen";
+
+export type SnackMenuItem = {
+  id: string;
+  name: string;
+  price: number;
+};
 
 export interface SnackPickerProps {
   visible: boolean;
-  clubId: Id<"clubs">;
-  sessionId: Id<"sessions">;
   sessionStatus: SessionStatus;
   paymentStatus: PaymentStatus;
   onClose: () => void;
-  onAdded?: () => void;
-  roleId?: Id<"staffRoles">;
   currency?: string;
+  /** Menu rows for the selected fulfillment type; undefined while loading. */
+  snacks: SnackMenuItem[] | undefined;
+  onFulfillmentTypeChange: (type: SnackFulfillmentType | null) => void;
+  onSubmit: (params: {
+    fulfillmentType: SnackFulfillmentType;
+    items: { snackId: string; qty: number }[];
+  }) => Promise<void>;
 }
 
 const FULFILLMENT_COPY: Record<
-  FulfillmentType,
+  SnackFulfillmentType,
   { title: string; subtitle: string; empty: string }
 > = {
   counter: {
@@ -50,29 +55,28 @@ const FULFILLMENT_COPY: Record<
   },
 };
 
-export function SnackPicker(props: SnackPickerProps): React.JSX.Element {
+export function SnackPicker(props: SnackPickerProps): React.JSX.Element | null {
+  if (!props.visible) {
+    return null;
+  }
+  return <SnackPickerModal {...props} />;
+}
+
+function SnackPickerModal(props: SnackPickerProps): React.JSX.Element {
   const {
     visible,
-    clubId,
-    sessionId,
     sessionStatus,
     paymentStatus,
     onClose,
-    onAdded,
-    roleId,
     currency = "INR",
+    snacks,
+    onFulfillmentTypeChange,
+    onSubmit,
   } = props;
   const [step, setStep] = useState<"choose" | "pick">("choose");
-  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType | null>(
+  const [fulfillmentType, setFulfillmentType] = useState<SnackFulfillmentType | null>(
     null,
   );
-  const snacks = useQuery(
-    api.snacks.listAvailableSnacks,
-    visible && step === "pick" && fulfillmentType
-      ? { clubId, fulfillmentType }
-      : "skip",
-  );
-  const addSnacksToSession = useMutation(api.snacks.addSnacksToSession);
   const [qtyBySnackId, setQtyBySnackId] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
 
@@ -80,10 +84,11 @@ export function SnackPicker(props: SnackPickerProps): React.JSX.Element {
     if (!visible) {
       setStep("choose");
       setFulfillmentType(null);
+      onFulfillmentTypeChange(null);
       setQtyBySnackId({});
       setSaving(false);
     }
-  }, [visible]);
+  }, [visible, onFulfillmentTypeChange]);
 
   useEffect(() => {
     if (!visible) return;
@@ -100,7 +105,7 @@ export function SnackPicker(props: SnackPickerProps): React.JSX.Element {
     if (!snacks) return [];
     return snacks
       .map((snack) => {
-        const qty = qtyBySnackId[snack._id] ?? 0;
+        const qty = qtyBySnackId[snack.id] ?? 0;
         return { snack, qty };
       })
       .filter((entry) => entry.qty > 0);
@@ -123,8 +128,9 @@ export function SnackPicker(props: SnackPickerProps): React.JSX.Element {
     });
   };
 
-  const chooseType = (type: FulfillmentType) => {
+  const chooseType = (type: SnackFulfillmentType) => {
     setFulfillmentType(type);
+    onFulfillmentTypeChange(type);
     setQtyBySnackId({});
     setStep("pick");
   };
@@ -132,6 +138,7 @@ export function SnackPicker(props: SnackPickerProps): React.JSX.Element {
   const goBack = () => {
     setStep("choose");
     setFulfillmentType(null);
+    onFulfillmentTypeChange(null);
     setQtyBySnackId({});
   };
 
@@ -139,22 +146,18 @@ export function SnackPicker(props: SnackPickerProps): React.JSX.Element {
     if (!fulfillmentType || selectedItems.length === 0 || saving) return;
     setSaving(true);
     try {
-      await addSnacksToSession({
-        sessionId,
+      await onSubmit({
         fulfillmentType,
         items: selectedItems.map((item) => ({
-          snackId: item.snack._id,
+          snackId: item.snack.id,
           qty: item.qty,
         })),
-        roleId,
       });
-      onAdded?.();
       onClose();
     } catch (error) {
-      Alert.alert(
-        "Failed to add items",
-        parseConvexError(error as Error).message,
-      );
+      const message =
+        error instanceof Error ? error.message : "Could not add items.";
+      Alert.alert("Failed to add items", message);
     } finally {
       setSaving(false);
     }
@@ -239,9 +242,9 @@ export function SnackPicker(props: SnackPickerProps): React.JSX.Element {
               ) : (
                 <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
                   {snacks.map((snack) => {
-                    const qty = qtyBySnackId[snack._id] ?? 0;
+                    const qty = qtyBySnackId[snack.id] ?? 0;
                     return (
-                      <View key={snack._id} style={styles.row}>
+                      <View key={snack.id} style={styles.row}>
                         <View style={styles.itemMeta}>
                           <Text style={styles.itemName}>{snack.name}</Text>
                           <Text style={styles.itemPrice}>
@@ -250,7 +253,7 @@ export function SnackPicker(props: SnackPickerProps): React.JSX.Element {
                         </View>
                         <View style={styles.stepper}>
                           <Pressable
-                            onPress={() => updateQty(snack._id, -1)}
+                            onPress={() => updateQty(snack.id, -1)}
                             style={styles.stepBtn}
                             accessibilityRole="button"
                             accessibilityLabel={`Decrease ${snack.name}`}
@@ -259,7 +262,7 @@ export function SnackPicker(props: SnackPickerProps): React.JSX.Element {
                           </Pressable>
                           <Text style={styles.qtyText}>{qty}</Text>
                           <Pressable
-                            onPress={() => updateQty(snack._id, 1)}
+                            onPress={() => updateQty(snack.id, 1)}
                             style={styles.stepBtn}
                             accessibilityRole="button"
                             accessibilityLabel={`Increase ${snack.name}`}

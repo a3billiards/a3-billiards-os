@@ -1,24 +1,33 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import {
   DEFAULT_LOCALE,
   isAppLocale,
   LOCALE_STORAGE_KEY,
+  USER_LANGUAGE_STORAGE_KEY,
   type AppLocale,
 } from "./config";
 
 export async function readStoredLocale(): Promise<AppLocale | null> {
   try {
-    const raw = await SecureStore.getItemAsync(LOCALE_STORAGE_KEY);
+    const raw = await AsyncStorage.getItem(USER_LANGUAGE_STORAGE_KEY);
     if (raw && isAppLocale(raw)) return raw;
   } catch {
-    // SecureStore unavailable on web or during tests
+    // best-effort
+  }
+  // Backward-compat: old builds stored language in SecureStore.
+  try {
+    const legacy = await SecureStore.getItemAsync(LOCALE_STORAGE_KEY);
+    if (legacy && isAppLocale(legacy)) return legacy;
+  } catch {
+    // best-effort
   }
   return null;
 }
 
 export async function writeStoredLocale(locale: AppLocale): Promise<void> {
   try {
-    await SecureStore.setItemAsync(LOCALE_STORAGE_KEY, locale);
+    await AsyncStorage.setItem(USER_LANGUAGE_STORAGE_KEY, locale);
   } catch {
     // best-effort
   }
@@ -26,7 +35,7 @@ export async function writeStoredLocale(locale: AppLocale): Promise<void> {
 
 export async function clearStoredLocale(): Promise<void> {
   try {
-    await SecureStore.deleteItemAsync(LOCALE_STORAGE_KEY);
+    await AsyncStorage.removeItem(USER_LANGUAGE_STORAGE_KEY);
   } catch {
     // best-effort
   }

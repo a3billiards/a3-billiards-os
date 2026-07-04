@@ -10,8 +10,8 @@ import {
 import {
   formatHhmm12h,
   STALE_SLOT_WARNING_MS,
+  buildBookableSlotTimes,
 } from "@a3/utils/availability";
-import { hhmmToMinutes } from "@a3/utils/timezone";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing, radius, layout } from "../theme/spacing";
@@ -49,16 +49,11 @@ export function TimeSlotGrid({
     return () => clearTimeout(t);
   }, [availableSlots, requestedDurationMin, bookableOpen, bookableClose]);
 
-  const openMin = hhmmToMinutes(bookableOpen);
-  const closeMin = hhmmToMinutes(bookableClose);
-  const allSlots: string[] = [];
-  for (let m = openMin; m < closeMin; m += 30) {
-    const end = m + requestedDurationMin;
-    if (end > closeMin) break;
-    const hh = String(Math.floor(m / 60)).padStart(2, "0");
-    const mm = String(m % 60).padStart(2, "0");
-    allSlots.push(`${hh}:${mm}`);
-  }
+  const allSlots = buildBookableSlotTimes(
+    bookableOpen,
+    bookableClose,
+    requestedDurationMin,
+  );
 
   const availableSet = new Set(availableSlots ?? []);
 

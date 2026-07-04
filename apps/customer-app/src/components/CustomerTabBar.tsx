@@ -17,12 +17,12 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
 };
 
 const TAB_LABEL_KEYS: Record<string, string> = {
-  home: "tabs.customer.home",
-  discover: "tabs.customer.discover",
-  live: "tabs.customer.live",
-  bookings: "tabs.customer.bookings",
-  history: "tabs.customer.history",
-  profile: "tabs.customer.profile",
+  home: "common.tabs.customer.home",
+  discover: "common.tabs.customer.discover",
+  live: "common.tabs.customer.live",
+  bookings: "common.tabs.customer.bookings",
+  history: "common.tabs.customer.history",
+  profile: "common.tabs.customer.profile",
 };
 
 export default function CustomerTabBar({
@@ -45,11 +45,9 @@ export default function CustomerTabBar({
         <View pointerEvents="none" style={styles.pillHighlight} />
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label =
-            (options.title as string | undefined) ??
-            (TAB_LABEL_KEYS[route.name]
-              ? t(TAB_LABEL_KEYS[route.name])
-              : route.name);
+          const label = TAB_LABEL_KEYS[route.name]
+            ? t(TAB_LABEL_KEYS[route.name])
+            : ((options.title as string | undefined) ?? route.name);
           const isFocused = state.index === index;
           const iconName = TAB_ICONS[route.name] ?? "circle";
 

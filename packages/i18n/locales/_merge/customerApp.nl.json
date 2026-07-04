@@ -1,0 +1,7 @@
+{
+  "googleAuth": {
+    "expoGo": "GOOGLE_AUTH_001: Google-aanmelding is niet beschikbaar in Expo Go. Gebruik e-maillogin of start een development build.",
+    "missingToken": "GOOGLE_AUTH_001: Google ID-token ontbreekt — voltooi Google-aanmelding om door te gaan"
+  },
+  "checkInPayload": "a3customer:{{userId}}"
+}

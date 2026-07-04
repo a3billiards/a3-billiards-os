@@ -17,24 +17,35 @@ import { useRouter } from "expo-router";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import {
-  SnackPicker,
   TableGrid,
   ComplaintBanner,
   type ComplaintBannerRow,
+  PhoneInput,
 } from "@a3/ui/components";
+import { OwnerSnackPicker } from "../../components/OwnerSnackPicker";
+import { CheckoutBillBreakdown } from "../../components/CheckoutBillBreakdown";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
 import { formatCurrency, formatElapsed } from "@a3/utils/billing";
+import { DEFAULT_PHONE_E164, isValidE164, normalizeE164 } from "@a3/utils/phone";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../../lib/StaffRoleContext";
 import { TabAccessDenied } from "../../components/TabAccessDenied";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
+import { useTranslation } from "@a3/i18n";
+import {
+  WalkInGroupSetup,
+  type GroupPlayer,
+  type PlayerSide,
+} from "../../components/WalkInGroupSetup";
+import { CustomerQrScannerModal } from "../../components/CustomerQrScannerModal";
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
 const TOS_URL = "https://a3billiards.com/terms";
 
-export default function SlotsScreen() {
+function SlotsScreenContent() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
@@ -55,14 +66,12 @@ export default function SlotsScreen() {
     useState<Id<"sessions"> | null>(null);
   const [showWalkInStartModal, setShowWalkInStartModal] = useState(false);
   const [walkInStartStep, setWalkInStartStep] = useState<
-    "choose" | "customer" | "deskRegister"
+    "choose" | "customer" | "deskRegister" | "groupSetup" | "addTeammate"
   >("choose");
   const [guestNameInput, setGuestNameInput] = useState("Walk-in");
-  const [customerPhoneInput, setCustomerPhoneInput] = useState("");
+  const [customerPhoneInput, setCustomerPhoneInput] = useState(DEFAULT_PHONE_E164);
   const [debouncedCustomerPhone, setDebouncedCustomerPhone] = useState("");
   const [pendingCustomerId, setPendingCustomerId] = useState<Id<"users"> | null>(null);
-  const [pendingFreeVisitCreditId, setPendingFreeVisitCreditId] =
-    useState<Id<"loyaltyCredits"> | null>(null);
   const [showComplaintGate, setShowComplaintGate] = useState(false);
   const walkInModalOpenedForTableRef = useRef<string | null>(null);
   const [checkoutTableId, setCheckoutTableId] = useState<Id<"tables"> | null>(
@@ -71,12 +80,13 @@ export default function SlotsScreen() {
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [discountInput, setDiscountInput] = useState("");
+  const [debouncedDiscountInput, setDebouncedDiscountInput] = useState("");
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   /** Pool-side new customer: name, age, +91 phone, WhatsApp OTP, consent. */
   const [deskName, setDeskName] = useState("");
   const [deskAge, setDeskAge] = useState("");
-  const [deskPhone, setDeskPhone] = useState("+91");
+  const [deskPhone, setDeskPhone] = useState(DEFAULT_PHONE_E164);
   const [deskOtp, setDeskOtp] = useState("");
   const [deskConsent, setDeskConsent] = useState(false);
   const [deskBusySend, setDeskBusySend] = useState(false);
@@ -84,11 +94,59 @@ export default function SlotsScreen() {
   const [deskBusyExtendLock, setDeskBusyExtendLock] = useState(false);
   const [deskError, setDeskError] = useState<string | null>(null);
   const [deskInfo, setDeskInfo] = useState<string | null>(null);
+  const [deskRegisterFor, setDeskRegisterFor] = useState<"primary" | "teammate">(
+    "primary",
+  );
+  const [groupPlayers, setGroupPlayers] = useState<GroupPlayer[]>([]);
+  const [playMode, setPlayMode] = useState<"casual" | "versus">("casual");
+  const [losersPay, setLosersPay] = useState(false);
+  const [groupValidationError, setGroupValidationError] = useState<string | null>(
+    null,
+  );
+  const [teammatePhoneInput, setTeammatePhoneInput] = useState(DEFAULT_PHONE_E164);
+  const [debouncedTeammatePhone, setDebouncedTeammatePhone] = useState("");
+  const [customerNameQuery, setCustomerNameQuery] = useState("");
+  const [debouncedNameQuery, setDebouncedNameQuery] = useState("");
+  const [qrPayload, setQrPayload] = useState("");
+  const [debouncedQrPayload, setDebouncedQrPayload] = useState("");
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [qrAutoContinue, setQrAutoContinue] = useState(false);
+  const [qrScanForTeammate, setQrScanForTeammate] = useState(false);
+  const [teammateNameQuery, setTeammateNameQuery] = useState("");
+  const [debouncedTeammateNameQuery, setDebouncedTeammateNameQuery] = useState("");
+  const [checkoutLoserSide, setCheckoutLoserSide] = useState<PlayerSide | null>(
+    null,
+  );
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedCustomerPhone(customerPhoneInput.trim()), 300);
     return () => clearTimeout(t);
   }, [customerPhoneInput]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedTeammatePhone(teammatePhoneInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [teammatePhoneInput]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedNameQuery(customerNameQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [customerNameQuery]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedTeammateNameQuery(teammateNameQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [teammateNameQuery]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQrPayload(qrPayload.trim()), 400);
+    return () => clearTimeout(t);
+  }, [qrPayload]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedDiscountInput(discountInput.trim()), 500);
+    return () => clearTimeout(t);
+  }, [discountInput]);
 
   // Tick once a second so elapsed timers and live bill preview stay current.
   useEffect(() => {
@@ -96,28 +154,40 @@ export default function SlotsScreen() {
     return () => clearInterval(id);
   }, []);
 
-  const phoneReady = /^\+91\d{10}$/.test(debouncedCustomerPhone);
+  const phoneReady = isValidE164(normalizeE164(debouncedCustomerPhone));
+  const teammatePhoneReady = isValidE164(normalizeE164(debouncedTeammatePhone));
   const customerPhoneSearch = useQuery(
     api.complaints.searchCustomerByPhone,
     phoneReady ? { phone: debouncedCustomerPhone } : "skip",
+  );
+  const clubIdForLookup = dashboard?.clubId;
+  const nameSearch = useQuery(
+    api.ownerCustomerLookup.searchCustomersByName,
+    clubIdForLookup && debouncedNameQuery.length >= 2
+      ? { clubId: clubIdForLookup, nameQuery: debouncedNameQuery }
+      : "skip",
+  );
+  const teammateNameSearch = useQuery(
+    api.ownerCustomerLookup.searchCustomersByName,
+    clubIdForLookup && debouncedTeammateNameQuery.length >= 2
+      ? { clubId: clubIdForLookup, nameQuery: debouncedTeammateNameQuery }
+      : "skip",
+  );
+  const qrResolve = useQuery(
+    api.ownerCustomerLookup.resolveCustomerQrPayload,
+    clubIdForLookup && debouncedQrPayload.length >= 8
+      ? { clubId: clubIdForLookup, payload: debouncedQrPayload }
+      : "skip",
+  );
+
+  const teammatePhoneSearch = useQuery(
+    api.complaints.searchCustomerByPhone,
+    teammatePhoneReady ? { phone: debouncedTeammatePhone } : "skip",
   );
   const customerComplaints = useQuery(
     api.complaints.getCustomerActiveComplaints,
     pendingCustomerId ? { userId: pendingCustomerId } : "skip",
   );
-  const canViewLoyaltyRedemption =
-    roleId === null || (roleId !== undefined && canAccessTab("loyalty"));
-  const loyaltyRedemption = useQuery(
-    api.loyalty.getRedemptionOffer,
-    dashboard?.clubId && pendingCustomerId && canViewLoyaltyRedemption
-      ? {
-          clubId: dashboard.clubId,
-          customerId: pendingCustomerId,
-          roleId: queryRoleId,
-        }
-      : "skip",
-  );
-
   const snackEligibility = useQuery(
     api.snacks.getSessionSnackEligibility,
     snackPickerSessionId ? { sessionId: snackPickerSessionId } : "skip",
@@ -142,13 +212,35 @@ export default function SlotsScreen() {
   const startWalkIn = useMutation(api.ownerSessions.startWalkInSession);
   const checkoutTableSession = useMutation(api.ownerSessions.checkoutTableSession);
 
-  const parsedDiscount = useMemo(() => {
+  useEffect(() => {
+    if (!showWalkInStartModal || !walkInTableId || !walkInLockToken) return;
+    const extend = () => {
+      void extendTableLockForDeskOtp({
+        tableId: walkInTableId,
+        lockToken: walkInLockToken,
+      }).catch(() => {
+        // Lock may already be cleared after session start; ignore.
+      });
+    };
+    extend();
+    const id = setInterval(extend, 60_000);
+    return () => clearInterval(id);
+  }, [showWalkInStartModal, walkInTableId, walkInLockToken, extendTableLockForDeskOtp]);
+
+  const discountInputTooHigh = useMemo(() => {
     const trimmed = discountInput.trim();
+    if (trimmed === "") return false;
+    const n = Number(trimmed);
+    return Number.isFinite(n) && n >= 100;
+  }, [discountInput]);
+
+  const parsedDiscount = useMemo(() => {
+    const trimmed = debouncedDiscountInput.trim();
     if (trimmed === "") return 0;
     const n = Number(trimmed);
-    if (!Number.isFinite(n) || n < 0) return 0;
-    return Math.min(100, n);
-  }, [discountInput]);
+    if (!Number.isFinite(n) || n < 0 || n >= 100) return 0;
+    return n;
+  }, [debouncedDiscountInput]);
 
   const checkoutPreview = useQuery(
     api.ownerSessions.previewTableCheckout,
@@ -162,21 +254,34 @@ export default function SlotsScreen() {
     setTimeout(() => setRefreshing(false), 600);
   }, []);
 
+  const resetPlayerLookupState = useCallback(() => {
+    setCustomerPhoneInput(DEFAULT_PHONE_E164);
+    setDebouncedCustomerPhone("");
+    setTeammatePhoneInput(DEFAULT_PHONE_E164);
+    setDebouncedTeammatePhone("");
+    setCustomerNameQuery("");
+    setDebouncedNameQuery("");
+    setTeammateNameQuery("");
+    setDebouncedTeammateNameQuery("");
+    setQrPayload("");
+    setDebouncedQrPayload("");
+    setQrAutoContinue(false);
+    setQrScanForTeammate(false);
+    setShowQrScanner(false);
+    setPendingCustomerId(null);
+  }, []);
+
   const clearWalkInState = useCallback(() => {
     walkInModalOpenedForTableRef.current = null;
     setWalkInTableId(null);
     setWalkInLockToken(null);
     setShowWalkInStartModal(false);
     setWalkInStartStep("choose");
-    setGuestNameInput("Walk-in");
-    setCustomerPhoneInput("");
-    setDebouncedCustomerPhone("");
-    setPendingCustomerId(null);
-    setPendingFreeVisitCreditId(null);
+    setGuestNameInput(t("ownerApp.slots.defaultWalkIn"));
     setShowComplaintGate(false);
     setDeskName("");
     setDeskAge("");
-    setDeskPhone("+91");
+    setDeskPhone(DEFAULT_PHONE_E164);
     setDeskOtp("");
     setDeskConsent(false);
     setDeskError(null);
@@ -184,7 +289,122 @@ export default function SlotsScreen() {
     setDeskBusySend(false);
     setDeskBusySubmit(false);
     setDeskBusyExtendLock(false);
+    setDeskRegisterFor("primary");
+    setGroupPlayers([]);
+    setPlayMode("casual");
+    setLosersPay(false);
+    setGroupValidationError(null);
+    resetPlayerLookupState();
+  }, [t, resetPlayerLookupState]);
+
+  const buildParticipantsPayload = useCallback(
+    (players: GroupPlayer[], mode: "casual" | "versus") =>
+      players.map((p) => ({
+        key: p.key,
+        customerId: p.customerId,
+        displayName: p.displayName,
+        isGuest: false as const,
+        side: mode === "versus" ? p.side : undefined,
+      })),
+    [],
+  );
+
+  const openGroupSetupForCustomer = useCallback(
+    (userId: Id<"users">, name: string, phone: string) => {
+      setPendingCustomerId(userId);
+      setGroupPlayers([
+        {
+          key: String(userId),
+          customerId: userId,
+          displayName: name,
+          phone,
+          side: "sideA",
+        },
+      ]);
+      setPlayMode("casual");
+      setLosersPay(false);
+      setGroupValidationError(null);
+      setWalkInStartStep("groupSetup");
+      if (walkInTableId && walkInLockToken) {
+        void extendTableLockForDeskOtp({
+          tableId: walkInTableId,
+          lockToken: walkInLockToken,
+        }).catch(() => {});
+      }
+    },
+    [walkInTableId, walkInLockToken, extendTableLockForDeskOtp],
+  );
+
+  const onQrScanned = useCallback((payload: string) => {
+    const trimmed = payload.trim();
+    setQrPayload(trimmed);
+    setDebouncedQrPayload(trimmed);
+    setQrAutoContinue(true);
   }, []);
+
+  const addTeammateToGroup = useCallback(
+    (userId: Id<"users">, name: string, phone: string) => {
+      if (groupPlayers.some((p) => p.customerId === userId)) {
+        setDeskError(t("ownerApp.slots.teammateAlreadyAdded"));
+        return;
+      }
+      const defaultSide: PlayerSide =
+        groupPlayers.some((p) => p.side === "sideA") ? "sideB" : "sideA";
+      setGroupPlayers((prev) => [
+        ...prev,
+        {
+          key: String(userId),
+          customerId: userId,
+          displayName: name,
+          phone,
+          side: defaultSide,
+        },
+      ]);
+      setDeskError(null);
+      setTeammatePhoneInput("");
+      setDebouncedTeammatePhone("");
+      setWalkInStartStep("groupSetup");
+    },
+    [groupPlayers, t],
+  );
+
+  useEffect(() => {
+    if (!qrAutoContinue || qrResolve === undefined) return;
+    if (qrResolve.ok) {
+      setQrAutoContinue(false);
+      if (qrScanForTeammate) {
+        setQrScanForTeammate(false);
+        addTeammateToGroup(
+          qrResolve.user._id,
+          qrResolve.user.name,
+          qrResolve.user.phone ?? "",
+        );
+      } else {
+        openGroupSetupForCustomer(
+          qrResolve.user._id,
+          qrResolve.user.name,
+          qrResolve.user.phone ?? "",
+        );
+      }
+    } else {
+      setQrAutoContinue(false);
+      Alert.alert(t("ownerApp.slots.error"), qrResolve.message);
+    }
+  }, [qrAutoContinue, qrResolve, qrScanForTeammate, addTeammateToGroup, openGroupSetupForCustomer, t]);
+
+  const validateGroupBeforeStart = useCallback((): string | null => {
+    if (playMode === "versus") {
+      if (groupPlayers.length < 2) {
+        return t("ownerApp.slots.needTwoForVersus");
+      }
+      const hasA = groupPlayers.some((p) => p.side === "sideA");
+      const hasB = groupPlayers.some((p) => p.side === "sideB");
+      if (!hasA || !hasB) {
+        return t("ownerApp.slots.assignBothSides");
+      }
+    }
+    return null;
+  }, [groupPlayers, playMode, t]);
 
   const runStartWalkIn = useCallback(
     async (
@@ -194,8 +414,10 @@ export default function SlotsScreen() {
         forceOverride?: boolean;
         guestName?: string;
         customerId?: Id<"users">;
-        freeVisitCreditId?: Id<"loyaltyCredits">;
         staffAcknowledgedComplaint?: boolean;
+        participants?: ReturnType<typeof buildParticipantsPayload>;
+        playMode?: "casual" | "versus";
+        losersPay?: boolean;
       },
     ) => {
       setActionError(null);
@@ -206,9 +428,11 @@ export default function SlotsScreen() {
           forceStartDespiteConflict: opts?.forceOverride || undefined,
           guestName: opts?.customerId ? undefined : opts?.guestName,
           customerId: opts?.customerId,
-          freeVisitCreditId: opts?.freeVisitCreditId,
           roleId: queryRoleId,
           staffAcknowledgedComplaint: opts?.staffAcknowledgedComplaint,
+          participants: opts?.participants,
+          playMode: opts?.playMode,
+          losersPay: opts?.losersPay,
         });
         if ((result as { hasUpcomingBooking?: boolean }).hasUpcomingBooking) {
           const r = result as {
@@ -216,7 +440,11 @@ export default function SlotsScreen() {
             bookingTime?: string;
           };
           setPendingConflictMessage(
-            `This table has a booking for ${r.customerName ?? "Customer"} at ${r.bookingTime ?? ""}. Proceeding will take priority over the booking.`,
+            t("ownerApp.slots.bookingConflictBody", {
+              customerName:
+                r.customerName ?? t("sharedUi.bookingCard.customerFallback"),
+              bookingTime: r.bookingTime ?? "",
+            }),
           );
           setShowConflictModal(true);
           return;
@@ -230,7 +458,37 @@ export default function SlotsScreen() {
         clearWalkInState();
       }
     },
-    [startWalkIn, clearWalkInState, queryRoleId],
+    [startWalkIn, clearWalkInState, queryRoleId, t],
+  );
+
+  const startGroupSession = useCallback(
+    (staffAcknowledgedComplaint?: boolean) => {
+      if (!walkInTableId || !walkInLockToken || !pendingCustomerId) return;
+      const err = validateGroupBeforeStart();
+      if (err) {
+        setGroupValidationError(err);
+        return;
+      }
+      setGroupValidationError(null);
+      void runStartWalkIn(walkInTableId, walkInLockToken, {
+        customerId: pendingCustomerId,
+        participants: buildParticipantsPayload(groupPlayers, playMode),
+        playMode,
+        losersPay: playMode === "versus" ? losersPay : false,
+        staffAcknowledgedComplaint,
+      });
+    },
+    [
+      walkInTableId,
+      walkInLockToken,
+      pendingCustomerId,
+      validateGroupBeforeStart,
+      runStartWalkIn,
+      buildParticipantsPayload,
+      groupPlayers,
+      playMode,
+      losersPay,
+    ],
   );
 
   useEffect(() => {
@@ -250,6 +508,8 @@ export default function SlotsScreen() {
   const openCheckoutForTable = useCallback((tableId: Id<"tables">) => {
     setActionError(null);
     setDiscountInput("");
+    setDebouncedDiscountInput("");
+    setCheckoutLoserSide(null);
     setCheckoutTableId(tableId);
     setShowCheckoutModal(true);
   }, []);
@@ -259,11 +519,24 @@ export default function SlotsScreen() {
     setShowCheckoutModal(false);
     setCheckoutTableId(null);
     setDiscountInput("");
+    setDebouncedDiscountInput("");
+    setCheckoutLoserSide(null);
   }, [checkoutBusy]);
 
   const runCheckout = useCallback(
     async (paymentMethod: "cash" | "upi" | "card" | "credit") => {
       if (checkoutTableId === null) return;
+      if (discountInputTooHigh) {
+        setActionError(t("ownerApp.slots.discountMustBeLessThan100"));
+        return;
+      }
+      if (
+        checkoutPreview?.requiresLoserSide &&
+        checkoutLoserSide === null
+      ) {
+        setActionError(t("ownerApp.slots.selectLosingSide"));
+        return;
+      }
       setCheckoutBusy(true);
       setActionError(null);
       try {
@@ -272,17 +545,30 @@ export default function SlotsScreen() {
           paymentMethod,
           roleId: queryRoleId,
           discountPercent: parsedDiscount > 0 ? parsedDiscount : undefined,
+          loserSide: checkoutPreview?.requiresLoserSide
+            ? checkoutLoserSide ?? undefined
+            : undefined,
         });
         setShowCheckoutModal(false);
         setCheckoutTableId(null);
         setDiscountInput("");
+        setCheckoutLoserSide(null);
       } catch (e) {
         setActionError(parseConvexError(e as Error).message);
       } finally {
         setCheckoutBusy(false);
       }
     },
-    [checkoutTableId, checkoutTableSession, queryRoleId, parsedDiscount],
+    [
+      checkoutTableId,
+      checkoutTableSession,
+      queryRoleId,
+      parsedDiscount,
+      discountInputTooHigh,
+      checkoutPreview?.requiresLoserSide,
+      checkoutLoserSide,
+      t,
+    ],
   );
 
   const handleTablePress = useCallback(
@@ -295,6 +581,11 @@ export default function SlotsScreen() {
         return;
       }
       setActionError(null);
+      resetPlayerLookupState();
+      setGroupPlayers([]);
+      setPlayMode("casual");
+      setLosersPay(false);
+      setGroupValidationError(null);
       setAcquiringLock(true);
       try {
         const { lockToken } = await acquireTableLock({
@@ -308,7 +599,7 @@ export default function SlotsScreen() {
         setAcquiringLock(false);
       }
     },
-    [dashboard, acquireTableLock, openCheckoutForTable],
+    [dashboard, acquireTableLock, openCheckoutForTable, resetPlayerLookupState],
   );
 
   const pickDifferentTable = useCallback(async () => {
@@ -361,7 +652,7 @@ export default function SlotsScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.accent.green} />
-        <Text style={styles.loadingText}>Loading tables…</Text>
+        <Text style={styles.loadingText}>{t("ownerApp.slots.loadingTables")}</Text>
       </View>
     );
   }
@@ -371,7 +662,7 @@ export default function SlotsScreen() {
   }
 
   if (roleId !== undefined && !canAccessTab("slots")) {
-    return <TabAccessDenied tabLabel="Slots" />;
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.slots")} />;
   }
 
   const summary = dashboard.bookingSummary;
@@ -402,9 +693,7 @@ export default function SlotsScreen() {
         }
       >
         <Text style={styles.screenTitle}>{dashboard.clubName}</Text>
-        <Text style={styles.screenSubtitle}>
-          Slots · Tap a free table for a walk-in, or an occupied table to close out.
-        </Text>
+        <Text style={styles.screenSubtitle}>{t("ownerApp.slots.subtitle")}</Text>
 
         {showSummary && (
           <View style={styles.summaryRow}>
@@ -416,7 +705,7 @@ export default function SlotsScreen() {
               ]}
             >
               <Text style={styles.summaryValue}>{summary.pending}</Text>
-              <Text style={styles.summaryLabel}>Pending</Text>
+              <Text style={styles.summaryLabel}>{t("ownerApp.slots.pending")}</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push("/(tabs)/bookings?segment=upcoming")}
@@ -428,7 +717,7 @@ export default function SlotsScreen() {
               <Text style={styles.summaryValue}>
                 {summary.confirmedToday}
               </Text>
-              <Text style={styles.summaryLabel}>Confirmed today</Text>
+              <Text style={styles.summaryLabel}>{t("ownerApp.slots.confirmedToday")}</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push("/(tabs)/bookings?segment=history")}
@@ -440,14 +729,14 @@ export default function SlotsScreen() {
               <Text style={styles.summaryValue}>
                 {summary.completedToday}
               </Text>
-              <Text style={styles.summaryLabel}>Completed today</Text>
+              <Text style={styles.summaryLabel}>{t("ownerApp.slots.completedToday")}</Text>
             </Pressable>
           </View>
         )}
 
         {actionError !== null && (
           <View style={styles.errorBanner} accessibilityRole="alert">
-            <Text style={styles.errorLabel}>Error</Text>
+            <Text style={styles.errorLabel}>{t("ownerApp.slots.error")}</Text>
             <Text style={styles.errorText}>{actionError}</Text>
           </View>
         )}
@@ -460,10 +749,8 @@ export default function SlotsScreen() {
 
         {activeTables.length > 0 ? (
           <View style={styles.activeSection}>
-            <Text style={styles.activeSectionTitle}>Active Tables</Text>
-            <Text style={styles.activeSectionHint}>
-              Close a table to run checkout and free it, or add snacks while play continues.
-            </Text>
+            <Text style={styles.activeSectionTitle}>{t("ownerApp.slots.activeTables")}</Text>
+            <Text style={styles.activeSectionHint}>{t("ownerApp.slots.activeTablesHint")}</Text>
             {activeTables.map((table) => {
               const session = activeSessionByTableId[table._id];
               const elapsedLabel =
@@ -475,21 +762,38 @@ export default function SlotsScreen() {
                   <View style={styles.activeCardLeft}>
                     <Text style={styles.activeCardTitle}>{table.label}</Text>
                     <Text style={styles.activeCardCustomer} numberOfLines={1}>
-                      {session?.customerName ?? "Session in progress"}
+                      {session?.customerName ?? t("ownerApp.slots.sessionInProgress")}
                       {session?.isGuest ? (
-                        <Text style={styles.guestBadgeInline}> · Guest</Text>
+                        <Text style={styles.guestBadgeInline}>{t("ownerApp.slots.guestBadge")}</Text>
+                      ) : null}
+                      {session?.playMode === "versus" ? (
+                        <Text style={styles.versusBadgeInline}>
+                          {" · "}
+                          {t("ownerApp.slots.versusBadge")}
+                          {session.losersPay
+                            ? ` · ${t("ownerApp.slots.losersPayBadge")}`
+                            : ""}
+                        </Text>
+                      ) : null}
+                      {(session?.playerCount ?? 0) > 1 ? (
+                        <Text style={styles.versusBadgeInline}>
+                          {" · "}
+                          {t("ownerApp.slots.playersCount", {
+                            count: session?.playerCount ?? 0,
+                          })}
+                        </Text>
                       ) : null}
                     </Text>
                     {elapsedLabel ? (
                       <View style={styles.elapsedRow}>
                         <View style={styles.elapsedDot} />
                         <Text style={styles.activeCardMeta}>
-                          {elapsedLabel} elapsed
+                          {t("ownerApp.slots.elapsedSuffix", { time: elapsedLabel })}
                         </Text>
                       </View>
                     ) : (
                       <Text style={styles.activeCardMeta}>
-                        Session in progress
+                        {t("ownerApp.slots.sessionInProgress")}
                       </Text>
                     )}
                   </View>
@@ -503,7 +807,7 @@ export default function SlotsScreen() {
                         openCheckoutForTable(table._id as Id<"tables">)
                       }
                     >
-                      <Text style={styles.closeTableBtnText}>Close table</Text>
+                      <Text style={styles.closeTableBtnText}>{t("ownerApp.slots.closeTable")}</Text>
                     </Pressable>
                     <Pressable
                       style={({ pressed }) => [
@@ -516,7 +820,7 @@ export default function SlotsScreen() {
                         )
                       }
                     >
-                      <Text style={styles.addSnacksBtnText}>Add Items</Text>
+                      <Text style={styles.addSnacksBtnText}>{t("ownerApp.slots.addItems")}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -529,7 +833,7 @@ export default function SlotsScreen() {
       {showLockOverlay && (
         <View style={styles.lockOverlay} pointerEvents="auto">
           <ActivityIndicator size="large" color={colors.accent.green} />
-          <Text style={styles.lockOverlayText}>Reserving table…</Text>
+          <Text style={styles.lockOverlayText}>{t("ownerApp.slots.reservingTable")}</Text>
         </View>
       )}
 
@@ -543,11 +847,9 @@ export default function SlotsScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Booking conflict</Text>
+            <Text style={styles.modalTitle}>{t("ownerApp.slots.bookingConflict")}</Text>
             <Text style={styles.modalBody}>{pendingConflictMessage}</Text>
-            <Text style={styles.modalHint}>
-              Physical walk-ins take priority if you choose to proceed.
-            </Text>
+            <Text style={styles.modalHint}>{t("ownerApp.slots.bookingConflictHint")}</Text>
             <View style={styles.modalActions}>
               <Pressable
                 style={({ pressed }) => [
@@ -558,10 +860,10 @@ export default function SlotsScreen() {
                   void pickDifferentTable();
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Pick different table"
+                accessibilityLabel={t("ownerApp.slots.pickDifferentTable")}
               >
                 <Text style={styles.modalBtnSecondaryText}>
-                  Pick Different Table
+                  {t("ownerApp.slots.pickDifferentTable")}
                 </Text>
               </Pressable>
               <Pressable
@@ -571,9 +873,9 @@ export default function SlotsScreen() {
                 ]}
                 onPress={proceedAnyway}
                 accessibilityRole="button"
-                accessibilityLabel="Proceed anyway"
+                accessibilityLabel={t("ownerApp.slots.proceedAnyway")}
               >
-                <Text style={styles.modalBtnPrimaryText}>Proceed Anyway</Text>
+                <Text style={styles.modalBtnPrimaryText}>{t("ownerApp.slots.proceedAnyway")}</Text>
               </Pressable>
             </View>
           </View>
@@ -596,17 +898,14 @@ export default function SlotsScreen() {
                 showsVerticalScrollIndicator={false}
                 bounces={false}
               >
-                <Text style={styles.modalTitle}>Start session</Text>
-                <Text style={styles.modalBody}>
-                  Walk-in guest starts immediately. For a registered customer, look up by phone.
-                  New customers can verify on WhatsApp and register here before play.
-                </Text>
-                <Text style={styles.walkInLabel}>Guest display name</Text>
+                <Text style={styles.modalTitle}>{t("ownerApp.slots.startSession")}</Text>
+                <Text style={styles.modalBody}>{t("ownerApp.slots.walkInModalBody")}</Text>
+                <Text style={styles.walkInLabel}>{t("ownerApp.slots.guestDisplayName")}</Text>
                 <TextInput
                   style={styles.walkInInput}
                   value={guestNameInput}
                   onChangeText={setGuestNameInput}
-                  placeholder="Walk-in"
+                  placeholder={t("ownerApp.slots.defaultWalkIn")}
                   placeholderTextColor={colors.text.tertiary}
                 />
                 {deskError ? (
@@ -624,11 +923,11 @@ export default function SlotsScreen() {
                     onPress={() => {
                       if (!walkInTableId || !walkInLockToken) return;
                       setDeskError(null);
-                      const g = guestNameInput.trim() || "Walk-in";
+                      const g = guestNameInput.trim() || t("ownerApp.slots.defaultWalkIn");
                       void runStartWalkIn(walkInTableId, walkInLockToken, { guestName: g });
                     }}
                   >
-                    <Text style={styles.modalBtnPrimaryText}>Start as walk-in guest</Text>
+                    <Text style={styles.modalBtnPrimaryText}>{t("ownerApp.slots.walkInGuest")}</Text>
                   </Pressable>
                   <Pressable
                     style={({ pressed }) => [
@@ -642,7 +941,7 @@ export default function SlotsScreen() {
                     }}
                   >
                     <Text style={styles.modalBtnSecondaryText}>
-                      Registered customer (phone)
+                      {t("ownerApp.slots.registeredCustomer")}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -672,9 +971,10 @@ export default function SlotsScreen() {
                           });
                           setDeskName("");
                           setDeskAge("");
-                          setDeskPhone("+91");
+                          setDeskPhone(DEFAULT_PHONE_E164);
                           setDeskOtp("");
                           setDeskConsent(false);
+                          setDeskRegisterFor("primary");
                           setWalkInStartStep("deskRegister");
                         } catch (e) {
                           setDeskError(parseConvexError(e as Error).message);
@@ -688,7 +988,7 @@ export default function SlotsScreen() {
                       <ActivityIndicator color={colors.text.primary} />
                     ) : (
                       <Text style={styles.modalBtnSecondaryText}>
-                        New customer — WhatsApp OTP
+                        {t("ownerApp.slots.newCustomerWhatsApp")}
                       </Text>
                     )}
                   </Pressable>
@@ -701,7 +1001,7 @@ export default function SlotsScreen() {
                       void cancelWalkInStart();
                     }}
                   >
-                    <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+                    <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.slots.cancel")}</Text>
                   </Pressable>
                 </View>
               </ScrollView>
@@ -710,44 +1010,39 @@ export default function SlotsScreen() {
                 keyboardShouldPersistTaps="always"
                 showsVerticalScrollIndicator={false}
               >
-                <Text style={styles.modalTitle}>Register customer</Text>
-                <Text style={styles.modalHint}>
-                  Enter their legal name, age (18+), and +91 mobile. We send a 6-digit code
-                  to WhatsApp; enter it here to create their verified profile, then start the
-                  session.
-                </Text>
+                <Text style={styles.modalTitle}>{t("ownerApp.slots.registerCustomer")}</Text>
+                <Text style={styles.modalHint}>{t("ownerApp.slots.registerCustomerHint")}</Text>
                 {deskError ? (
                   <Text style={styles.walkInErr}>{deskError}</Text>
                 ) : null}
                 {deskInfo ? (
                   <Text style={styles.walkInOk}>{deskInfo}</Text>
                 ) : null}
-                <Text style={styles.walkInLabel}>Full name</Text>
+                <Text style={styles.walkInLabel}>{t("ownerApp.slots.fullName")}</Text>
                 <TextInput
                   style={styles.walkInInput}
                   value={deskName}
                   onChangeText={setDeskName}
-                  placeholder="As on ID"
+                  placeholder={t("ownerApp.slots.asOnId")}
                   placeholderTextColor={colors.text.tertiary}
                 />
-                <Text style={styles.walkInLabel}>Age</Text>
+                <Text style={styles.walkInLabel}>{t("auth.owner.register.age")}</Text>
                 <TextInput
                   style={styles.walkInInput}
                   value={deskAge}
                   onChangeText={setDeskAge}
-                  placeholder="18+"
+                  placeholder={t("ownerApp.slots.age18Plus")}
                   keyboardType="number-pad"
                   placeholderTextColor={colors.text.tertiary}
                 />
-                <Text style={styles.walkInLabel}>Mobile (WhatsApp)</Text>
-                <TextInput
-                  style={styles.walkInInput}
+                <Text style={styles.walkInLabel}>{t("ownerApp.slots.mobileWhatsApp")}</Text>
+                <PhoneInput
                   value={deskPhone}
-                  onChangeText={setDeskPhone}
-                  keyboardType="phone-pad"
-                  placeholder="+91xxxxxxxxxx"
-                  placeholderTextColor={colors.text.tertiary}
-                  autoCapitalize="none"
+                  onChangeValue={setDeskPhone}
+                  countryCodeLabel={t("auth.phone.countryCode")}
+                  selectCountryLabel={t("auth.phone.selectCountry")}
+                  accessibilityLabel={t("auth.phone.number")}
+                  inputStyle={styles.walkInInput}
                 />
                 <Pressable
                   style={({ pressed }) => [
@@ -758,9 +1053,9 @@ export default function SlotsScreen() {
                   disabled={deskBusySend}
                   onPress={() => {
                     void (async () => {
-                      const phone = deskPhone.replace(/\s/g, "");
-                      if (!/^\+91\d{10}$/.test(phone)) {
-                        setDeskError("Use +91 followed by 10 digits.");
+                      const phone = normalizeE164(deskPhone);
+                      if (!isValidE164(phone)) {
+                        setDeskError(t("ownerApp.slots.usePhoneFormat"));
                         setDeskInfo(null);
                         return;
                       }
@@ -769,10 +1064,10 @@ export default function SlotsScreen() {
                       setDeskBusySend(true);
                       try {
                         await ownerSendDeskCustomerOtp({ phone });
-                        setDeskInfo("OTP sent to WhatsApp.");
+                        setDeskInfo(t("ownerApp.slots.otpSentWhatsApp"));
                         Alert.alert(
-                          "Code sent",
-                          "A 6-digit verification code was sent to the customer's WhatsApp.",
+                          t("ownerApp.slots.codeSentTitle"),
+                          t("ownerApp.slots.codeSentBody"),
                         );
                       } catch (e) {
                         setDeskInfo(null);
@@ -784,10 +1079,10 @@ export default function SlotsScreen() {
                   }}
                 >
                   <Text style={styles.modalBtnSecondaryText}>
-                    {deskBusySend ? "Sending…" : "Send WhatsApp code"}
+                    {deskBusySend ? t("ownerApp.slots.sending") : t("ownerApp.slots.sendWhatsAppCode")}
                   </Text>
                 </Pressable>
-                <Text style={styles.walkInLabel}>6-digit code</Text>
+                <Text style={styles.walkInLabel}>{t("ownerApp.slots.sixDigitCode")}</Text>
                 <TextInput
                   style={styles.walkInInput}
                   value={deskOtp}
@@ -812,19 +1107,19 @@ export default function SlotsScreen() {
                     />
                   </Pressable>
                   <Text style={styles.consentText}>
-                    Customer confirms they are 18+ and agrees to the{" "}
+                    {t("ownerApp.slots.consentDeskPrefix")}{" "}
                     <Text
                       style={styles.linkInline}
                       onPress={() => void Linking.openURL(TOS_URL)}
                     >
-                      Terms
+                      {t("ownerApp.slots.terms")}
                     </Text>{" "}
-                    and{" "}
+                    {t("ownerApp.slots.and")}{" "}
                     <Text
                       style={styles.linkInline}
                       onPress={() => void Linking.openURL(PRIVACY_URL)}
                     >
-                      Privacy Policy
+                      {t("ownerApp.slots.privacyPolicy")}
                     </Text>
                     .
                   </Text>
@@ -840,30 +1135,30 @@ export default function SlotsScreen() {
                     void (async () => {
                       const name = deskName.trim();
                       const ageN = Number(deskAge);
-                      const phone = deskPhone.replace(/\s/g, "");
+                      const phone = normalizeE164(deskPhone);
                       const code = deskOtp.replace(/\s/g, "");
                       if (name.length < 2) {
-                        setDeskError("Please enter the customer's full name.");
+                        setDeskError(t("ownerApp.slots.enterFullName"));
                         setDeskInfo(null);
                         return;
                       }
                       if (!Number.isInteger(ageN) || ageN < 18) {
-                        setDeskError("Age must be a whole number, 18 or older.");
+                        setDeskError(t("ownerApp.slots.ageMustBe18"));
                         setDeskInfo(null);
                         return;
                       }
-                      if (!/^\+91\d{10}$/.test(phone)) {
-                        setDeskError("Use +91 followed by 10 digits.");
+                      if (!isValidE164(phone)) {
+                        setDeskError(t("ownerApp.slots.usePhoneFormat"));
                         setDeskInfo(null);
                         return;
                       }
                       if (!/^\d{6}$/.test(code)) {
-                        setDeskError("Enter the 6-digit WhatsApp code.");
+                        setDeskError(t("ownerApp.slots.enterWhatsAppCode"));
                         setDeskInfo(null);
                         return;
                       }
                       if (!deskConsent) {
-                        setDeskError("Ask the customer to confirm the consent checkbox.");
+                        setDeskError(t("ownerApp.slots.confirmConsentCheckbox"));
                         setDeskInfo(null);
                         return;
                       }
@@ -881,7 +1176,15 @@ export default function SlotsScreen() {
                         setPendingCustomerId(userId);
                         setCustomerPhoneInput(phone);
                         setDebouncedCustomerPhone(phone);
-                        setWalkInStartStep("customer");
+                        if (deskRegisterFor === "teammate") {
+                          addTeammateToGroup(userId, name, phone);
+                          setDeskRegisterFor("primary");
+                        } else {
+                          openGroupSetupForCustomer(userId, name, phone);
+                        }
+                        setWalkInStartStep(
+                          deskRegisterFor === "teammate" ? "groupSetup" : "groupSetup",
+                        );
                         setDeskOtp("");
                       } catch (e) {
                         setDeskInfo(null);
@@ -893,7 +1196,7 @@ export default function SlotsScreen() {
                   }}
                 >
                   <Text style={styles.modalBtnPrimaryText}>
-                    {deskBusySubmit ? "Saving…" : "Verify & continue"}
+                    {deskBusySubmit ? t("ownerApp.slots.saving") : t("ownerApp.slots.verifyContinue")}
                   </Text>
                 </Pressable>
                 <View style={styles.modalActions}>
@@ -907,7 +1210,7 @@ export default function SlotsScreen() {
                       setWalkInStartStep("choose");
                     }}
                   >
-                    <Text style={styles.modalBtnSecondaryText}>Back</Text>
+                    <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.slots.back")}</Text>
                   </Pressable>
                   <Pressable
                     style={({ pressed }) => [
@@ -918,24 +1221,288 @@ export default function SlotsScreen() {
                       void cancelWalkInStart();
                     }}
                   >
-                    <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+                    <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.slots.cancel")}</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
+            ) : walkInStartStep === "groupSetup" ? (
+              <WalkInGroupSetup
+                players={groupPlayers}
+                primaryCustomerId={pendingCustomerId}
+                playMode={playMode}
+                losersPay={losersPay}
+                onPlayModeChange={(next) => {
+                  setPlayMode(next);
+                  if (next === "casual") setLosersPay(false);
+                  setGroupValidationError(null);
+                }}
+                onLosersPayChange={setLosersPay}
+                onSideChange={(customerId, side) => {
+                  setGroupPlayers((prev) =>
+                    prev.map((p) =>
+                      p.customerId === customerId ? { ...p, side } : p,
+                    ),
+                  );
+                }}
+                onRemove={(customerId) => {
+                  setGroupPlayers((prev) =>
+                    prev.filter((p) => p.customerId !== customerId),
+                  );
+                }}
+                onAddTeammate={() => {
+                  setDeskError(null);
+                  setTeammatePhoneInput("");
+                  setDebouncedTeammatePhone("");
+                  setWalkInStartStep("addTeammate");
+                }}
+                onRegisterTeammate={() => {
+                  setDeskRegisterFor("teammate");
+                  setDeskName("");
+                  setDeskAge("");
+                  setDeskPhone(DEFAULT_PHONE_E164);
+                  setDeskOtp("");
+                  setDeskConsent(false);
+                  setDeskError(null);
+                  if (walkInTableId && walkInLockToken) {
+                    void extendTableLockForDeskOtp({
+                      tableId: walkInTableId,
+                      lockToken: walkInLockToken,
+                    }).catch(() => {});
+                  }
+                  setWalkInStartStep("deskRegister");
+                }}
+                onStart={() => {
+                  if (!walkInTableId || !walkInLockToken || !pendingCustomerId) return;
+                  if (customerComplaints?.hasComplaints) {
+                    setShowComplaintGate(true);
+                    return;
+                  }
+                  startGroupSession();
+                }}
+                onBack={() => {
+                  setGroupValidationError(null);
+                  resetPlayerLookupState();
+                  setGroupPlayers([]);
+                  setWalkInStartStep("customer");
+                }}
+                validationError={groupValidationError}
+                t={t}
+              />
+            ) : walkInStartStep === "addTeammate" ? (
+              <ScrollView
+                keyboardShouldPersistTaps="always"
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.modalTitle}>{t("ownerApp.slots.addTeammate")}</Text>
+                <Text style={styles.modalHint}>{t("ownerApp.slots.addTeammatePhone")}</Text>
+
+                <Text style={[styles.modalHint, { marginTop: spacing[3] }]}>
+                  {t("ownerApp.slots.scanQrCode")}
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.modalBtnPrimary,
+                    pressed && styles.pressed,
+                    { marginBottom: spacing[2] },
+                  ]}
+                  onPress={() => {
+                    setQrScanForTeammate(true);
+                    setShowQrScanner(true);
+                  }}
+                >
+                  <Text style={styles.modalBtnPrimaryText}>
+                    {t("ownerApp.slots.openQrScanner")}
+                  </Text>
+                </Pressable>
+                <TextInput
+                  style={styles.walkInInput}
+                  value={qrPayload}
+                  onChangeText={setQrPayload}
+                  placeholder={t("ownerApp.slots.qrPlaceholder")}
+                  placeholderTextColor={colors.text.tertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {qrResolve === undefined && debouncedQrPayload.length >= 8 ? (
+                  <ActivityIndicator color={colors.accent.green} />
+                ) : qrResolve && !qrResolve.ok && debouncedQrPayload.length >= 8 ? (
+                  <Text style={styles.walkInErr}>{qrResolve.message}</Text>
+                ) : qrResolve?.ok ? (
+                  <View style={styles.foundCard}>
+                    <Text style={styles.foundName}>{qrResolve.user.name}</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.modalBtnPrimary, pressed && styles.pressed]}
+                      onPress={() =>
+                        addTeammateToGroup(
+                          qrResolve.user._id,
+                          qrResolve.user.name,
+                          qrResolve.user.phone ?? "",
+                        )
+                      }
+                    >
+                      <Text style={styles.modalBtnPrimaryText}>
+                        {t("ownerApp.slots.addTeammate")}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                <Text style={[styles.modalHint, { marginTop: spacing[3] }]}>
+                  {t("ownerApp.slots.customerNameSearch")}
+                </Text>
+                <TextInput
+                  style={styles.walkInInput}
+                  value={teammateNameQuery}
+                  onChangeText={setTeammateNameQuery}
+                  placeholder={t("ownerApp.slots.customerNamePlaceholder")}
+                  placeholderTextColor={colors.text.tertiary}
+                  autoCapitalize="words"
+                />
+                {teammateNameSearch?.users.map((u) => (
+                  <Pressable
+                    key={u._id}
+                    style={({ pressed }) => [styles.foundCard, pressed && styles.pressed]}
+                    onPress={() =>
+                      addTeammateToGroup(u._id, u.name, u.phone ?? "")
+                    }
+                  >
+                    <Text style={styles.foundName}>{u.name}</Text>
+                    {u.phone ? <Text style={styles.foundPhone}>{u.phone}</Text> : null}
+                  </Pressable>
+                ))}
+
+                <PhoneInput
+                  value={teammatePhoneInput}
+                  onChangeValue={setTeammatePhoneInput}
+                  countryCodeLabel={t("auth.phone.countryCode")}
+                  selectCountryLabel={t("auth.phone.selectCountry")}
+                  accessibilityLabel={t("auth.phone.number")}
+                  inputStyle={styles.walkInInput}
+                />
+                {teammatePhoneSearch === undefined && teammatePhoneReady ? (
+                  <ActivityIndicator color={colors.accent.green} />
+                ) : teammatePhoneSearch && !teammatePhoneSearch.ok ? (
+                  <Text style={styles.walkInErr}>{teammatePhoneSearch.message}</Text>
+                ) : teammatePhoneSearch?.ok ? (
+                  <View style={styles.foundCard}>
+                    <Text style={styles.foundName}>{teammatePhoneSearch.user.name}</Text>
+                    <Text style={styles.foundPhone}>{teammatePhoneSearch.user.phone}</Text>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.modalBtnPrimary,
+                        pressed && styles.pressed,
+                        { marginTop: spacing[3] },
+                      ]}
+                      onPress={() =>
+                        addTeammateToGroup(
+                          teammatePhoneSearch.user._id,
+                          teammatePhoneSearch.user.name,
+                          teammatePhoneSearch.user.phone ?? debouncedTeammatePhone,
+                        )
+                      }
+                    >
+                      <Text style={styles.modalBtnPrimaryText}>
+                        {t("ownerApp.slots.addTeammate")}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                <View style={styles.modalActions}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.modalBtnSecondary,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => setWalkInStartStep("groupSetup")}
+                  >
+                    <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.slots.back")}</Text>
                   </Pressable>
                 </View>
               </ScrollView>
             ) : (
               <>
-                <Text style={styles.modalTitle}>Customer phone</Text>
-                <Text style={styles.modalHint}>
-                  E.164 format: +91 and 10 digits (e.g. +919876543210)
+                <Text style={styles.modalTitle}>{t("ownerApp.slots.customerPhone")}</Text>
+                <Text style={styles.modalHint}>{t("ownerApp.slots.phoneFormatHint")}</Text>
+
+                <Text style={[styles.modalHint, { marginTop: spacing[3] }]}>
+                  {t("ownerApp.slots.scanQrCode")}
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.modalBtnPrimary,
+                    pressed && styles.pressed,
+                    { marginBottom: spacing[2] },
+                  ]}
+                  onPress={() => setShowQrScanner(true)}
+                >
+                  <Text style={styles.modalBtnPrimaryText}>
+                    {t("ownerApp.slots.openQrScanner")}
+                  </Text>
+                </Pressable>
+                <TextInput
+                  style={styles.walkInInput}
+                  value={qrPayload}
+                  onChangeText={setQrPayload}
+                  placeholder={t("ownerApp.slots.qrPlaceholder")}
+                  placeholderTextColor={colors.text.tertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {qrResolve === undefined && debouncedQrPayload.length >= 8 ? (
+                  <ActivityIndicator color={colors.accent.green} />
+                ) : qrResolve && !qrResolve.ok ? (
+                  <Text style={styles.walkInErr}>{qrResolve.message}</Text>
+                ) : qrResolve?.ok ? (
+                  <View style={styles.foundCard}>
+                    <Text style={styles.foundName}>{qrResolve.user.name}</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.modalBtnPrimary, pressed && styles.pressed]}
+                      onPress={() =>
+                        openGroupSetupForCustomer(
+                          qrResolve.user._id,
+                          qrResolve.user.name,
+                          qrResolve.user.phone ?? "",
+                        )
+                      }
+                    >
+                      <Text style={styles.modalBtnPrimaryText}>
+                        {t("ownerApp.slots.continueToGroup")}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                <Text style={[styles.modalHint, { marginTop: spacing[3] }]}>
+                  {t("ownerApp.slots.customerNameSearch")}
                 </Text>
                 <TextInput
                   style={styles.walkInInput}
-                  value={customerPhoneInput}
-                  onChangeText={setCustomerPhoneInput}
-                  keyboardType="phone-pad"
-                  placeholder="+91xxxxxxxxxx"
+                  value={customerNameQuery}
+                  onChangeText={setCustomerNameQuery}
+                  placeholder={t("ownerApp.slots.customerNamePlaceholder")}
                   placeholderTextColor={colors.text.tertiary}
-                  autoCapitalize="none"
+                  autoCapitalize="words"
+                />
+                {nameSearch?.users.map((u) => (
+                  <Pressable
+                    key={u._id}
+                    style={({ pressed }) => [styles.foundCard, pressed && styles.pressed]}
+                    onPress={() =>
+                      openGroupSetupForCustomer(u._id, u.name, u.phone ?? "")
+                    }
+                  >
+                    <Text style={styles.foundName}>{u.name}</Text>
+                    {u.phone ? <Text style={styles.foundPhone}>{u.phone}</Text> : null}
+                  </Pressable>
+                ))}
+
+                <PhoneInput
+                  value={customerPhoneInput}
+                  onChangeValue={setCustomerPhoneInput}
+                  countryCodeLabel={t("auth.phone.countryCode")}
+                  selectCountryLabel={t("auth.phone.selectCountry")}
+                  accessibilityLabel={t("auth.phone.number")}
+                  inputStyle={styles.walkInInput}
                 />
                 {customerPhoneSearch === undefined && phoneReady ? (
                   <ActivityIndicator color={colors.accent.green} />
@@ -953,49 +1520,30 @@ export default function SlotsScreen() {
                       ]}
                       onPress={() => setPendingCustomerId(customerPhoneSearch.user._id)}
                     >
-                      <Text style={styles.modalBtnSecondaryText}>Use this customer</Text>
+                      <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.slots.useThisCustomer")}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.modalBtnPrimary,
+                        pressed && styles.pressed,
+                        { marginTop: spacing[2] },
+                      ]}
+                      onPress={() =>
+                        openGroupSetupForCustomer(
+                          customerPhoneSearch.user._id,
+                          customerPhoneSearch.user.name,
+                          customerPhoneSearch.user.phone ?? debouncedCustomerPhone,
+                        )
+                      }
+                    >
+                      <Text style={styles.modalBtnPrimaryText}>
+                        {t("ownerApp.slots.continueToGroup")}
+                      </Text>
                     </Pressable>
                   </View>
                 ) : null}
                 {pendingCustomerId !== null && customerComplaints !== undefined ? (
                   <>
-                    {loyaltyRedemption?.eligible && loyaltyRedemption.creditId ? (
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.modalBtnSecondary,
-                          pressed && styles.pressed,
-                          { marginTop: spacing[3] },
-                        ]}
-                        onPress={() => {
-                          if (!walkInTableId || !walkInLockToken || !pendingCustomerId) return;
-                          Alert.alert(
-                            "Redeem free visit?",
-                            `${loyaltyRedemption.availableCredits} credit(s) for this club only. This session will use 1 credit and cover table time up to ${loyaltyRedemption.freeVisitMaxMinutes} minutes. Snacks are billed normally. Time beyond the cap is charged at the normal rate. Credits from other clubs cannot be used here.`,
-                            [
-                              { text: "Cancel", style: "cancel" },
-                              {
-                                text: "Redeem & start",
-                                onPress: () => {
-                                  if (customerComplaints.hasComplaints) {
-                                    setPendingFreeVisitCreditId(loyaltyRedemption.creditId!);
-                                    setShowComplaintGate(true);
-                                    return;
-                                  }
-                                  void runStartWalkIn(walkInTableId, walkInLockToken, {
-                                    customerId: pendingCustomerId,
-                                    freeVisitCreditId: loyaltyRedemption.creditId!,
-                                  });
-                                },
-                              },
-                            ],
-                          );
-                        }}
-                      >
-                        <Text style={styles.modalBtnSecondaryText}>
-                          Redeem free visit ({loyaltyRedemption.availableCredits} available)
-                        </Text>
-                      </Pressable>
-                    ) : null}
                     <Pressable
                       style={({ pressed }) => [
                         styles.modalBtnPrimary,
@@ -1003,17 +1551,26 @@ export default function SlotsScreen() {
                         { marginTop: spacing[4] },
                       ]}
                       onPress={() => {
-                        if (!walkInTableId || !walkInLockToken || !pendingCustomerId) return;
-                        if (customerComplaints.hasComplaints) {
-                          setShowComplaintGate(true);
-                        } else {
-                          void runStartWalkIn(walkInTableId, walkInLockToken, {
-                            customerId: pendingCustomerId,
-                          });
+                        if (!pendingCustomerId) return;
+                        const primary = groupPlayers.find(
+                          (p) => p.customerId === pendingCustomerId,
+                        );
+                        if (!primary) {
+                          openGroupSetupForCustomer(
+                            pendingCustomerId,
+                            customerPhoneSearch?.ok
+                              ? customerPhoneSearch.user.name
+                              : t("sharedUi.bookingCard.customerFallback"),
+                            debouncedCustomerPhone,
+                          );
+                          return;
                         }
+                        setWalkInStartStep("groupSetup");
                       }}
                     >
-                      <Text style={styles.modalBtnPrimaryText}>Start session</Text>
+                      <Text style={styles.modalBtnPrimaryText}>
+                        {t("ownerApp.slots.continueToGroup")}
+                      </Text>
                     </Pressable>
                   </>
                 ) : null}
@@ -1024,11 +1581,12 @@ export default function SlotsScreen() {
                       pressed && styles.pressed,
                     ]}
                     onPress={() => {
+                      resetPlayerLookupState();
+                      setGroupPlayers([]);
                       setWalkInStartStep("choose");
-                      setPendingCustomerId(null);
                     }}
                   >
-                    <Text style={styles.modalBtnSecondaryText}>Back</Text>
+                    <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.slots.back")}</Text>
                   </Pressable>
                   <Pressable
                     style={({ pressed }) => [
@@ -1039,7 +1597,7 @@ export default function SlotsScreen() {
                       void cancelWalkInStart();
                     }}
                   >
-                    <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+                    <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.slots.cancel")}</Text>
                   </Pressable>
                 </View>
               </>
@@ -1059,28 +1617,42 @@ export default function SlotsScreen() {
               onAcknowledge={() => {
                 if (!walkInTableId || !walkInLockToken || !pendingCustomerId) return;
                 setShowComplaintGate(false);
+                if (walkInStartStep === "groupSetup" || groupPlayers.length > 1) {
+                  startGroupSession(true);
+                  return;
+                }
                 void runStartWalkIn(walkInTableId, walkInLockToken, {
                   customerId: pendingCustomerId,
-                  freeVisitCreditId: pendingFreeVisitCreditId ?? undefined,
                   staffAcknowledgedComplaint: true,
                 });
-                setPendingFreeVisitCreditId(null);
               }}
             />
           </View>
         </View>
       </Modal>
 
-      {snackPickerSessionId !== null && snackEligibility !== undefined ? (
-        <SnackPicker
-          visible
-          clubId={dashboard.clubId}
-          sessionId={snackPickerSessionId}
-          sessionStatus={snackEligibility.status}
-          paymentStatus={snackEligibility.paymentStatus}
-          currency={dashboard.currency}
-          onClose={() => setSnackPickerSessionId(null)}
-        />
+      {snackPickerSessionId !== null && dashboard ? (
+        <>
+          {snackEligibility === undefined ? (
+            <Modal transparent visible animationType="fade">
+              <View style={styles.lockOverlay}>
+                <ActivityIndicator size="large" color={colors.accent.green} />
+                <Text style={styles.lockOverlayText}>{t("common.loading")}</Text>
+              </View>
+            </Modal>
+          ) : (
+            <OwnerSnackPicker
+              visible
+              clubId={dashboard.clubId}
+              sessionId={snackPickerSessionId}
+              sessionStatus={snackEligibility.status}
+              paymentStatus={snackEligibility.paymentStatus}
+              currency={dashboard.currency}
+              roleId={queryRoleId}
+              onClose={() => setSnackPickerSessionId(null)}
+            />
+          )}
+        </>
       ) : null}
 
       <Modal
@@ -1090,62 +1662,37 @@ export default function SlotsScreen() {
         onRequestClose={closeCheckoutModal}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Close table</Text>
-            <Text style={styles.modalBody}>
-              End the session, record the bill, and free this table for the next guest.
-            </Text>
+          <View style={[styles.modalCard, styles.checkoutModalCard]}>
+            <Text style={styles.modalTitle}>{t("ownerApp.slots.closeTable")}</Text>
+            <Text style={styles.modalBody}>{t("ownerApp.slots.closeTableBody")}</Text>
             {checkoutPreview === undefined ? (
               <ActivityIndicator color={colors.accent.green} style={{ marginVertical: spacing[4] }} />
             ) : checkoutPreview === null ? (
-              <Text style={styles.walkInErr}>
-                No active session on this table. It may have already been closed.
-              </Text>
+              <Text style={styles.walkInErr}>{t("ownerApp.slots.noActiveSession")}</Text>
             ) : (
-              <>
+              <ScrollView
+                style={styles.checkoutScroll}
+                contentContainerStyle={styles.checkoutScrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
                 <Text style={styles.checkoutTableName}>{checkoutPreview.tableLabel}</Text>
                 <Text style={styles.checkoutMeta}>
                   {checkoutPreview.isGuest
-                    ? `Guest: ${checkoutPreview.guestName ?? "Walk-in"}`
-                    : "Registered customer"}
+                    ? t("ownerApp.slots.guestLabel", {
+                        name: checkoutPreview.guestName ?? t("ownerApp.slots.defaultWalkIn"),
+                      })
+                    : t("ownerApp.slots.registeredCustomerCheckout")}
                 </Text>
-                <Text style={styles.checkoutBill}>
-                  Total due:{" "}
-                  <Text style={styles.checkoutBillStrong}>
-                    {formatCurrency(checkoutPreview.finalBill, checkoutPreview.currency)}
-                  </Text>
-                </Text>
-                <Text style={styles.checkoutDetail}>
-                  {checkoutPreview.billableMinutes} min billable (
-                  {checkoutPreview.actualMinutes} min played) · Table{" "}
-                  {formatCurrency(
-                    checkoutPreview.discountedTable,
-                    checkoutPreview.currency,
-                  )}
-                  {checkoutPreview.discountAmount > 0
-                    ? ` (−${checkoutPreview.discountPercent}% off ${formatCurrency(
-                        checkoutPreview.tableSubtotal,
-                        checkoutPreview.currency,
-                      )})`
-                    : ""}{" "}
-                  · Snacks{" "}
-                  {formatCurrency(
-                    checkoutPreview.snackTotal,
-                    checkoutPreview.currency,
-                  )}
-                </Text>
-                {checkoutPreview.isFreeVisit ? (
-                  <Text style={styles.modalBody}>
-                    Free visit — table time up to {checkoutPreview.freeVisitMaxMinutes ?? "—"}{" "}
-                    min waived. Snacks billed normally.
-                  </Text>
-                ) : null}
-                {checkoutPreview.canApplyDiscount && !checkoutPreview.isFreeVisit ? (
+                <CheckoutBillBreakdown preview={checkoutPreview} t={t} />
+                {checkoutPreview.canApplyDiscount ? (
                   <View style={styles.discountRow}>
                     <Text style={styles.walkInLabel}>
-                      Discount %{" "}
+                      {t("ownerApp.slots.discountPercent")}{" "}
                       {checkoutPreview.maxDiscountPercent !== null
-                        ? `(max ${checkoutPreview.maxDiscountPercent}%)`
+                        ? t("ownerApp.slots.discountMax", {
+                            percent: checkoutPreview.maxDiscountPercent,
+                          })
                         : ""}
                     </Text>
                     <TextInput
@@ -1160,23 +1707,58 @@ export default function SlotsScreen() {
                     {checkoutPreview.maxDiscountPercent !== null &&
                     parsedDiscount > checkoutPreview.maxDiscountPercent ? (
                       <Text style={styles.discountHint}>
-                        Capped at {checkoutPreview.maxDiscountPercent}% by your role.
+                        {t("ownerApp.slots.discountCapped", {
+                          percent: checkoutPreview.maxDiscountPercent,
+                        })}
+                      </Text>
+                    ) : discountInputTooHigh ? (
+                      <Text style={styles.walkInErr}>
+                        {t("ownerApp.slots.discountMustBeLessThan100")}
                       </Text>
                     ) : null}
                   </View>
                 ) : (
-                  <Text style={styles.discountHint}>
-                    Your role cannot apply discounts.
-                  </Text>
+                  <Text style={styles.discountHint}>{t("ownerApp.slots.cannotApplyDiscount")}</Text>
                 )}
-                <Text style={styles.walkInLabel}>Payment</Text>
+                {checkoutPreview.requiresLoserSide ? (
+                  <>
+                    <Text style={styles.walkInLabel}>
+                      {t("ownerApp.slots.selectLosingSide")}
+                    </Text>
+                    <View style={styles.payGrid}>
+                      {(["sideA", "sideB"] as const).map((side) => (
+                        <Pressable
+                          key={side}
+                          style={({ pressed }) => [
+                            styles.payTile,
+                            checkoutLoserSide === side && styles.payTileSelected,
+                            pressed && styles.pressed,
+                          ]}
+                          onPress={() => setCheckoutLoserSide(side)}
+                        >
+                          <Text style={styles.payTileText}>
+                            {side === "sideA"
+                              ? t("ownerApp.slots.sideA")
+                              : t("ownerApp.slots.sideB")}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    {checkoutLoserSide !== null ? (
+                      <Text style={styles.modalBody}>
+                        {t("ownerApp.slots.losersPayCheckoutNote")}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
+                <Text style={styles.walkInLabel}>{t("ownerApp.slots.payment")}</Text>
                 <View style={styles.payGrid}>
                   {(
                     [
-                      ["cash", "Cash"],
-                      ["upi", "UPI"],
-                      ["card", "Card"],
-                      ["credit", "On credit"],
+                      ["cash", t("ownerApp.slots.paymentCash")],
+                      ["upi", t("ownerApp.slots.paymentUpi")],
+                      ["card", t("ownerApp.slots.paymentCard")],
+                      ["credit", t("ownerApp.slots.paymentCredit")],
                     ] as const
                   ).map(([method, label]) => (
                     <Pressable
@@ -1193,7 +1775,7 @@ export default function SlotsScreen() {
                     </Pressable>
                   ))}
                 </View>
-              </>
+              </ScrollView>
             )}
             <View style={[styles.modalActions, { marginTop: spacing[4] }]}>
               <Pressable
@@ -1204,12 +1786,17 @@ export default function SlotsScreen() {
                 onPress={closeCheckoutModal}
                 disabled={checkoutBusy}
               >
-                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+                <Text style={styles.modalBtnSecondaryText}>{t("common.cancel")}</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
+      <CustomerQrScannerModal
+        visible={showQrScanner}
+        onClose={() => setShowQrScanner(false)}
+        onScan={onQrScanned}
+      />
     </View>
   );
 }
@@ -1336,6 +1923,10 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
   },
+  versusBadgeInline: {
+    ...typography.caption,
+    color: colors.accent.amber,
+  },
   elapsedRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1398,6 +1989,16 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
     width: "100%",
+  },
+  checkoutModalCard: {
+    maxHeight: "92%",
+  },
+  checkoutScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  checkoutScrollContent: {
+    paddingBottom: spacing[2],
   },
   modalTitle: {
     ...typography.heading3,
@@ -1534,6 +2135,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: spacing[2],
   },
+  payTileSelected: {
+    borderColor: colors.accent.green,
+    backgroundColor: "rgba(34, 197, 94, 0.15)",
+  },
   payTileText: { ...typography.label, color: colors.text.primary },
   consentRow: {
     flexDirection: "row",
@@ -1564,3 +2169,12 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
 });
+
+export default function SlotsScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.owner.slots")}>
+      <SlotsScreenContent />
+    </TabErrorBoundary>
+  );
+}

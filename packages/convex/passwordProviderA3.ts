@@ -12,6 +12,7 @@ import {
 } from "@convex-dev/auth/server";
 import { Scrypt } from "lucia";
 import { internal } from "./_generated/api";
+import { assertStrongPasswordOrThrow } from "./model/passwordPolicy";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PasswordConfig = Record<string, any>;
@@ -190,9 +191,10 @@ function defaultProfile(params: Record<string, unknown>) {
   if (flow === "signUp" || flow === "reset-verification") {
     const password =
       flow === "signUp" ? params.password : params.newPassword;
-    if (!password || String(password).length < 8) {
+    if (!password || typeof password !== "string") {
       throw new Error("Invalid password");
     }
+    assertStrongPasswordOrThrow(String(password));
   }
   // Include ALL non-optional users-table fields. On signUp the client passes
   // name / age / consentGiven / phone as extra params so the user row is fully

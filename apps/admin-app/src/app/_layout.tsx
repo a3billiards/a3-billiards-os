@@ -13,7 +13,10 @@ import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
-import { I18nProvider } from "@a3/i18n";
+import { ensureI18nInitialized, useTranslation } from "@a3/i18n";
+import { I18nConvexBridge } from "../lib/I18nConvexBridge";
+
+ensureI18nInitialized();
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AdminAuthProvider, useAdminAuth } from "../lib/adminAuth";
 
@@ -45,23 +48,21 @@ const secureStorage: TokenStorage = {
 };
 
 function MissingConfigScreen() {
+  const { t } = useTranslation();
   useEffect(() => {
     void SplashScreen.hideAsync().catch(() => {});
   }, []);
   return (
     <View style={styles.boot}>
       <Text style={configErrorStyles.icon}>⚠️</Text>
-      <Text style={configErrorStyles.heading}>Configuration Error</Text>
-      <Text style={configErrorStyles.body}>
-        EXPO_PUBLIC_CONVEX_URL is missing from this build. The app cannot
-        connect to the backend. Please reinstall the latest build or contact
-        support at support@a3billiards.com.
-      </Text>
+      <Text style={configErrorStyles.heading}>{t("auth.admin.shell.configErrorTitle")}</Text>
+      <Text style={configErrorStyles.body}>{t("auth.admin.shell.configErrorBody")}</Text>
     </View>
   );
 }
 
 function AdminAuthShellInner(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const segments = useSegments();
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -165,17 +166,15 @@ function AdminAuthShellInner(): React.JSX.Element {
   if (user === null || user.role !== "admin") {
     return (
       <View style={styles.denied}>
-        <Text style={styles.deniedTitle}>Access Denied</Text>
-        <Text style={styles.deniedBody}>
-          This application is only available to A3 Billiards OS administrators.
-        </Text>
+        <Text style={styles.deniedTitle}>{t("auth.admin.shell.accessDeniedTitle")}</Text>
+        <Text style={styles.deniedBody}>{t("auth.admin.shell.accessDeniedBody")}</Text>
         <Pressable
           style={styles.deniedBtn}
           onPress={() => {
             void signOutAdmin();
           }}
         >
-          <Text style={styles.deniedBtnText}>Sign out</Text>
+          <Text style={styles.deniedBtnText}>{t("auth.admin.shell.signOut")}</Text>
         </Pressable>
       </View>
     );
@@ -233,9 +232,9 @@ function RootLayout() {
   return (
     <SafeAreaProvider>
       <ConvexAuthProvider client={convex} storage={secureStorage}>
-        <I18nProvider>
+        <I18nConvexBridge>
           <AdminAuthShell />
-        </I18nProvider>
+        </I18nConvexBridge>
       </ConvexAuthProvider>
     </SafeAreaProvider>
   );

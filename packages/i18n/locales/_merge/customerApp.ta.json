@@ -1,0 +1,7 @@
+{
+  "googleAuth": {
+    "expoGo": "GOOGLE_AUTH_001: Expo Go-யில் Google உள்நுழைவு கிடைக்காது. மின்னஞ்சல் உள்நுழைவைப் பயன்படுத்தவும் அல்லது டெவலப்மென்ட் பில்டை இயக்கவும்.",
+    "missingToken": "GOOGLE_AUTH_001: Google ID டோக்கன் இல்லை — தொடர Google உள்நுழைவை முடிக்கவும்"
+  },
+  "checkInPayload": "a3customer:{{userId}}"
+}

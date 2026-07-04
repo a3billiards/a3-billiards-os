@@ -150,6 +150,10 @@ export const getClubProfile = query({
     if (!club || club.subscriptionStatus === "frozen" || !club.isDiscoverable) {
       return null;
     }
+    const ownerUser = await ctx.db.get(club.ownerId);
+    if (!ownerUser || ownerUser.isFrozen) {
+      return null;
+    }
 
     const tables = await ctx.db
       .query("tables")

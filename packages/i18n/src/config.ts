@@ -1,15 +1,18 @@
 /** Supported app locales — English default. */
 export const APP_LOCALES = [
   "en",
-  "hi",
   "ar",
+  "hi",
   "kn",
   "ml",
-  "ta",
   "te",
+  "ta",
   "fr",
-  "de",
+  "nl",
 ] as const;
+
+/** AsyncStorage / manual preference key (manual choice wins over device locale). */
+export const USER_LANGUAGE_STORAGE_KEY = "user_language_preference";
 
 export type AppLocale = (typeof APP_LOCALES)[number];
 
@@ -38,6 +41,7 @@ export function resolveDeviceLocale(
   return DEFAULT_LOCALE;
 }
 
+/** @deprecated Use USER_LANGUAGE_STORAGE_KEY — kept for SecureStore migration reads */
 export const LOCALE_STORAGE_KEY = "a3.preferredLocale";
 
 export interface LocaleOption {
@@ -48,12 +52,12 @@ export interface LocaleOption {
 
 export const LOCALE_OPTIONS: LocaleOption[] = [
   { code: "en", nativeName: "English" },
-  { code: "hi", nativeName: "हिन्दी" },
   { code: "ar", nativeName: "العربية" },
+  { code: "hi", nativeName: "हिंदी" },
   { code: "kn", nativeName: "ಕನ್ನಡ" },
   { code: "ml", nativeName: "മലയാളം" },
-  { code: "ta", nativeName: "தமிழ்" },
   { code: "te", nativeName: "తెలుగు" },
+  { code: "ta", nativeName: "தமிழ்" },
   { code: "fr", nativeName: "Français" },
-  { code: "de", nativeName: "Deutsch" },
+  { code: "nl", nativeName: "Nederlands" },
 ];

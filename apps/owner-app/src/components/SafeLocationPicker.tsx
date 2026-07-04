@@ -1,4 +1,4 @@
-import React, { Component, Suspense, useState } from "react";
+import React, { Component, Suspense, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import Constants from "expo-constants";
 import { colors, typography, spacing, radius } from "@a3/ui/theme";
+import { useTranslation } from "@a3/i18n";
 
 /**
  * `react-native-maps` requires native Google Maps SDK keys. Without them,
@@ -17,7 +18,7 @@ import { colors, typography, spacing, radius } from "@a3/ui/theme";
  * never run. We therefore skip loading `react-native-maps` entirely unless
  * `expo-constants` reports a configured key (same source as the native embed).
  *
- * Otherwise we show a manual lat/lng fallback.
+ * Manual latitude/longitude fields are always shown so owners can pin precisely.
  */
 
 function hasNativeGoogleMapsApiKey(): boolean {
@@ -97,10 +98,16 @@ const LazyMapBlock = React.lazy(async () => {
   return { default: MapBlock };
 });
 
-function ManualCoordFallback({
+function ManualCoordFields({
   markerCoord,
   onChange,
-}: Pick<Props, "markerCoord" | "onChange">): React.JSX.Element {
+  disabled,
+  showMapHint,
+}: Pick<Props, "markerCoord" | "onChange"> & {
+  disabled?: boolean;
+  showMapHint?: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
   const [latStr, setLatStr] = useState(
     markerCoord ? String(markerCoord.latitude) : "",
   );
@@ -109,19 +116,35 @@ function ManualCoordFallback({
   );
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!markerCoord) return;
+    setLatStr(String(markerCoord.latitude));
+    setLngStr(String(markerCoord.longitude));
+  }, [markerCoord?.latitude, markerCoord?.longitude, markerCoord]);
+
   return (
-    <View style={styles.fallback}>
-      <Text style={styles.fallbackTitle}>Map unavailable</Text>
-      <Text style={styles.fallbackBody}>
-        Enter your venue coordinates manually. You can copy them from Google
-        Maps (right-click your venue → click the lat/lng to copy).
-      </Text>
+    <View style={styles.manualSection}>
+      {showMapHint ? (
+        <Text style={styles.manualHint}>
+          {t("sharedUi.safeLocationPicker.manualPinHint")}
+        </Text>
+      ) : (
+        <>
+          <Text style={styles.fallbackTitle}>
+            {t("sharedUi.safeLocationPicker.mapUnavailable")}
+          </Text>
+          <Text style={styles.fallbackBody}>
+            {t("sharedUi.safeLocationPicker.fallbackInstructions")}
+          </Text>
+        </>
+      )}
       <View style={styles.row}>
         <View style={styles.col}>
-          <Text style={styles.label}>Latitude</Text>
+          <Text style={styles.label}>{t("sharedUi.safeLocationPicker.latitude")}</Text>
           <TextInput
             value={latStr}
             onChangeText={setLatStr}
+            editable={!disabled}
             keyboardType="numbers-and-punctuation"
             placeholder="28.6139"
             placeholderTextColor={colors.text.tertiary}
@@ -129,10 +152,11 @@ function ManualCoordFallback({
           />
         </View>
         <View style={styles.col}>
-          <Text style={styles.label}>Longitude</Text>
+          <Text style={styles.label}>{t("sharedUi.safeLocationPicker.longitude")}</Text>
           <TextInput
             value={lngStr}
             onChangeText={setLngStr}
+            editable={!disabled}
             keyboardType="numbers-and-punctuation"
             placeholder="77.2090"
             placeholderTextColor={colors.text.tertiary}
@@ -142,69 +166,89 @@ function ManualCoordFallback({
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable
-        style={styles.applyBtn}
+        style={[styles.applyBtn, disabled && styles.applyBtnDisabled]}
+        disabled={disabled}
         onPress={() => {
           const lat = Number(latStr);
           const lng = Number(lngStr);
           if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
-            setError("Latitude must be a number between -90 and 90.");
+            setError(t("sharedUi.safeLocationPicker.latError"));
             return;
           }
           if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
-            setError("Longitude must be a number between -180 and 180.");
+            setError(t("sharedUi.safeLocationPicker.lngError"));
             return;
           }
           setError(null);
           onChange({ latitude: lat, longitude: lng });
         }}
       >
-        <Text style={styles.applyBtnText}>Use these coordinates</Text>
+        <Text style={styles.applyBtnText}>
+          {t("sharedUi.safeLocationPicker.useCoordinates")}
+        </Text>
       </Pressable>
     </View>
   );
 }
 
 export function SafeLocationPicker(props: Props): React.JSX.Element {
-  const fallback = (
-    <ManualCoordFallback
-      markerCoord={props.markerCoord}
-      onChange={props.onChange}
-    />
-  );
-
-  if (!hasNativeGoogleMapsApiKey()) {
-    return fallback;
-  }
+  const hasMap = hasNativeGoogleMapsApiKey();
 
   return (
-    <MapErrorBoundary fallback={fallback}>
-      <Suspense
-        fallback={
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={colors.accent.green} />
-          </View>
-        }
-      >
-        <LazyMapBlock {...props} />
-      </Suspense>
-    </MapErrorBoundary>
+    <View style={styles.root}>
+      {hasMap ? (
+        <MapErrorBoundary
+          fallback={
+            <View style={styles.mapFallbackBox}>
+              <ManualCoordFields
+                markerCoord={props.markerCoord}
+                onChange={props.onChange}
+                disabled={!props.draggable}
+              />
+            </View>
+          }
+        >
+          <Suspense
+            fallback={
+              <View style={styles.loadingBox}>
+                <ActivityIndicator color={colors.accent.green} />
+              </View>
+            }
+          >
+            <LazyMapBlock {...props} />
+          </Suspense>
+        </MapErrorBoundary>
+      ) : null}
+      <ManualCoordFields
+        markerCoord={props.markerCoord}
+        onChange={props.onChange}
+        disabled={!props.draggable}
+        showMapHint={hasMap}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  map: { flex: 1 },
+  root: { flex: 1, gap: spacing[3] },
+  map: { flex: 1, minHeight: 200 },
+  mapFallbackBox: { minHeight: 120 },
   loadingBox: {
     flex: 1,
+    minHeight: 200,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.bg.tertiary,
   },
-  fallback: {
-    flex: 1,
+  manualSection: {
     backgroundColor: colors.bg.tertiary,
-    padding: spacing[4],
-    justifyContent: "center",
-    gap: spacing[3],
+    padding: spacing[3],
+    borderRadius: radius.md,
+    gap: spacing[2],
+  },
+  manualHint: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
   },
   fallbackTitle: {
     ...typography.heading4,
@@ -239,6 +283,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minHeight: 44,
   },
+  applyBtnDisabled: { opacity: 0.5 },
   applyBtnText: {
     ...typography.button,
     color: colors.bg.primary,

@@ -1,0 +1,478 @@
+{
+  "adminApp": {
+    "bookings": {
+      "estimatedCost": "Est. {{amount}}"
+    },
+    "complaints": {
+      "dateFormatHint": "YYYY-MM-DD",
+      "statusActive": "Active"
+    },
+    "moderation": {
+      "live": "EN DIRECT"
+    },
+    "notifications": {
+      "messageLabel": "Message",
+      "required": " *"
+    },
+    "roles": {
+      "admin": "Admin"
+    },
+    "userProfile": {
+      "actionsSection": "Actions",
+      "club": "Club : {{name}}",
+      "confirmPlaceholder": "CONFIRM",
+      "namePlaceholder": "Nom",
+      "phonePlaceholder": "+919876543210"
+    },
+    "users": {
+      "filterAdmins": "Admins"
+    }
+  },
+  "auth": {
+    "admin": {
+      "login": {
+        "emailPlaceholder": "admin@example.com"
+      }
+    },
+    "customer": {
+      "register": {
+        "agePlaceholder": "18",
+        "emailOptional": "(optionnel)",
+        "emailPlaceholder": "you@example.com",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      }
+    },
+    "owner": {
+      "changePasscode": {
+        "ok": "OK"
+      },
+      "login": {
+        "emailPlaceholder": "owner@example.com",
+        "logo": "A3"
+      },
+      "passcode": {
+        "ok": "OK"
+      },
+      "register": {
+        "agePlaceholder": "18",
+        "emailPlaceholder": "you@example.com",
+        "logo": "A3",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      },
+      "verifyPhone": {
+        "logo": "A3"
+      }
+    },
+    "phone": {
+      "countryCode": "Indicatif pays",
+      "number": "Numéro de téléphone",
+      "selectCountry": "Sélectionner le pays"
+    }
+  },
+  "common": {
+    "amenityPresets": {
+      "ac": "Climatisation",
+      "lounge": "Salon",
+      "parking": "Parking",
+      "wifi": "Wi‑Fi"
+    },
+    "arrowSeparator": " → ",
+    "chartMonths": {
+      "dec": "Dec",
+      "feb": "Feb",
+      "jan": "Jan",
+      "mar": "Mar",
+      "nov": "Nov",
+      "oct": "Oct"
+    },
+    "confirmKeyword": "CONFIRM",
+    "deleteKeyword": "DELETE",
+    "detailsLabel": "Détails",
+    "emDash": "—",
+    "inbox": {
+      "alertLater": "Plus tard",
+      "alertView": "Voir",
+      "bellAccessibility": "Notifications",
+      "empty": "Aucune notification pour l'instant.",
+      "fromAdmin": "A3 Billiards",
+      "loadMore": "Charger plus",
+      "markAllRead": "Tout marquer comme lu",
+      "subtitle": "Messages d'A3 Billiards",
+      "title": "Notifications"
+    },
+    "loadingEllipsis": "…",
+    "logoA3": "A3",
+    "mapsClubFallback": "Club",
+    "minSuffix": " min",
+    "ok": "OK",
+    "passcodeMask": "••••••",
+    "passwordMask": "••••••••",
+    "placeholderOtp": "000000",
+    "placeholderZero": "0",
+    "pushChannelName": "A3 Billiards",
+    "questionMark": "?",
+    "slotDurationChips": {
+      "min30": "30 min"
+    },
+    "tableTypes": {
+      "americanPool": "American Pool",
+      "eightBall": "8-Ball",
+      "frenchBilliards": "French Billiards",
+      "nineBall": "9-Ball",
+      "snooker": "Snooker"
+    },
+    "tabs": {
+      "admin": {
+        "audit": "Audit",
+        "live-moderation": "Direct"
+      },
+      "customer": {
+        "live": "Direct"
+      },
+      "owner": {
+        "documents": "Docs",
+        "financials": "Finances",
+        "livestream": "Direct",
+        "snacks": "Snacks"
+      }
+    },
+    "timesSeparator": " × ",
+    "typeLabel": "Type"
+  },
+  "customerApp": {
+    "booking": {
+      "durations": {
+        "chipFallback": "{{count}}m",
+        "d120": {
+          "chip": "2h"
+        },
+        "d180": {
+          "chip": "3h"
+        },
+        "d30": {
+          "chip": "30m",
+          "summary": "30 minutes"
+        },
+        "d60": {
+          "chip": "1h"
+        },
+        "summaryFallback": "{{count}} minutes"
+      },
+      "emDash": "—",
+      "noDatesAvailable": "Aucune date réservable disponible. Le club devra peut-être mettre à jour son planning.",
+      "noTablesEmpty": "Aucune table active pour ce type. Demandez au club de vérifier la configuration des tables dans les Paramètres.",
+      "notesCounter": "{{count}}/200",
+      "pickDate": "Quand souhaitez-vous jouer ?",
+      "steps": {
+        "date": "Date",
+        "table": "Table",
+        "type": "Type"
+      },
+      "summaryDate": "Date",
+      "summaryTable": "Table",
+      "today": "Aujourd'hui",
+      "whichTable": "Quelle table ?"
+    },
+    "bookingDetail": {
+      "date": "Date",
+      "durationMin": "{{count}} min",
+      "estimatedCostValue": "Est. {{symbol}}{{amount}}"
+    },
+    "checkInPayload": "a3customer:{{userId}}",
+    "clubProfile": {
+      "perMin": "/min",
+      "tablePlural": "tables",
+      "tableSingular": "table",
+      "tables": "Tables"
+    },
+    "discovery": {
+      "title": "Découvrir"
+    },
+    "history": {
+      "minAtRate": "{{minutes}} min @ {{rate}}/min",
+      "snacks": "Collations",
+      "total": "Total",
+      "upi": "UPI"
+    },
+    "home": {
+      "discover": "Découvrir"
+    },
+    "live": {
+      "title": "En direct"
+    },
+    "loyalty": {
+      "profile": {
+        "checkInCode": "Code d'enregistrement au club",
+        "checkInCodeHint": "Présentez-le au comptoir pour une attribution de créneau plus rapide. Code : a3customer:{{id}}",
+        "deletePlaceholder": "DELETE",
+        "name": "Nom"
+      }
+    },
+    "profile": {
+      "checkInCode": "Code d'enregistrement au club",
+      "checkInCodeHint": "Présentez-le au comptoir pour une attribution de créneau plus rapide. Code : a3customer:{{id}}",
+      "deletePlaceholder": "DELETE",
+      "name": "Nom"
+    },
+    "screens": {
+      "discover": "Découvrir",
+      "live": "En direct"
+    },
+    "streaming": {
+      "mute": "Couper le son",
+      "otherLive": "Autres diffusions en direct",
+      "unmute": "Réactiver le son"
+    }
+  },
+  "notifications": {
+    "fallback": "Notification"
+  },
+  "ownerApp": {
+    "documents": {
+      "pdf": "PDF",
+      "title": "Documents"
+    },
+    "financials": {
+      "cgst": "CGST",
+      "gstin": "GSTIN",
+      "igst": "IGST",
+      "minutes": "{{count}} min",
+      "session_one": "{{count}} session",
+      "sessions": "{{count}} sessions",
+      "sgst": "SGST",
+      "snackLine": "{{name}} × {{qty}} = {{amount}}",
+      "snacks": "Collations",
+      "sortByDate": "Date",
+      "tableLine": "{{minutes}} @ {{rate}}/min = {{subtotal}}",
+      "upi": "UPI"
+    },
+    "gstReport": {
+      "financialsGst": {
+        "cgst": "CGST",
+        "gstin": "GSTIN",
+        "igst": "IGST",
+        "sgst": "SGST"
+      }
+    },
+    "home": {
+      "tileDocuments": "Documents",
+      "tileSlots": "Créneaux",
+      "tileSnacks": "Collations"
+    },
+    "kitchen": {
+      "table": "Table {{label}}"
+    },
+    "livestream": {
+      "flipCamera": "Inverser la caméra",
+      "liveBadge": "EN DIRECT",
+      "micMute": "Couper le micro",
+      "micUnmute": "Réactiver le micro",
+      "otherClubStreams": "Autres tables en direct dans votre club",
+      "placeholderTable": "Table 4",
+      "selectTable": "Table à diffuser"
+    },
+    "loyalty": {
+      "awardLine": "{{date}} — +{{count}} crédit(s) ({{tier}})",
+      "creditsCount": "{{count}} crédits",
+      "programmeNamePlaceholder": "A3 Regulars",
+      "statusLine": "Statut : {{status}}"
+    },
+    "settings": {
+      "chefRoleName": "Chef",
+      "content": {
+        "acceptOnlineBookings": "Accepter les réservations en ligne",
+        "addAmenity": "Ajouter",
+        "addChefRole": "+ Ajouter le rôle Chef",
+        "addEmailFirst": "Ajoutez d'abord un e-mail",
+        "addPhoto": "+ Ajouter une photo",
+        "addRole": "Ajouter un rôle",
+        "addTable": "+ Ajouter une table",
+        "allTables": "Toutes les tables",
+        "amenities": "Équipements",
+        "approvalDeadline": "Délai d'approbation (minutes)",
+        "approvalDeadlineNote": "Minutes pour approuver avant expiration de la réservation",
+        "bookableHours": "Heures réservables",
+        "bookableHoursMustBeWithin": "Les heures réservables doivent être comprises dans les heures d'ouverture. Mettez d'abord à jour les heures réservables.",
+        "bookableHoursNote": "Les heures réservables doivent être comprises dans vos heures d'ouverture.",
+        "bookableTableTypes": "Types de tables réservables",
+        "bookableTableTypesMismatch": "Certains types de tables réservables n'ont pas de tables actives.",
+        "bookableTableTypesNote": "Seuls les types sélectionnés apparaissent dans le flux de réservation client.",
+        "bookingCouponCode": "Code coupon de réservation",
+        "bookingsDisabledDesc": "Les clients ne peuvent pas découvrir ni réserver votre club en ligne",
+        "bookingsEnabledDesc": "Votre club accepte les réservations en ligne",
+        "canApplyDiscount": "Peut appliquer une remise",
+        "canApplyDiscountMax": "Peut appliquer une remise (max {{pct}}%)",
+        "canFileComplaints": "Peut déposer des réclamations",
+        "cancellationWindow": "Fenêtre d'annulation (minutes)",
+        "cancellationWindowNote": "Minutes avant l'heure de début pour une annulation tardive",
+        "changeAccountPassword": "Modifier le mot de passe du compte",
+        "changeSettingsPasscode": "Modifier le code d'accès des paramètres",
+        "chefRoleCreated": "Rôle Chef créé",
+        "chefRoleCreatedBody": "Onglet Cuisine uniquement. Attribuez-le lorsque vous confiez l'appareil au personnel de cuisine.",
+        "chefRoleExists": "Le rôle Chef existe déjà",
+        "chefRoleExistsBody": "Modifiez-le sous Rôles du personnel si nécessaire.",
+        "closes": "Ferme",
+        "couponDescription": "Les clients saisissent un coupon au lieu du paiement par carte lors de la réservation",
+        "customAmenities": "Équipements personnalisés",
+        "customAmenityPlaceholder": "Équipement personnalisé",
+        "deleteRoleBody": "Si ce rôle est actuellement actif sur l'appareil, il repassera en mode propriétaire.",
+        "deleteRoleConfirm": "Supprimer",
+        "deleteRoleTitle": "Supprimer le rôle ?",
+        "descriptionMax": "Description (max 500)",
+        "discoverable": "Visible",
+        "downloadMyData": "Télécharger mes données",
+        "editRole": "Modifier le rôle",
+        "exportClubMembers": "Télécharger les données des membres du club",
+        "exportDownload": "Télécharger",
+        "exportMembersBody": "Téléchargez une feuille de calcul (CSV) pour Excel ou Google Sheets avec les clients ayant réservé, joué ou rejoint la fidélité dans votre club. Seuls les champs liés au club sont inclus.",
+        "exportMembersTitle": "Exporter les membres du club ?",
+        "exportingMembers": "Exportation…",
+        "gstItcError": "L'ITC mensuel doit être un nombre positif ou nul.",
+        "gstNote": "Données pour le rapport GST estimatif uniquement. Les rapports complets d'impôt sur le revenu seront ajoutés après consultation d'un expert-comptable.",
+        "gstRegistered": "Enregistré à la GST",
+        "gstRegisteredNote": "Lorsque désactivé, le rapport GST affiche une taxe en sortie nulle",
+        "gstSnacks": "GST % sur les collations",
+        "gstSnacksError": "Le % GST sur les collations doit être entre 0 et 100.",
+        "gstTableError": "Le % GST sur le temps de table doit être entre 0 et 100.",
+        "gstTableTime": "GST % sur le temps de table",
+        "gstin": "GSTIN (facultatif)",
+        "hidden": "Masqué",
+        "locationPin": "Repère de localisation",
+        "locationSaved": "Localisation enregistrée",
+        "manageTables": "Gérer les tables de billard",
+        "maxAdvanceDays": "Jours d'avance maximum",
+        "maxAdvanceDaysNote": "Jusqu'à quand les clients peuvent réserver",
+        "minAdvanceMinutes": "Minutes d'avance minimum",
+        "minAdvanceMinutesNote": "Délai minimum avant le début de la réservation",
+        "monthlyItc": "Estimation mensuelle du crédit d'impôt en entrée (facultatif)",
+        "opens": "Ouvre",
+        "operatingHours": "Heures d'ouverture",
+        "operatingHoursPrefix": "Heures d'ouverture :",
+        "ownerModeLabel": "Mode propriétaire (sans restriction)",
+        "photos": "Photos",
+        "requestDataExportBody": "Votre export de données (nom, téléphone, e-mail, nom du club, historique d'abonnement) sera envoyé à {{email}} sous 72 heures.",
+        "requestDataExportTitle": "Demander l'export des données ?",
+        "requestSubmitted": "Demande envoyée",
+        "requireBookingCoupon": "Exiger un coupon de réservation",
+        "saveAmenities": "Enregistrer les équipements",
+        "saveBookableHours": "Enregistrer les heures réservables",
+        "saveBookableTypes": "Enregistrer les types réservables",
+        "saveBookingRules": "Enregistrer les règles de réservation",
+        "saveCouponSettings": "Enregistrer les paramètres du coupon",
+        "saveDescription": "Enregistrer la description",
+        "saveGst": "Enregistrer les paramètres GST",
+        "saveLocation": "Enregistrer la localisation",
+        "saveOperatingHours": "Enregistrer les heures d'ouverture",
+        "saveSlotDurations": "Enregistrer les durées de créneau",
+        "selectAtLeastOneTab": "Sélectionnez au moins un onglet.",
+        "selectAtLeastOneTable": "Sélectionnez au moins une table lors de l'utilisation de tables spécifiques.",
+        "selectSlotDuration": "Sélectionnez au moins une durée de créneau.",
+        "setOperatingHoursFirst": "Définissez d'abord les heures d'ouverture sous Profil du club, puis enregistrez les heures réservables ici.",
+        "showClubInSearch": "Afficher le club dans la recherche client",
+        "slotDurationOptions": "Options de durée de créneau",
+        "specificTables": "{{count}} tables spécifiques",
+        "supplyInterstate": "Inter-État (IGST)",
+        "supplyIntrastate": "Intra-État (CGST + SGST)",
+        "supplyType": "Type de fourniture",
+        "tableActive": "Active",
+        "tableDisabled": "Désactivée",
+        "timeTo": "à",
+        "uploading": "Téléversement…"
+      },
+      "hhmmStart": "HH:MM début",
+      "labelField": "Libellé",
+      "labelPlaceholder": "Libellé *",
+      "passcode": {
+        "ok": "OK"
+      },
+      "sections": {
+        "tables": "Tables"
+      },
+      "timezonePlaceholder": "Asia/Kolkata"
+    },
+    "slots": {
+      "addTeammate": "Ajouter un joueur",
+      "addTeammatePhone": "Téléphone du joueur",
+      "age18Plus": "18+",
+      "assignBothSides": "Attribuez au moins un joueur à chaque côté.",
+      "billBreakdown": "Détail de la facture",
+      "checkInCode": "Code d'enregistrement",
+      "checkoutCounterSnacks": "Collations comptoir",
+      "checkoutDiscount": "Remise ({{percent}}%)",
+      "checkoutItemLine": "{{name}} × {{qty}}",
+      "checkoutKitchenItems": "Articles cuisine",
+      "checkoutSectionSubtotal": "Sous-total",
+      "checkoutTableRate": "{{minutes}} min @ {{rate}}/min",
+      "checkoutTableTime": "Temps de table",
+      "checkoutTableTotal": "Total table",
+      "continueToGroup": "Continuer",
+      "customerNamePlaceholder": "Saisir le nom du client…",
+      "customerNameSearch": "Ou rechercher par nom",
+      "groupSetupHint": "Ajoutez les joueurs sur cette table. Chaque nouveau joueur doit vérifier son téléphone via WhatsApp.",
+      "groupSetupTitle": "Joueurs sur cette table",
+      "losersPay": "Les perdants paient",
+      "losersPayBadge": "Les perdants paient",
+      "losersPayCheckoutNote": "Les perdants paient — facture enregistrée contre le côté perdant.",
+      "losersPayHint": "À l'encaissement, indiquez quel côté a perdu et paie la facture de table.",
+      "mobileWhatsApp": "Mobile (WhatsApp)",
+      "needTwoForVersus": "Ajoutez au moins un joueur pour le mode versus.",
+      "openQrScanner": "Scanner le code QR",
+      "paymentUpi": "UPI",
+      "playVersus": "Jouer en versus",
+      "playVersusHint": "Répartissez les joueurs en Côté A et Côté B pour un match compétitif.",
+      "playersCount": "{{count}} joueurs",
+      "primaryPlayer": "Joueur principal",
+      "qrAllowCamera": "Autoriser la caméra",
+      "qrCameraPermission": "L'accès à la caméra est nécessaire pour scanner les codes d'enregistrement des clients.",
+      "qrPlaceholder": "Collez le contenu du QR ou scannez au comptoir",
+      "qrScannerHint": "Pointez vers le QR d'enregistrement du client sur son profil",
+      "qrScannerTitle": "Scanner le QR client",
+      "registerTeammateWhatsApp": "Enregistrer le joueur — OTP WhatsApp",
+      "removePlayer": "Retirer",
+      "scanQrCode": "Scanner / coller le code d'enregistrement",
+      "selectLosingSide": "Quel côté a perdu ?",
+      "sideA": "Côté A",
+      "sideB": "Côté B",
+      "snacksCharge": "Collations",
+      "tableCharge": "Table",
+      "teammateAlreadyAdded": "Ce joueur est déjà sur la table.",
+      "teammates": "Joueurs",
+      "versusBadge": "Versus"
+    },
+    "snacks": {
+      "name": "Nom"
+    }
+  },
+  "sharedUi": {
+    "bookingCard": {
+      "duration30": "30 min",
+      "durationMinutes": "{{min}} min",
+      "estimated": "Est. {{amount}}"
+    },
+    "clubCard": {
+      "kmAway": "{{km}} km"
+    },
+    "liveStreamCard": {
+      "liveBadge": "LIVE"
+    },
+    "placeholders": {
+      "billModal": "BillModal",
+      "networkGuard": "NetworkGuard",
+      "offlineScreen": "OfflineScreen",
+      "passcodeSetupModal": "PasscodeSetupModal",
+      "sessionTimer": "SessionTimer",
+      "userSelector": "UserSelector"
+    },
+    "safeLocationPicker": {
+      "latitude": "Latitude",
+      "longitude": "Longitude"
+    },
+    "tableGrid": {
+      "a11yTable": "{{label}}, {{status}}{{tag}}",
+      "tableFallback": "Table"
+    },
+    "tableTypePicker": {
+      "ratePerMin": "{{rate}}/min"
+    }
+  }
+}

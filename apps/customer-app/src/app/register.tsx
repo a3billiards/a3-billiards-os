@@ -14,7 +14,10 @@ import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
+import { LoginLanguagePicker, useTranslation } from "@a3/i18n";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll, PhoneInput } from "@a3/ui/components";
+import { DEFAULT_PHONE_E164, isValidE164 } from "@a3/utils/phone";
+import { parseOtpAttemptsRemaining, parseOtpLockoutSeconds } from "@a3/utils/otp";
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
 const TOS_URL = "https://a3billiards.com/terms";
@@ -22,6 +25,7 @@ const TOS_URL = "https://a3billiards.com/terms";
 type Step = "details" | "code";
 
 export default function RegisterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { signIn } = useAuthActions();
   const sendSignupOtp = useAction(api.phoneOtp.sendSignupOtp);
@@ -30,7 +34,7 @@ export default function RegisterScreen() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("+91");
+  const [phone, setPhone] = useState(DEFAULT_PHONE_E164);
   const [age, setAge] = useState("");
   const [consent, setConsent] = useState(false);
   const [code, setCode] = useState("");
@@ -47,7 +51,7 @@ export default function RegisterScreen() {
   const parsedAge = Number(age);
   const ageValid =
     age.length > 0 && Number.isInteger(parsedAge) && parsedAge >= 18;
-  const phoneValid = /^\+[1-9]\d{6,14}$/.test(phone.replace(/\s/g, ""));
+  const phoneValid = isValidE164(phone.replace(/\s/g, ""));
   const emailValid =
     email.trim().length === 0 ||
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -65,34 +69,30 @@ export default function RegisterScreen() {
     try {
       await sendSignupOtp({ phone: phone.replace(/\s/g, "") });
       setStep("code");
-      setInfo("OTP sent via WhatsApp.");
+      setInfo(t("auth.customer.register.otpSent"));
       setTimeout(() => codeRef.current?.focus(), 50);
     } catch (e) {
       const appErr = parseConvexError(e as Error);
       switch (appErr.code) {
         case "OTP_005":
-          setError(
-            "Invalid phone number. Use country code, e.g. +91XXXXXXXXXX",
-          );
+          setError(t("auth.customer.register.invalidPhone"));
           break;
         case "OTP_006":
-          setError("This phone number cannot be used for registration.");
+          setError(t("auth.customer.register.phoneCannotRegister"));
           break;
         case "OTP_007":
-          setError(
-            "This phone is already registered. Please sign in instead.",
-          );
+          setError(t("auth.customer.register.phoneAlreadyRegistered"));
           break;
         case "OTP_003":
-          setError("Too many OTP requests. Please wait a few minutes.");
+          setError(t("auth.customer.register.tooManyOtp"));
           break;
         default:
-          setError(appErr.message ?? "Could not send OTP.");
+          setError(appErr.message ?? t("auth.customer.register.couldNotSendOtp"));
       }
     } finally {
       setLoading(false);
     }
-  }, [canSendOtp, phone, sendSignupOtp]);
+  }, [canSendOtp, phone, sendSignupOtp, t]);
 
   const handleVerifyAndSignUp = useCallback(async () => {
     if (!codeValid || loading) return;
@@ -111,7 +111,7 @@ export default function RegisterScreen() {
         ...(trimmedEmail.length > 0 ? { email: trimmedEmail } : {}),
       });
       if (!signingIn) {
-        setError("Sign-up failed. Please try again.");
+        setError(t("auth.customer.register.signUpFailed"));
         setLoading(false);
         return;
       }
@@ -119,30 +119,39 @@ export default function RegisterScreen() {
     } catch (e) {
       const appErr = parseConvexError(e as Error);
       switch (appErr.code) {
-        case "OTP_001":
+        case "OTP_001": {
+          const lockSec = parseOtpLockoutSeconds(appErr.message);
+          if (lockSec) {
+            const mins = Math.max(1, Math.ceil(lockSec / 60));
+            setError(t("auth.customer.register.lockoutWait", { minutes: mins }));
+          } else {
+            setError(t("auth.customer.register.tooManyAttempts"));
+          }
+          break;
+        }
+        case "OTP_002": {
+          const remaining = parseOtpAttemptsRemaining(appErr.message);
           setError(
-            "Too many failed attempts. Please request a new OTP in 5 minutes.",
+            remaining !== null
+              ? t("auth.customer.register.wrongOtpRemaining", { remaining })
+              : appErr.message ?? t("auth.customer.register.wrongOtp"),
           );
           break;
-        case "OTP_002":
-          setError(appErr.message ?? "Wrong or expired OTP.");
-          break;
+        }
         case "OTP_007":
-          setError(
-            "This phone is already registered. Please sign in instead.",
-          );
+          setError(t("auth.customer.register.phoneAlreadyRegistered"));
           break;
         case "AUTH_005":
-          setError("You must agree to the Privacy Policy and Terms.");
+          setError(t("auth.customer.register.mustAgreeConsent"));
           break;
         case "AUTH_007":
-          setError("You must be 18 or older to register.");
+          setError(t("auth.customer.register.mustBe18"));
           break;
         case "DATA_001":
-          setError("Name is required.");
+          setError(t("auth.customer.register.nameRequired"));
           break;
         default:
-          setError("Could not complete sign-up. Please try again.");
+          setError(t("auth.customer.register.couldNotCompleteSignUp"));
       }
       setLoading(false);
     }
@@ -156,31 +165,33 @@ export default function RegisterScreen() {
     name,
     parsedAge,
     router,
+    t,
   ]);
 
   return (
     <GlassPageBackground>
     <KeyboardFormScroll contentContainerStyle={styles.scroll}>
         <View style={styles.container}>
+          <LoginLanguagePicker />
           <View style={styles.logoTile}>
             <Text style={styles.logoText}>A3</Text>
           </View>
-          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.title}>{t("auth.customer.register.title")}</Text>
           <Text style={styles.subtitle}>
             {step === "details"
-              ? "Join A3 Billiards. We'll verify your phone via WhatsApp."
-              : "Enter the 6-digit code we sent to your WhatsApp."}
+              ? t("auth.customer.register.subtitleDetails")
+              : t("auth.customer.register.subtitleCode")}
           </Text>
 
           <LiquidGlassCard style={styles.formCard} padding={20}>
           {step === "details" ? (
             <View style={styles.form}>
-              <Text style={styles.label}>Full Name</Text>
+              <Text style={styles.label}>{t("auth.customer.register.fullName")}</Text>
               <TextInput
                 style={styles.input}
                 value={name}
                 onChangeText={setName}
-                placeholder="Your full name"
+                placeholder={t("auth.customer.register.fullNamePlaceholder")}
                 placeholderTextColor={colors.text.tertiary}
                 autoCapitalize="words"
                 autoComplete="name"
@@ -190,14 +201,15 @@ export default function RegisterScreen() {
               />
 
               <Text style={[styles.label, styles.fieldGap]}>
-                Email <Text style={styles.optional}>(optional)</Text>
+                {t("auth.customer.register.email")}{" "}
+                <Text style={styles.optional}>{t("auth.customer.register.emailOptional")}</Text>
               </Text>
               <TextInput
                 ref={emailRef}
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="you@example.com"
+                placeholder={t("auth.customer.register.emailPlaceholder")}
                 placeholderTextColor={colors.text.tertiary}
                 autoCapitalize="none"
                 autoComplete="email"
@@ -207,30 +219,28 @@ export default function RegisterScreen() {
                 editable={!loading}
               />
 
-              <Text style={[styles.label, styles.fieldGap]}>Phone Number</Text>
-              <TextInput
-                ref={phoneRef}
-                style={styles.input}
+              <Text style={[styles.label, styles.fieldGap]}>{t("auth.customer.register.phone")}</Text>
+              <PhoneInput
+                inputRef={phoneRef}
                 value={phone}
-                onChangeText={setPhone}
-                placeholder="+91XXXXXXXXXX"
-                placeholderTextColor={colors.text.tertiary}
-                keyboardType="phone-pad"
+                onChangeValue={setPhone}
+                editable={!loading}
                 returnKeyType="next"
                 onSubmitEditing={() => ageRef.current?.focus()}
-                editable={!loading}
+                countryCodeLabel={t("auth.phone.countryCode")}
+                selectCountryLabel={t("auth.phone.selectCountry")}
+                accessibilityLabel={t("auth.phone.number")}
+                inputStyle={styles.input}
               />
-              <Text style={styles.hint}>
-                E.164 format. We&apos;ll send a 6-digit OTP via WhatsApp.
-              </Text>
+              <Text style={styles.hint}>{t("auth.customer.register.phoneHint")}</Text>
 
-              <Text style={[styles.label, styles.fieldGap]}>Age</Text>
+              <Text style={[styles.label, styles.fieldGap]}>{t("auth.customer.register.age")}</Text>
               <TextInput
                 ref={ageRef}
                 style={styles.input}
                 value={age}
-                onChangeText={(t) => setAge(t.replace(/\D/g, ""))}
-                placeholder="18"
+                onChangeText={(text) => setAge(text.replace(/\D/g, ""))}
+                placeholder={t("auth.customer.register.agePlaceholder")}
                 placeholderTextColor={colors.text.tertiary}
                 keyboardType="number-pad"
                 returnKeyType="done"
@@ -250,19 +260,19 @@ export default function RegisterScreen() {
                   {consent && <Text style={styles.checkmark}>✓</Text>}
                 </View>
                 <Text style={styles.consentText}>
-                  I agree to the{" "}
+                  {t("auth.customer.register.consentPrefix")}{" "}
                   <Text
                     style={styles.consentLink}
                     onPress={() => Linking.openURL(PRIVACY_URL)}
                   >
-                    Privacy Policy
+                    {t("auth.customer.register.privacyPolicy")}
                   </Text>
-                  {" "}and{" "}
+                  {" "}{t("auth.customer.register.consentAnd")}{" "}
                   <Text
                     style={styles.consentLink}
                     onPress={() => Linking.openURL(TOS_URL)}
                   >
-                    Terms of Service
+                    {t("auth.customer.register.termsOfService")}
                   </Text>
                 </Text>
               </Pressable>
@@ -280,19 +290,19 @@ export default function RegisterScreen() {
                 {loading ? (
                   <ActivityIndicator color={colors.bg.primary} />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Send OTP</Text>
+                  <Text style={styles.primaryButtonText}>{t("auth.customer.register.sendOtp")}</Text>
                 )}
               </Pressable>
             </View>
           ) : (
             <View style={styles.form}>
-              <Text style={styles.label}>OTP Code</Text>
+              <Text style={styles.label}>{t("auth.customer.register.otpCode")}</Text>
               <TextInput
                 ref={codeRef}
                 style={styles.input}
                 value={code}
-                onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
-                placeholder="6-digit code"
+                onChangeText={(text) => setCode(text.replace(/\D/g, "").slice(0, 6))}
+                placeholder={t("auth.customer.register.otpPlaceholder")}
                 placeholderTextColor={colors.text.tertiary}
                 keyboardType="number-pad"
                 returnKeyType="go"
@@ -300,7 +310,7 @@ export default function RegisterScreen() {
                 editable={!loading}
               />
               <Text style={styles.hint}>
-                Sent to {phone.replace(/\s/g, "")} via WhatsApp.
+                {t("auth.customer.register.sentTo", { phone: phone.replace(/\s/g, "") })}
               </Text>
 
               <Pressable
@@ -315,7 +325,7 @@ export default function RegisterScreen() {
                     (loading || !canSendOtp) && styles.disabledText,
                   ]}
                 >
-                  Resend OTP
+                  {t("auth.customer.register.resendOtp")}
                 </Text>
               </Pressable>
 
@@ -333,7 +343,7 @@ export default function RegisterScreen() {
                   <ActivityIndicator color={colors.bg.primary} />
                 ) : (
                   <Text style={styles.primaryButtonText}>
-                    Verify & Create Account
+                    {t("auth.customer.register.verifyCreateAccount")}
                   </Text>
                 )}
               </Pressable>
@@ -349,7 +359,7 @@ export default function RegisterScreen() {
                 hitSlop={8}
                 style={styles.toggleRow}
               >
-                <Text style={styles.toggleText}>← Edit details</Text>
+                <Text style={styles.toggleText}>{t("auth.customer.register.editDetails")}</Text>
               </Pressable>
             </View>
           )}
@@ -366,21 +376,21 @@ export default function RegisterScreen() {
               accessibilityRole="alert"
               accessibilityLiveRegion="polite"
             >
-              <Text style={styles.errorLabel}>Error</Text>
+              <Text style={styles.errorLabel}>{t("auth.customer.register.errorLabel")}</Text>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
           </LiquidGlassCard>
 
           <View style={styles.loginRow}>
-            <Text style={styles.loginText}>Already have an account? </Text>
+            <Text style={styles.loginText}>{t("auth.customer.register.alreadyHaveAccount")} </Text>
             <Pressable
               onPress={() => router.replace("/login")}
               disabled={loading}
               hitSlop={8}
               accessibilityRole="link"
             >
-              <Text style={styles.loginLink}>Sign In</Text>
+              <Text style={styles.loginLink}>{t("auth.customer.register.signIn")}</Text>
             </Pressable>
           </View>
         </View>

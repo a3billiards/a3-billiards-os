@@ -1,15 +1,19 @@
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, layout, glass } from "@a3/ui/theme";
+import { TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
 import {
   GlassPageBackground,
   LiquidGlassCard,
   GlassIconTile,
+  NotificationBellButton,
 } from "@a3/ui/components";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
+import { getCurrentLanguage, useTranslation, LanguagePicker } from "@a3/i18n";
 import { customerTabBarTotalInset } from "../../theme/customerShell";
 
 function to12h(hhmm: string): string {
@@ -22,7 +26,7 @@ function to12h(hhmm: string): string {
 function formatShortDate(ymd: string): string {
   const [y, m, d] = ymd.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(getCurrentLanguage(), {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -30,19 +34,24 @@ function formatShortDate(ymd: string): string {
 }
 
 function formatComplaintDate(ms: number): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(getCurrentLanguage(), {
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(new Date(ms));
 }
 
-function countdownLabel(startMs: number): string {
+function countdownLabel(
+  startMs: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
   const diff = Math.max(0, startMs - Date.now());
   const minutes = Math.floor(diff / 60_000);
-  if (minutes < 60) return `In ${Math.max(1, minutes)} minutes`;
+  if (minutes < 60) {
+    return t("customerApp.home.countdownInMinutes", { count: Math.max(1, minutes) });
+  }
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `In ${hours} hours`;
+  if (hours < 24) return t("customerApp.home.countdownInHours", { count: hours });
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const start = new Date(startMs);
@@ -51,12 +60,14 @@ function countdownLabel(startMs: number): string {
     start.getMonth() === tomorrow.getMonth() &&
     start.getDate() === tomorrow.getDate()
   ) {
-    return "Tomorrow";
+    return t("customerApp.home.tomorrow");
   }
-  return `In ${Math.ceil(hours / 24)} days`;
+  return t("customerApp.home.countdownInDays", { count: Math.ceil(hours / 24) });
 }
 
-export default function HomeScreen() {
+function HomeScreenContent() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = customerTabBarTotalInset(insets.bottom);
@@ -70,13 +81,14 @@ export default function HomeScreen() {
     api.bookings.getPendingBookingsCount,
     user?._id ? { customerId: user._id } : "skip",
   );
+  const unreadInbox = useQuery(api.notifications.getUnreadInboxCount);
 
   const complaints = myComplaints?.complaints ?? [];
   const greetingTime = (() => {
     const h = new Date().getHours();
-    if (h < 12) return "Good morning";
-    if (h < 17) return "Good afternoon";
-    return "Good evening";
+    if (h < 12) return t("customerApp.home.goodMorning");
+    if (h < 17) return t("customerApp.home.goodAfternoon");
+    return t("customerApp.home.goodEvening");
   })();
 
   return (
@@ -88,23 +100,34 @@ export default function HomeScreen() {
             { paddingTop: spacing[2], paddingBottom: bottomPad },
           ]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         >
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.greetingSmall}>{greetingTime}</Text>
               <Text style={styles.greetingName} numberOfLines={1}>
-                {user?.name ? user.name : "Player"}
+                {user?.name ? user.name : t("customerApp.home.playerDefault")}
               </Text>
             </View>
-            <Pressable
-              hitSlop={10}
-              style={styles.profileBtn}
-              onPress={() => router.push("/(tabs)/profile")}
-              accessibilityLabel="Profile"
-            >
-              <MaterialIcons name="person" size={20} color={glass.textMuted} />
-            </Pressable>
+            <View style={styles.headerActions}>
+              <LanguagePicker variant="icon" />
+              <NotificationBellButton
+                unreadCount={unreadInbox?.count}
+                onPress={() => router.push("/inbox-notifications")}
+                accessibilityLabel={t("common.inbox.bellAccessibility")}
+              />
+              <Pressable
+                hitSlop={10}
+                style={styles.profileBtn}
+                onPress={() => router.push("/(tabs)/profile")}
+                accessibilityLabel={t("customerApp.home.profileAccessibility")}
+              >
+                <MaterialIcons name="person" size={20} color={glass.textMuted} />
+              </Pressable>
+            </View>
           </View>
 
           {/* Complaint details — customer sees exact reason */}
@@ -118,19 +141,17 @@ export default function HomeScreen() {
                     color={colors.accent.amber}
                   />
                 </View>
-                <Text style={styles.alertTitle}>
-                  Your account has been flagged
-                </Text>
+                <Text style={styles.alertTitle}>{t("customerApp.home.flaggedTitle")}</Text>
               </View>
-              <Text style={styles.alertIntro}>
-                A club reported the following. Contact support if you believe
-                this is a mistake.
-              </Text>
+              <Text style={styles.alertIntro}>{t("customerApp.home.flaggedIntro")}</Text>
               {complaints.map((c) => (
                 <View key={c._id} style={styles.complaintBox}>
                   <Text style={styles.complaintType}>{c.typeLabel}</Text>
                   <Text style={styles.complaintMeta}>
-                    Filed by {c.clubName} · {formatComplaintDate(c.createdAt)}
+                    {t("customerApp.home.filedBy", {
+                      clubName: c.clubName,
+                      date: formatComplaintDate(c.createdAt),
+                    })}
                   </Text>
                   {c.description.trim().length > 0 ? (
                     <Text style={styles.complaintDesc}>{c.description}</Text>
@@ -148,11 +169,11 @@ export default function HomeScreen() {
               onPress={() => router.push(`/booking/${next.log.bookingId}`)}
             >
               <View style={styles.nextRow}>
-                <Text style={styles.nextLabel}>NEXT BOOKING</Text>
+                <Text style={styles.nextLabel}>{t("customerApp.home.nextBooking")}</Text>
                 <View style={styles.nextChip}>
                   <View style={styles.nextChipDot} />
                   <Text style={styles.nextChipText}>
-                    {countdownLabel(next.startMs)}
+                    {countdownLabel(next.startMs, t)}
                   </Text>
                 </View>
               </View>
@@ -173,18 +194,16 @@ export default function HomeScreen() {
             </LiquidGlassCard>
           ) : (
             <LiquidGlassCard style={styles.nextCard} padding={20}>
-              <Text style={styles.nextLabel}>NEXT BOOKING</Text>
+              <Text style={styles.nextLabel}>{t("customerApp.home.nextBooking")}</Text>
               <Text style={[styles.nextClub, { color: glass.textMuted }]}>
-                No upcoming bookings
+                {t("customerApp.home.noUpcomingBookings")}
               </Text>
-              <Text style={styles.nextMeta}>
-                Find a table on Discover and book your slot.
-              </Text>
+              <Text style={styles.nextMeta}>{t("customerApp.home.discoverPrompt")}</Text>
               <Pressable
                 style={styles.findBtn}
                 onPress={() => router.push("/(tabs)/discover")}
               >
-                <Text style={styles.findBtnText}>Find a club</Text>
+                <Text style={styles.findBtnText}>{t("customerApp.home.findClub")}</Text>
                 <MaterialIcons name="chevron-right" size={18} color="#000" />
               </Pressable>
             </LiquidGlassCard>
@@ -204,7 +223,7 @@ export default function HomeScreen() {
                 <Text style={[styles.statValue, { color: "#fbbf24" }]}>
                   {pending?.count ?? 0}
                 </Text>
-                <Text style={styles.statLabel}>Pending requests</Text>
+                <Text style={styles.statLabel}>{t("customerApp.home.pendingRequests")}</Text>
               </LiquidGlassCard>
             </View>
             <View style={styles.statCellWrap}>
@@ -217,13 +236,13 @@ export default function HomeScreen() {
                   <MaterialIcons name="history" size={20} color="#86efac" />
                 </GlassIconTile>
                 <Text style={styles.statValue}>—</Text>
-                <Text style={styles.statLabel}>View history</Text>
+                <Text style={styles.statLabel}>{t("customerApp.home.viewHistory")}</Text>
               </LiquidGlassCard>
             </View>
           </View>
 
           {/* Quick links */}
-          <Text style={styles.sectionTitle}>Quick Access</Text>
+          <Text style={styles.sectionTitle}>{t("customerApp.home.quickAccess")}</Text>
           <View style={styles.quickRow}>
             <Pressable
               style={styles.quickTile}
@@ -232,7 +251,7 @@ export default function HomeScreen() {
               <View style={styles.quickIcon}>
                 <MaterialIcons name="explore" size={22} color="#7dd3fc" />
               </View>
-              <Text style={styles.quickLabel}>Discover</Text>
+              <Text style={styles.quickLabel}>{t("customerApp.home.discover")}</Text>
             </Pressable>
             <Pressable
               style={styles.quickTile}
@@ -241,7 +260,7 @@ export default function HomeScreen() {
               <View style={styles.quickIcon}>
                 <MaterialIcons name="event" size={22} color="#86efac" />
               </View>
-              <Text style={styles.quickLabel}>Bookings</Text>
+              <Text style={styles.quickLabel}>{t("customerApp.home.bookings")}</Text>
             </Pressable>
             <Pressable
               style={styles.quickTile}
@@ -250,7 +269,7 @@ export default function HomeScreen() {
               <View style={styles.quickIcon}>
                 <MaterialIcons name="history" size={22} color="#fbbf24" />
               </View>
-              <Text style={styles.quickLabel}>History</Text>
+              <Text style={styles.quickLabel}>{t("customerApp.home.history")}</Text>
             </Pressable>
             <Pressable
               style={styles.quickTile}
@@ -259,7 +278,7 @@ export default function HomeScreen() {
               <View style={styles.quickIcon}>
                 <MaterialIcons name="person" size={22} color="#fda4af" />
               </View>
-              <Text style={styles.quickLabel}>Profile</Text>
+              <Text style={styles.quickLabel}>{t("customerApp.home.profile")}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -291,6 +310,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: glass.textPrimary,
     letterSpacing: -0.2,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
   },
   profileBtn: {
     width: 40,
@@ -481,3 +505,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 });
+
+export default function HomeScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.customer.home")}>
+      <HomeScreenContent />
+    </TabErrorBoundary>
+  );
+}

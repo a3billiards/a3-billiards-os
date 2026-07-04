@@ -78,4 +78,15 @@ export const ml: TranslationBundle = {
     graceBanner: "നിങ്ങളുടെ സബ്‌സ്‌ക്രിപ്ഷൻ ഉടൻ അവസാനിക്കും. തടസ്സം ഒഴിവാക്കാൻ ഇപ്പോൾ പുതുക്കുക.",
     graceRenew: "പുതുക്കുക",
   },
+  inbox: {
+    title: "Notifications",
+    subtitle: "Messages from A3 Billiards",
+    empty: "No notifications yet.",
+    markAllRead: "Mark all read",
+    alertView: "View",
+    alertLater: "Later",
+    fromAdmin: "A3 Billiards",
+    bellAccessibility: "Notifications",
+    loadMore: "Load more",
+  },
 };

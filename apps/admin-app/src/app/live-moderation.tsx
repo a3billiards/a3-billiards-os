@@ -1,13 +1,19 @@
 import { useCallback } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, spacing, typography } from "@a3/ui/theme";
+import { usePullToRefresh } from "@a3/ui/hooks";
 import { adminTabBarTotalInset } from "../theme/adminShell";
+import { useTranslation } from "@a3/i18n";
 import { LiveStreamModerationList } from "../components/LiveStreamModerationList";
 
 export default function LiveModerationScreen() {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const insets = useSafeAreaInsets();
   const bottomPad = adminTabBarTotalInset(insets.bottom);
   const streams = useQuery(api.livestream.getActiveStreamsForAdmin, {});
@@ -20,18 +26,30 @@ export default function LiveModerationScreen() {
     [forceEnd],
   );
 
+  const handleWatch = useCallback(
+    (stream: { liveStreamId: Parameters<typeof forceEnd>[0]["liveStreamId"]; clubName: string }) => {
+      router.push({
+        pathname: "/live/[liveStreamId]",
+        params: { liveStreamId: stream.liveStreamId, clubName: stream.clubName },
+      } as never);
+    },
+    [router],
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Live moderation</Text>
-        <Text style={styles.subtitle}>
-          Platform-wide active broadcasts. Force-ending requires a logged reason.
-        </Text>
+        <Text style={styles.title}>{t("adminApp.moderation.title")}</Text>
+        <Text style={styles.subtitle}>{t("adminApp.moderation.subtitle")}</Text>
       </View>
       <LiveStreamModerationList
         streams={streams}
         onForceEnd={handleForceEnd}
+        onWatch={handleWatch}
         bottomInset={bottomPad}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
     </SafeAreaView>
   );

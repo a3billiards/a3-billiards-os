@@ -5,8 +5,7 @@ import { v } from "convex/values";
 import { Scrypt } from "lucia";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
-
-const MIN_PASSWORD_LENGTH = 8;
+import { assertStrongPasswordOrThrow } from "./model/passwordPolicy";
 
 /**
  * Links a phone+password login to the signed-in customer (same userId as phoneOtp).
@@ -15,12 +14,7 @@ const MIN_PASSWORD_LENGTH = 8;
 export const setupLoginPassword = action({
   args: { password: v.string() },
   handler: async (ctx, { password }) => {
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      throw new Error(
-        `DATA_002: Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
-      );
-    }
-
+    assertStrongPasswordOrThrow(password);
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
       throw new Error("AUTH_001: Not authenticated");

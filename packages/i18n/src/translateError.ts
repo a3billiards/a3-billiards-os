@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import type { ErrorMessageKey } from "./errors";
+import type { ErrorMessageKey } from "./locales/errors";
 import { ensureI18nInitialized } from "./i18n";
 
 /** Translate a Convex error code (e.g. AUTH_001) to the user's locale. */

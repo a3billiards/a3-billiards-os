@@ -1,0 +1,7 @@
+{
+  "googleAuth": {
+    "expoGo": "GOOGLE_AUTH_001 : la connexion Google n'est pas disponible dans Expo Go. Utilisez la connexion par e-mail ou lancez une version de développement.",
+    "missingToken": "GOOGLE_AUTH_001 : jeton Google ID manquant — terminez la connexion Google pour continuer"
+  },
+  "checkInPayload": "a3customer:{{userId}}"
+}

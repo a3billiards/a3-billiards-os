@@ -6,7 +6,7 @@ const GATED_TAB_ROUTES = [
   "slots",
   "snacks",
   "kitchen",
-  "loyalty",
+  // "loyalty",
   "livestream",
   "financials",
   "complaints",
@@ -14,7 +14,7 @@ const GATED_TAB_ROUTES = [
   "documents",
 ] as const;
 
-const HIDDEN_TAB_ROUTES = new Set(["gst-report"]);
+const HIDDEN_TAB_ROUTES = new Set(["gst-report", "loyalty"]);
 
 function tabFromPathname(pathname: string): string | null {
   for (const tab of GATED_TAB_ROUTES) {

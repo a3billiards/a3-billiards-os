@@ -12,6 +12,7 @@ import { api, internal } from "./_generated/api";
 import { action } from "./_generated/server";
 import { listOnboardingPlansFromEnv } from "./onboardingPlanPricing";
 import { geocodeAddress } from "./model/geocode";
+import { assertStrongPasswordOrThrow } from "./model/passwordPolicy";
 
 const FREE_ACCESS_COUPON = "A3A3A3";
 
@@ -60,10 +61,7 @@ export const registerOwnerAccount = action({
     if (!consentGiven) {
       throw new Error("AUTH_005: Consent not given");
     }
-    if (password.length < 8) {
-      throw new Error("DATA_001: Password must be at least 8 characters");
-    }
-
+    assertStrongPasswordOrThrow(password);
     const passwordHash = await new Scrypt().hash(password);
     const { userId } = await ctx.runMutation(
       internal.onboardingWeb.insertOwnerAccountForWeb,

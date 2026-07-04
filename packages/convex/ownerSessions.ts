@@ -22,6 +22,185 @@ import {
   reserveFreeVisitCredit,
 } from "./model/loyaltyCore";
 
+const sessionParticipantSideArg = v.union(
+  v.literal("sideA"),
+  v.literal("sideB"),
+);
+
+const sessionParticipantArg = v.object({
+  key: v.string(),
+  customerId: v.optional(v.id("users")),
+  displayName: v.string(),
+  isGuest: v.boolean(),
+  side: v.optional(sessionParticipantSideArg),
+});
+
+const sessionPlayModeArg = v.union(v.literal("casual"), v.literal("versus"));
+
+type ParticipantInput = {
+  key: string;
+  customerId?: Id<"users">;
+  displayName: string;
+  isGuest: boolean;
+  side?: "sideA" | "sideB";
+};
+
+async function validateAndNormalizeParticipants(
+  ctx: MutationCtx,
+  args: {
+    customerId?: Id<"users">;
+    guestName?: string;
+    participants?: ParticipantInput[];
+    playMode?: "casual" | "versus";
+    losersPay?: boolean;
+    staffAcknowledgedComplaint?: boolean;
+    roleId?: Id<"staffRoles">;
+  },
+): Promise<{
+  participants: ParticipantInput[];
+  playMode: "casual" | "versus";
+  losersPay: boolean;
+  complaintAck: {
+    staffAcknowledgedComplaint?: boolean;
+    acknowledgedByRoleId?: Id<"staffRoles">;
+    acknowledgedAt?: number;
+  };
+}> {
+  const playMode = args.playMode ?? "casual";
+  const losersPay = args.losersPay === true;
+  const now = Date.now();
+
+  if (losersPay && playMode !== "versus") {
+    throw new Error("SESSION_007: Losers pay is only available in versus mode");
+  }
+
+  let participants: ParticipantInput[] = args.participants ?? [];
+
+  if (participants.length === 0 && args.customerId !== undefined) {
+    const customer = await ctx.db.get(args.customerId);
+    if (!customer) {
+      throw new Error("DATA_003: Customer not found");
+    }
+    participants = [
+      {
+        key: String(args.customerId),
+        customerId: args.customerId,
+        displayName: customer.name,
+        isGuest: false,
+        side: playMode === "versus" ? "sideA" : undefined,
+      },
+    ];
+  }
+
+  if (participants.length > 0) {
+    const seenKeys = new Set<string>();
+    const seenCustomerIds = new Set<string>();
+    for (const p of participants) {
+      const key = p.key.trim();
+      const name = p.displayName.trim();
+      if (!key || !name) {
+        throw new Error("DATA_001: Each player needs a name");
+      }
+      if (seenKeys.has(key)) {
+        throw new Error("DATA_001: Duplicate player on this table");
+      }
+      seenKeys.add(key);
+      if (p.isGuest && p.customerId !== undefined) {
+        throw new Error("DATA_001: Guest players cannot have a customer id");
+      }
+      if (!p.isGuest) {
+        if (p.customerId === undefined) {
+          throw new Error("DATA_001: Registered players must have a customer id");
+        }
+        const cid = String(p.customerId);
+        if (seenCustomerIds.has(cid)) {
+          throw new Error("DATA_001: Same customer cannot be added twice");
+        }
+        seenCustomerIds.add(cid);
+        const customer = await ctx.db.get(p.customerId);
+        if (!customer || customer.role !== "customer") {
+          throw new Error("DATA_003: Customer not found");
+        }
+        if (!customer.phoneVerified) {
+          throw new Error(
+            "AUTH_004: Each player must be phone-verified before play",
+          );
+        }
+      }
+    }
+
+    if (args.customerId !== undefined) {
+      const primaryInList = participants.some(
+        (p) => p.customerId === args.customerId,
+      );
+      if (!primaryInList) {
+        throw new Error("DATA_001: Primary customer must be in the player list");
+      }
+    }
+  }
+
+  if (playMode === "versus") {
+    if (args.guestName !== undefined && args.customerId === undefined) {
+      throw new Error(
+        "SESSION_008: Versus mode requires registered, verified players",
+      );
+    }
+    const registered = participants.filter(
+      (p) => !p.isGuest && p.customerId !== undefined,
+    );
+    if (registered.length < 2) {
+      throw new Error(
+        "SESSION_008: Versus mode needs at least two verified players",
+      );
+    }
+    if (!registered.every((p) => p.side === "sideA" || p.side === "sideB")) {
+      throw new Error("SESSION_008: Assign each player to Side A or Side B");
+    }
+    const hasA = registered.some((p) => p.side === "sideA");
+    const hasB = registered.some((p) => p.side === "sideB");
+    if (!hasA || !hasB) {
+      throw new Error("SESSION_008: Versus mode needs players on both sides");
+    }
+  } else if (participants.some((p) => p.side !== undefined)) {
+    throw new Error("DATA_001: Side assignment is only for versus mode");
+  }
+
+  let complaintAck: {
+    staffAcknowledgedComplaint?: boolean;
+    acknowledgedByRoleId?: Id<"staffRoles">;
+    acknowledgedAt?: number;
+  } = {};
+
+  const customerIdsToCheck = new Set<Id<"users">>();
+  if (args.customerId !== undefined) {
+    customerIdsToCheck.add(args.customerId);
+  }
+  for (const p of participants) {
+    if (p.customerId !== undefined) {
+      customerIdsToCheck.add(p.customerId);
+    }
+  }
+
+  for (const userId of customerIdsToCheck) {
+    const n = await countActiveComplaintsForUser(ctx, userId);
+    if (n > 0) {
+      if (!args.staffAcknowledgedComplaint) {
+        throw new Error(
+          "COMPLAINT_001: A player has active complaints. Acknowledge before starting the session.",
+        );
+      }
+      complaintAck = {
+        staffAcknowledgedComplaint: true,
+        acknowledgedByRoleId: args.roleId,
+        acknowledgedAt: now,
+      };
+      break;
+    }
+  }
+
+  return { participants, playMode, losersPay, complaintAck };
+}
+
 async function assertSlotsTabPermission(
   ctx: MutationCtx | QueryCtx,
   clubId: Id<"clubs">,
@@ -188,6 +367,9 @@ export const startWalkInSession = mutation({
     freeVisitCreditId: v.optional(v.id("loyaltyCredits")),
     roleId: v.optional(v.id("staffRoles")),
     staffAcknowledgedComplaint: v.optional(v.boolean()),
+    participants: v.optional(v.array(sessionParticipantArg)),
+    playMode: v.optional(sessionPlayModeArg),
+    losersPay: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const {
@@ -199,6 +381,9 @@ export const startWalkInSession = mutation({
       freeVisitCreditId,
       roleId,
       staffAcknowledgedComplaint,
+      participants: participantsArg,
+      playMode: playModeArg,
+      losersPay: losersPayArg,
     } = args;
     const viewer = await requireViewer(ctx);
     const owner = requireOwnerWithClub(viewer);
@@ -289,19 +474,33 @@ export const startWalkInSession = mutation({
       freeVisitMaxMinutes = programme.freeVisitMaxMinutes;
     }
 
-    const ratePerMin = resolveRatePerMinAtSessionStart(club, now);
+    const ratePerMin = resolveRatePerMinAtSessionStart(
+      club,
+      now,
+      table.tableType,
+    );
     const minBillMinutes = club.minBillMinutes;
     const currency = club.currency;
+
+    const {
+      participants: normalizedParticipants,
+      playMode,
+      losersPay,
+      complaintAck,
+    } = await validateAndNormalizeParticipants(ctx, {
+      customerId,
+      guestName,
+      participants: participantsArg,
+      playMode: playModeArg,
+      losersPay: losersPayArg,
+      staffAcknowledgedComplaint,
+      roleId,
+    });
 
     let sessionCustomerId: typeof customerId = undefined;
     let sessionGuestName: string | undefined;
     let sessionGuestAge: number | undefined;
     let sessionIsGuest = true;
-    let complaintAck: {
-      staffAcknowledgedComplaint?: boolean;
-      acknowledgedByRoleId?: typeof roleId;
-      acknowledgedAt?: number;
-    } = {};
 
     if (customerId !== undefined) {
       const customer = await ctx.db.get(customerId);
@@ -310,21 +509,8 @@ export const startWalkInSession = mutation({
       }
       if (!customer.phoneVerified) {
         throw new Error(
-          "Complaints cannot be filed against guest sessions. The customer must be registered.",
+          "AUTH_004: Customer phone must be verified before play",
         );
-      }
-      const n = await countActiveComplaintsForUser(ctx, customerId);
-      if (n > 0) {
-        if (!staffAcknowledgedComplaint) {
-          throw new Error(
-            "COMPLAINT_001: This customer has active complaints. Acknowledge before starting the session.",
-          );
-        }
-        complaintAck = {
-          staffAcknowledgedComplaint: true,
-          acknowledgedByRoleId: roleId,
-          acknowledgedAt: now,
-        };
       }
       sessionCustomerId = customerId;
       sessionGuestName = undefined;
@@ -368,6 +554,11 @@ export const startWalkInSession = mutation({
       isFreeVisit: isFreeVisit || undefined,
       freeVisitCreditId: isFreeVisit ? freeVisitCreditId : undefined,
       freeVisitMaxMinutes,
+      playMode: normalizedParticipants.length > 0 ? playMode : undefined,
+      losersPay: losersPay || undefined,
+      participants:
+        normalizedParticipants.length > 0 ? normalizedParticipants : undefined,
+      loserSide: undefined,
       createdAt: now,
       updatedAt: now,
     });
@@ -417,6 +608,46 @@ const paymentMethodArg = v.union(
   v.literal("card"),
   v.literal("credit"),
 );
+
+type SnackFulfillmentType = "counter" | "kitchen";
+
+function resolveSnackFulfillmentType(
+  snack: { fulfillmentType?: SnackFulfillmentType } | null,
+): SnackFulfillmentType {
+  return snack?.fulfillmentType ?? "counter";
+}
+
+async function enrichSnackLineItems(
+  ctx: QueryCtx,
+  snackOrders: {
+    snackId: Id<"snacks">;
+    name: string;
+    qty: number;
+    priceAtOrder: number;
+  }[],
+) {
+  const uniqueIds = [...new Set(snackOrders.map((o) => o.snackId))];
+  const snacksById = new Map<
+    Id<"snacks">,
+    { fulfillmentType?: SnackFulfillmentType } | null
+  >();
+  for (const id of uniqueIds) {
+    snacksById.set(id, await ctx.db.get(id));
+  }
+  return snackOrders.map((o) => {
+    const fulfillmentType = resolveSnackFulfillmentType(
+      snacksById.get(o.snackId) ?? null,
+    );
+    return {
+      snackId: o.snackId,
+      name: o.name,
+      qty: o.qty,
+      priceAtOrder: o.priceAtOrder,
+      lineTotal: o.priceAtOrder * o.qty,
+      fulfillmentType,
+    };
+  });
+}
 
 function computeCheckoutBill(session: {
   startTime: number;
@@ -532,6 +763,14 @@ export const previewTableCheckout = query({
       ...session,
       discount: appliedDiscountPct,
     });
+    const snackLineItems = await enrichSnackLineItems(ctx, session.snackOrders);
+    const counterSnackTotal = snackLineItems
+      .filter((line) => line.fulfillmentType === "counter")
+      .reduce((sum, line) => sum + line.lineTotal, 0);
+    const kitchenSnackTotal = snackLineItems
+      .filter((line) => line.fulfillmentType === "kitchen")
+      .reduce((sum, line) => sum + line.lineTotal, 0);
+    const participants = session.participants ?? [];
     return {
       sessionId: session._id,
       tableLabel: table.label,
@@ -539,10 +778,14 @@ export const previewTableCheckout = query({
       isGuest: session.isGuest,
       guestName: session.guestName ?? null,
       startTime: session.startTime,
+      ratePerMin: session.ratePerMin,
       finalBill: bill.finalBill,
       billableMinutes: bill.billableMinutes,
       actualMinutes: bill.actualMinutes,
       snackTotal: bill.snackTotal,
+      snackLineItems,
+      counterSnackTotal,
+      kitchenSnackTotal,
       tableSubtotal: bill.tableSubtotal,
       discountedTable: bill.discountedTable,
       discountAmount: bill.discountAmount,
@@ -551,6 +794,11 @@ export const previewTableCheckout = query({
       maxDiscountPercent: perms.maxDiscountPercent,
       isFreeVisit,
       freeVisitMaxMinutes: session.freeVisitMaxMinutes ?? null,
+      playMode: session.playMode ?? "casual",
+      losersPay: session.losersPay === true,
+      participants,
+      requiresLoserSide:
+        session.playMode === "versus" && session.losersPay === true,
     };
   },
 });
@@ -562,8 +810,9 @@ export const checkoutTableSession = mutation({
     paymentMethod: paymentMethodArg,
     roleId: v.optional(v.id("staffRoles")),
     discountPercent: v.optional(v.number()),
+    loserSide: v.optional(sessionParticipantSideArg),
   },
-  handler: async (ctx, { tableId, paymentMethod, roleId, discountPercent }) => {
+  handler: async (ctx, { tableId, paymentMethod, roleId, discountPercent, loserSide }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwnerWithClub(viewer);
     const club = await ctx.db.get(owner.clubId);
@@ -587,6 +836,21 @@ export const checkoutTableSession = mutation({
     }
     if (session.status !== "active") {
       throw new Error("SESSION_004: Session is not active");
+    }
+
+    if (session.playMode === "versus" && session.losersPay === true) {
+      if (loserSide !== "sideA" && loserSide !== "sideB") {
+        throw new Error("SESSION_009: Select the losing side for losers pay");
+      }
+      const registered = (session.participants ?? []).filter(
+        (p) => !p.isGuest && p.customerId !== undefined,
+      );
+      const losers = registered.filter((p) => p.side === loserSide);
+      if (losers.length === 0) {
+        throw new Error("SESSION_009: No players on the selected losing side");
+      }
+    } else if (loserSide !== undefined) {
+      throw new Error("SESSION_009: Loser side only applies when losers pay is on");
     }
 
     const perms = await resolveDiscountPermissions(ctx, owner.clubId, roleId);
@@ -623,6 +887,10 @@ export const checkoutTableSession = mutation({
       discount: appliedDiscountPct > 0 ? appliedDiscountPct : undefined,
       discountAppliedByRoleId: appliedDiscountPct > 0 ? roleId : undefined,
       discountAppliedAt: appliedDiscountPct > 0 ? now : undefined,
+      loserSide:
+        session.playMode === "versus" && session.losersPay === true
+          ? loserSide
+          : undefined,
       updatedAt: now,
     });
 

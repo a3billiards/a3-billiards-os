@@ -2,16 +2,20 @@ import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useConvexAuth, useQuery } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors } from "@a3/ui/theme";
+import { useAuthUserSettled } from "@a3/ui/hooks";
 
 export default function AuthGate() {
   const router = useRouter();
+  const { signOut } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const user = useQuery(
     api.users.getCurrentUser,
     isAuthenticated ? {} : "skip",
   );
+  const nullUserExpired = useAuthUserSettled(isAuthenticated, user);
 
   useEffect(() => {
     if (isLoading) return;
@@ -23,8 +27,24 @@ export default function AuthGate() {
 
     if (user === undefined) return;
 
-    if (user === null || user.role !== "owner") {
+    if (user === null) {
+      if (!nullUserExpired) return;
       router.replace("/login");
+      return;
+    }
+
+    if (user.role !== "owner") {
+      router.replace("/login");
+      return;
+    }
+
+    if (user.isFrozen) {
+      void signOut().finally(() => {
+        router.replace({
+          pathname: "/login",
+          params: { frozen: "1" },
+        });
+      });
       return;
     }
 
@@ -34,7 +54,7 @@ export default function AuthGate() {
     }
 
     router.replace("/(tabs)/home");
-  }, [isLoading, isAuthenticated, user, router]);
+  }, [isLoading, isAuthenticated, user, nullUserExpired, router, signOut]);
 
   return (
     <View style={styles.container}>

@@ -7,24 +7,20 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { I18nManager } from "react-native";
-import * as Localization from "expo-localization";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { View, StyleSheet } from "react-native";
 import { useTranslation } from "react-i18next";
-import { api } from "@a3/convex/_generated/api";
 import {
   type AppLocale,
   isAppLocale,
-  resolveDeviceLocale,
   RTL_LOCALES,
 } from "./config";
+import { applyAppLocale } from "./applyAppLocale";
+import { readDeviceLocale } from "./deviceLocale";
 import { ensureI18nInitialized } from "./i18n";
 import {
   pickInitialLocale,
   readStoredLocale,
-  writeStoredLocale,
 } from "./localeStorage";
-
 ensureI18nInitialized();
 
 interface I18nContextValue {
@@ -36,51 +32,40 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-async function applyRtl(locale: AppLocale): Promise<void> {
-  const shouldRtl = RTL_LOCALES.has(locale);
-  if (I18nManager.isRTL === shouldRtl) return;
-  I18nManager.allowRTL(shouldRtl);
-  I18nManager.forceRTL(shouldRtl);
+export interface I18nProviderProps {
+  children: React.ReactNode;
+  preferredLocale?: string | null;
+  isAuthenticated?: boolean;
+  onLocalePersist?: (locale: AppLocale) => Promise<void>;
 }
 
 export function I18nProvider({
   children,
-}: {
-  children: React.ReactNode;
-}): React.JSX.Element {
+  preferredLocale,
+  isAuthenticated = false,
+  onLocalePersist,
+}: I18nProviderProps): React.JSX.Element {
   const { i18n } = useTranslation();
-  const { isAuthenticated } = useConvexAuth();
-  const user = useQuery(
-    api.users.getCurrentUser,
-    isAuthenticated ? {} : "skip",
-  );
-  const updatePreferredLocale = useMutation(api.users.updatePreferredLocale);
-
-  const deviceLocale = useMemo(() => {
-    const locales = Localization.getLocales().map((loc) => ({
-      languageTag: loc.languageTag ?? undefined,
-      languageCode: loc.languageCode ?? undefined,
-    }));
-    return resolveDeviceLocale(locales);
-  }, []);
+  const deviceLocale = useMemo(() => readDeviceLocale(), []);
 
   const [ready, setReady] = useState(false);
   const [locale, setLocaleState] = useState<AppLocale>(deviceLocale);
   const bootstrappedRef = useRef(false);
   const userLocaleSyncedRef = useRef<string | null>(null);
+  const userOverrideRef = useRef(false);
 
   useEffect(() => {
+    if (bootstrappedRef.current) return;
     let cancelled = false;
     void (async () => {
       const stored = await readStoredLocale();
       const initial = pickInitialLocale(
         stored,
-        user?.preferredLocale,
+        preferredLocale,
         deviceLocale,
       );
       if (cancelled) return;
-      await applyRtl(initial);
-      await i18n.changeLanguage(initial);
+      await applyAppLocale(initial, i18n);
       setLocaleState(initial);
       setReady(true);
       bootstrappedRef.current = true;
@@ -88,38 +73,35 @@ export function I18nProvider({
     return () => {
       cancelled = true;
     };
-  }, [deviceLocale, i18n, user?.preferredLocale]);
+  }, [deviceLocale, i18n]);
 
   useEffect(() => {
-    if (!bootstrappedRef.current) return;
-    const preferred = user?.preferredLocale;
-    if (!preferred || !isAppLocale(preferred)) return;
-    if (userLocaleSyncedRef.current === preferred) return;
-    userLocaleSyncedRef.current = preferred;
-    if (preferred === locale) return;
+    if (!bootstrappedRef.current || userOverrideRef.current) return;
+    if (!preferredLocale || !isAppLocale(preferredLocale)) return;
+    if (userLocaleSyncedRef.current === preferredLocale) return;
+    userLocaleSyncedRef.current = preferredLocale;
+    if (preferredLocale === locale) return;
     void (async () => {
-      await applyRtl(preferred);
-      await i18n.changeLanguage(preferred);
-      setLocaleState(preferred);
-      await writeStoredLocale(preferred);
+      await applyAppLocale(preferredLocale, i18n);
+      setLocaleState(preferredLocale);
     })();
-  }, [user?.preferredLocale, i18n, locale]);
+  }, [preferredLocale, i18n, locale]);
 
   const setLocale = useCallback(
     async (next: AppLocale) => {
-      await applyRtl(next);
-      await i18n.changeLanguage(next);
+      userOverrideRef.current = true;
+      userLocaleSyncedRef.current = next;
+      await applyAppLocale(next, i18n);
       setLocaleState(next);
-      await writeStoredLocale(next);
-      if (isAuthenticated) {
+      if (isAuthenticated && onLocalePersist) {
         try {
-          await updatePreferredLocale({ locale: next });
+          await onLocalePersist(next);
         } catch {
           // local preference still applies
         }
       }
     },
-    [i18n, isAuthenticated, updatePreferredLocale],
+    [i18n, isAuthenticated, onLocalePersist],
   );
 
   const value = useMemo<I18nContextValue>(
@@ -132,8 +114,28 @@ export function I18nProvider({
     [locale, ready, setLocale],
   );
 
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+  return (
+    <I18nContext.Provider value={value}>
+      {ready ? (
+        <View
+          key={locale}
+          style={[
+            styles.root,
+            // Text direction only. Full layout mirroring (forceRTL) is handled in applyAppLocale
+            // and requires an app restart to take effect.
+            { direction: RTL_LOCALES.has(locale) ? "rtl" : "ltr" },
+          ]}
+        >
+          {children}
+        </View>
+      ) : null}
+    </I18nContext.Provider>
+  );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});
 
 export function useAppLocale(): I18nContextValue {
   const ctx = useContext(I18nContext);

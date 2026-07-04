@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@a3/utils": "workspace:*",
     "@convex-dev/auth": "0.0.68",
     "@sentry/react": "^8.55.0",
     "convex": "^1.13.0",

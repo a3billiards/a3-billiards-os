@@ -78,4 +78,15 @@ export const ar: TranslationBundle = {
     graceBanner: "اشتراكك ينتهي قريباً. جدّد الآن لتجنب الانقطاع.",
     graceRenew: "تجديد",
   },
+  inbox: {
+    title: "Notifications",
+    subtitle: "Messages from A3 Billiards",
+    empty: "No notifications yet.",
+    markAllRead: "Mark all read",
+    alertView: "View",
+    alertLater: "Later",
+    fromAdmin: "A3 Billiards",
+    bellAccessibility: "Notifications",
+    loadMore: "Load more",
+  },
 };

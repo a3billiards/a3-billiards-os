@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,15 +6,16 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAction } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { LoginLanguagePicker, useTranslation } from "@a3/i18n";
 import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
+import { usePostLoginNavigation } from "@a3/ui/hooks";
 
 /** Logs native / Convex errors for Google Sign-In (Metro + adb logcat). */
 function logOwnerGoogleError(context: string, err: unknown): void {
@@ -42,51 +43,37 @@ function logOwnerGoogleError(context: string, err: unknown): void {
   });
 }
 
-/** On-screen diagnostic for Google Sign-In failures (no Metro/adb). */
-function googleSignInErrorAlertBody(err: unknown): string {
-  const o = err as Record<string, unknown> & {
-    code?: string | number;
-    message?: string;
-    name?: string;
-    stack?: string;
-    userInfo?: unknown;
-  };
-  const codeStr =
-    o.code !== undefined && o.code !== null ? String(o.code) : "(undefined)";
-  const msgStr =
-    typeof o.message === "string"
-      ? o.message
-      : err instanceof Error
-        ? err.message
-        : String(err);
-  const lines = [`code: ${codeStr}`, `message: ${msgStr}`];
-  if (typeof o.name === "string") lines.push(`name: ${o.name}`);
-  if (o.userInfo !== undefined) {
-    try {
-      lines.push(`userInfo: ${JSON.stringify(o.userInfo)}`);
-    } catch {
-      lines.push("userInfo: <non-serializable>");
-    }
-  }
-  if (typeof o.stack === "string" && o.stack.length > 0) {
-    lines.push(`stack:\n${o.stack}`);
-  }
-  try {
-    lines.push(
-      `JSON:\n${JSON.stringify(err, Object.getOwnPropertyNames(Object(err ?? {})))}`,
-    );
-  } catch {
-    lines.push("JSON: <non-serializable>");
-  }
-  return lines.join("\n\n");
-}
-
 async function getGoogleSigninModule() {
   return await import("@react-native-google-signin/google-signin");
 }
 
+/** Map native Google Sign-In errors to user-facing copy. */
+function googleSignInUserMessage(
+  err: unknown,
+  t: (key: string) => string,
+): string {
+  const o = err as Record<string, unknown> & { message?: string; code?: string | number };
+  const msg = String(o?.message ?? "");
+  const code = o?.code;
+  if (code === 10 || code === "10" || msg.includes("DEVELOPER_ERROR")) {
+    return t("auth.owner.login.googleDeveloperError");
+  }
+  if (code === 12501 || code === "12501" || msg.includes("SIGN_IN_CANCELLED")) {
+    return t("auth.owner.login.googleCancelled");
+  }
+  if (msg.includes("GOOGLE_AUTH_001")) {
+    return t("auth.owner.login.googleAuthFailed");
+  }
+  if (msg.length > 0 && msg.length < 200) {
+    return msg;
+  }
+  return t("auth.owner.login.googleFailed");
+}
+
 export default function OwnerLoginScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const { frozen } = useLocalSearchParams<{ frozen?: string }>();
   const { signIn } = useAuthActions();
   const resolveOwnerGoogle = useAction(
     api.googleAuthActions.resolveOwnerGoogleSignIn,
@@ -99,13 +86,16 @@ export default function OwnerLoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const passwordRef = useRef<TextInput>(null);
+  const { schedulePostLogin, isWaitingForAuth } = usePostLoginNavigation();
+
+  useEffect(() => {
+    if (frozen === "1") {
+      setError(t("auth.owner.login.accountFrozen"));
+    }
+  }, [frozen, t]);
 
   const canSubmitEmail =
-    email.trim().length > 0 && password.length >= 8 && !loading && !googleLoading;
-
-  const navigatePostLogin = useCallback(() => {
-    router.replace("/post-login-gate");
-  }, [router]);
+    email.trim().length > 0 && password.length >= 8 && !loading && !googleLoading && !isWaitingForAuth;
 
   const handleEmailLogin = useCallback(async () => {
     if (!canSubmitEmail) return;
@@ -120,33 +110,31 @@ export default function OwnerLoginScreen() {
       });
 
       if (!signingIn) {
-        setError("Sign-in failed. Check your email and password.");
+        setError(t("auth.owner.login.signInFailed"));
         setLoading(false);
         return;
       }
 
-      navigatePostLogin();
+      schedulePostLogin();
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
-        setError("This account is frozen. Contact support.");
+        setError(t("auth.owner.login.accountFrozen"));
       } else if (appError.code === "AUTH_006") {
-        setError("This account is pending deletion.");
+        setError(t("auth.owner.login.accountPendingDeletion"));
       } else if (appError.code === "AUTH_009") {
-        setError(
-          "Verify your owner email on register.a3billiards.com before signing in here.",
-        );
+        setError(t("auth.owner.login.verifyEmailFirst"));
       } else if (
         appError.code === "AUTH_001" ||
         appError.code === "UNKNOWN"
       ) {
-        setError("Invalid email or password.");
+        setError(t("auth.owner.login.invalidCredentials"));
       } else {
         setError(appError.message);
       }
       setLoading(false);
     }
-  }, [canSubmitEmail, email, password, signIn, navigatePostLogin]);
+  }, [canSubmitEmail, email, password, signIn, schedulePostLogin, t]);
 
   const handleGoogleLogin = useCallback(async () => {
     if (loading || googleLoading) return;
@@ -159,14 +147,18 @@ export default function OwnerLoginScreen() {
         ({ GoogleSignin } = await getGoogleSigninModule());
       } catch (e) {
         logOwnerGoogleError("loadGoogleSigninModule", e);
-        setError(
-          "Google Sign-In is not available in Expo Go. Use email login or run a development build.",
-        );
+        setError(t("auth.owner.login.googleNotInExpoGo"));
+        return;
+      }
+
+      const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
+      if (!webClientId) {
+        setError(t("auth.owner.login.googleFailed"));
         return;
       }
 
       GoogleSignin.configure({
-        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+        webClientId,
         ...(typeof process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID === "string" &&
         process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID.length > 0
           ? { iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }
@@ -195,7 +187,7 @@ export default function OwnerLoginScreen() {
           response,
           user: response.data?.user,
         });
-        setError("Google sign-in cancelled or failed.");
+        setError(t("auth.owner.login.googleCancelled"));
         return;
       }
 
@@ -223,52 +215,46 @@ export default function OwnerLoginScreen() {
 
       if (!signingIn) {
         logOwnerGoogleError("signInReturnedFalse", { signingIn: false });
-        setError("Google sign-in failed. Please try again.");
+        setError(t("auth.owner.login.googleFailed"));
         return;
       }
 
-      navigatePostLogin();
+      schedulePostLogin();
     } catch (e) {
       logOwnerGoogleError("handleGoogleLogin(catch)", e);
-      Alert.alert("Google Sign-In error", googleSignInErrorAlertBody(e));
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
-        setError("This account is frozen. Contact support.");
+        setError(t("auth.owner.login.accountFrozen"));
       } else if (appError.code === "AUTH_006") {
-        setError("This account is pending deletion.");
+        setError(t("auth.owner.login.accountPendingDeletion"));
       } else if (appError.code === "OWNER_001") {
-        setError(
-          "This Google account is not registered as an owner. Use the customer app or complete owner onboarding.",
-        );
+        setError(t("auth.owner.login.googleNotOwner"));
       } else if (appError.code === "DATA_002") {
-        setError(
-          "This Google account conflicts with your onboarding login. Sign in with email and password instead.",
-        );
+        setError(t("auth.owner.login.googleConflict"));
       } else if (appError.code === "GOOGLE_AUTH_001") {
-        setError("Google authentication failed. Please try again.");
+        setError(t("auth.owner.login.googleAuthFailed"));
       } else if (appError.code !== "UNKNOWN") {
         setError(appError.message);
       } else {
-        setError("Google sign-in failed. Please try again.");
+        setError(googleSignInUserMessage(e, t));
       }
     } finally {
       setGoogleLoading(false);
     }
-  }, [loading, googleLoading, signIn, navigatePostLogin, resolveOwnerGoogle, router]);
+  }, [loading, googleLoading, signIn, schedulePostLogin, resolveOwnerGoogle, router, t]);
 
-  const busy = loading || googleLoading;
+  const busy = loading || googleLoading || isWaitingForAuth;
 
   return (
     <GlassPageBackground>
     <KeyboardFormScroll contentContainerStyle={styles.scroll}>
         <View style={styles.container}>
+          <LoginLanguagePicker />
           <View style={styles.logoTile}>
-            <Text style={styles.logoText}>A3</Text>
+            <Text style={styles.logoText}>{t("auth.owner.login.logo")}</Text>
           </View>
-          <Text style={styles.title}>Owner Panel</Text>
-          <Text style={styles.subtitle}>
-            Sign in with the same email and password from owner onboarding
-          </Text>
+          <Text style={styles.title}>{t("auth.owner.login.title")}</Text>
+          <Text style={styles.subtitle}>{t("auth.owner.login.subtitle")}</Text>
           <LiquidGlassCard style={styles.formCard} padding={24}>
 
           {/* ── Google Sign-In (PRD v23: no password field) ── */}
@@ -281,30 +267,29 @@ export default function OwnerLoginScreen() {
             onPress={handleGoogleLogin}
             disabled={busy}
             accessibilityRole="button"
-            accessibilityLabel="Continue with Google"
+            accessibilityLabel={t("auth.owner.login.continueGoogle")}
           >
             {googleLoading ? (
               <ActivityIndicator color={colors.text.primary} />
             ) : (
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
+              <Text style={styles.googleButtonText}>{t("auth.owner.login.continueGoogle")}</Text>
             )}
           </Pressable>
 
-          {/* ── OR divider ── */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
+            <Text style={styles.dividerText}>{t("auth.owner.login.or")}</Text>
             <View style={styles.dividerLine} />
           </View>
 
           {/* ── Email + Password ── */}
           <View style={styles.form}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>{t("auth.owner.login.email")}</Text>
             <TextInput
               style={styles.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="owner@example.com"
+              placeholder={t("auth.owner.login.emailPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               autoCapitalize="none"
               autoComplete="email"
@@ -313,25 +298,25 @@ export default function OwnerLoginScreen() {
               returnKeyType="next"
               onSubmitEditing={() => passwordRef.current?.focus()}
               editable={!busy}
-              accessibilityLabel="Email address"
+              accessibilityLabel={t("auth.owner.login.email")}
             />
 
             <Text style={[styles.label, { marginTop: spacing[4] }]}>
-              Password
+              {t("auth.owner.login.password")}
             </Text>
             <TextInput
               ref={passwordRef}
               style={styles.input}
               value={password}
               onChangeText={setPassword}
-              placeholder="Enter your password"
+              placeholder={t("auth.owner.login.passwordPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               secureTextEntry
               textContentType="password"
               returnKeyType="go"
               onSubmitEditing={handleEmailLogin}
               editable={!busy}
-              accessibilityLabel="Password"
+              accessibilityLabel={t("auth.owner.login.password")}
             />
 
             <Pressable
@@ -343,13 +328,13 @@ export default function OwnerLoginScreen() {
               onPress={handleEmailLogin}
               disabled={!canSubmitEmail}
               accessibilityRole="button"
-              accessibilityLabel="Sign in with email"
+              accessibilityLabel={t("auth.owner.login.signIn")}
               accessibilityState={{ disabled: !canSubmitEmail }}
             >
               {loading ? (
                 <ActivityIndicator color={colors.bg.primary} />
               ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
+                <Text style={styles.buttonText}>{t("auth.owner.login.signIn")}</Text>
               )}
             </Pressable>
           </View>
@@ -361,7 +346,7 @@ export default function OwnerLoginScreen() {
               accessibilityRole="alert"
               accessibilityLiveRegion="polite"
             >
-              <Text style={styles.errorDot}>Error</Text>
+              <Text style={styles.errorDot}>{t("common.error")}</Text>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}

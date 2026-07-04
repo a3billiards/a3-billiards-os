@@ -16,7 +16,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import {
-  parseIndiaE164OrThrow,
+  parseGenericE164OrThrow,
   throwIfPhoneUnavailableForNewAccount,
 } from "./model/phoneRegistration";
 import { requireAdminWithMfa, requireCustomer, requireOwner, requireViewer } from "./model/viewer";
@@ -345,7 +345,7 @@ export const updateUser = mutation({
     }
 
     if (phone !== undefined) {
-      const normalizedPhone = parseIndiaE164OrThrow(phone);
+      const normalizedPhone = parseGenericE164OrThrow(phone);
       const dup = await ctx.db
         .query("users")
         .withIndex("by_phone", (q) => q.eq("phone", normalizedPhone))
@@ -421,6 +421,79 @@ export const adminUnfreezeUser = mutation({
     });
 
     return { ok: true as const };
+  },
+});
+
+const DELETION_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Admin cancels a pending owner/customer account deletion during the 30-day grace period. */
+export const adminCancelDeletion = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId: targetUserId }) => {
+    const viewer = await requireAdminViewer(ctx);
+    const target = await ctx.db.get(targetUserId);
+    if (!target) throwErr("DATA_003: User not found");
+    if (target.role === "admin") {
+      throwErr("Admin accounts cannot have deletion cancelled this way.");
+    }
+    if (target.deletionRequestedAt === undefined) {
+      return { ok: true as const };
+    }
+    if (Date.now() > target.deletionRequestedAt + DELETION_GRACE_MS) {
+      throwErr("Deletion grace period has ended for this account.");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(targetUserId, {
+      deletionRequestedAt: undefined,
+      deletionCancelToken: undefined,
+    });
+    await ctx.db.insert("adminAuditLog", {
+      adminId: viewer.userId,
+      action: "deletion_cancelled",
+      targetUserId,
+      createdAt: now,
+    });
+
+    return { ok: true as const };
+  },
+});
+
+/** Admin ends an owner club's A3 Billiards OS subscription (sets club status to frozen). */
+export const adminEndClubSubscription = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId: targetUserId }) => {
+    const viewer = await requireAdminViewer(ctx);
+    const target = await ctx.db.get(targetUserId);
+    if (!target) throwErr("DATA_003: User not found");
+    if (target.role !== "owner") {
+      throwErr("Only owner accounts have a club subscription to end.");
+    }
+
+    const club = await ctx.db
+      .query("clubs")
+      .withIndex("by_owner", (q) => q.eq("ownerId", targetUserId))
+      .unique();
+    if (!club) throwErr("Owner has no club on file.");
+
+    if (club.subscriptionStatus === "frozen") {
+      return { ok: true as const, alreadyEnded: true as const };
+    }
+
+    const previous = club.subscriptionStatus;
+    const now = Date.now();
+    await ctx.db.patch(club._id, { subscriptionStatus: "frozen" });
+    await ctx.db.insert("adminAuditLog", {
+      adminId: viewer.userId,
+      action: "subscription_ended",
+      targetUserId,
+      previousValue: previous,
+      newValue: "frozen",
+      notes: `Club: ${club.name}`,
+      createdAt: now,
+    });
+
+    return { ok: true as const, alreadyEnded: false as const };
   },
 });
 
@@ -567,6 +640,7 @@ export const searchUsers = query({
     ),
     cursor: v.optional(v.string()),
     limit: v.optional(v.number()),
+    activeClubsOnly: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireAdminViewer(ctx);
@@ -591,6 +665,27 @@ export const searchUsers = query({
       });
     }
 
+    if (args.activeClubsOnly) {
+      const ownersOnly = await Promise.all(
+        filtered.map(async (u) => {
+          if (u.role !== "owner") return null;
+          const club = await ctx.db
+            .query("clubs")
+            .withIndex("by_owner", (q) => q.eq("ownerId", u._id))
+            .unique();
+          if (
+            !club ||
+            (club.subscriptionStatus !== "active" &&
+              club.subscriptionStatus !== "grace")
+          ) {
+            return null;
+          }
+          return u;
+        }),
+      );
+      filtered = ownersOnly.filter((u): u is (typeof filtered)[number] => u !== null);
+    }
+
     filtered.sort((a, b) => b.createdAt - a.createdAt);
 
     let offset = 0;
@@ -602,19 +697,35 @@ export const searchUsers = query({
     }
 
     const slice = filtered.slice(offset, offset + limit);
-    const users = slice.map((u) => ({
-      _id: u._id,
-      name: u.name,
-      email: u.email ?? null,
-      phone: u.phone ?? null,
-      role: u.role,
-      isFrozen: u.isFrozen,
-      phoneVerified: u.phoneVerified,
-      complaintCount: u.complaints.length,
-      deletionRequested: u.deletionRequestedAt != null,
-      hasPushToken: u.fcmTokens.length > 0,
-      createdAt: u.createdAt,
-    }));
+    const users = await Promise.all(
+      slice.map(async (u) => {
+        let clubName: string | null = null;
+        let subscriptionStatus: "active" | "grace" | "frozen" | null = null;
+        if (u.role === "owner") {
+          const club = await ctx.db
+            .query("clubs")
+            .withIndex("by_owner", (q) => q.eq("ownerId", u._id))
+            .unique();
+          clubName = club?.name ?? null;
+          subscriptionStatus = club?.subscriptionStatus ?? null;
+        }
+        return {
+          _id: u._id,
+          name: u.name,
+          email: u.email ?? null,
+          phone: u.phone ?? null,
+          role: u.role,
+          isFrozen: u.isFrozen,
+          phoneVerified: u.phoneVerified,
+          complaintCount: u.complaints.length,
+          deletionRequested: u.deletionRequestedAt != null,
+          hasPushToken: u.fcmTokens.length > 0,
+          createdAt: u.createdAt,
+          clubName,
+          subscriptionStatus,
+        };
+      }),
+    );
 
     const nextCursor =
       offset + limit < filtered.length ? String(offset + limit) : null;

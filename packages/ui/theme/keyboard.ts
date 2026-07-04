@@ -1,9 +1,9 @@
 import { Platform } from "react-native";
 
-/** Use on KeyboardAvoidingView — Android pan mode handles the keyboard natively. */
+/** KeyboardAvoidingView props — padding on iOS, height on Android for form screens. */
 export const iosKeyboardAvoidingProps = {
-  enabled: Platform.OS === "ios",
-  behavior: Platform.OS === "ios" ? ("padding" as const) : undefined,
+  enabled: true,
+  behavior: Platform.OS === "ios" ? ("padding" as const) : ("height" as const),
 };
 
 /** Prefer "always" so taps / re-renders do not dismiss the keyboard mid-typing. */

@@ -19,6 +19,11 @@ export const en = {
     selectLanguage: "Choose language",
     languageHint: "Menus and messages in this app will use your selection.",
   },
+  phone: {
+    countryCode: "Country code",
+    selectCountry: "Select country",
+    number: "Phone number",
+  },
   tabs: {
     customer: {
       home: "Home",
@@ -79,6 +84,17 @@ export const en = {
     graceBanner:
       "Your subscription expires soon. Renew now to avoid interruption.",
     graceRenew: "Renew",
+  },
+  inbox: {
+    title: "Notifications",
+    subtitle: "Messages from A3 Billiards",
+    empty: "No notifications yet.",
+    markAllRead: "Mark all read",
+    alertView: "View",
+    alertLater: "Later",
+    fromAdmin: "A3 Billiards",
+    bellAccessibility: "Notifications",
+    loadMore: "Load more",
   },
   errors: errorMessagesEn,
 } satisfies TranslationBundle;

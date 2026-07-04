@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  Pressable,
-  Switch,
-  ActivityIndicator,
   Alert,
   Modal,
   Image,
   Linking,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -24,7 +25,9 @@ import { api } from "@a3/convex/_generated/api";
 import type { Doc, Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { LanguagePicker } from "@a3/i18n";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { shareCsvExport } from "@a3/ui/shareJson";
+import { LanguagePicker, getCurrentLanguage, useTranslation } from "@a3/i18n";
 import { getActiveRoleId, setActiveRoleId } from "../lib/activeRoleStorage";
 import { useStaffRole } from "../lib/StaffRoleContext";
 import { OwnerModePasscodeGate } from "./OwnerModePasscodeGate";
@@ -32,52 +35,53 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ownerTabBarTotalInset } from "../theme/ownerShell";
 import { uploadLocalFileToConvexStorage } from "../lib/uploadConvexStorage";
 import { HhMmTimeField, normalizeHhmmInput } from "./HhMmTimeField";
-import {
-  formatHhmm12h,
-  validateBookableWithinOperating,
-} from "@a3/utils/availability";
+import { validateBookableWithinOperating } from "@a3/utils/availability";
+import { TableTypeSelect } from "@a3/ui/components";
+import { groupTablesByFloor, tableTypeLabel } from "@a3/utils/tableTypes";
 
 const RENEW_URL = "https://renew.a3billiards.com";
-const PREDEFINED_AMENITIES = ["AC", "Parking", "Cafe", "WiFi", "Lounge", "Restrooms"] as const;
-const PREDEFINED_AMENITY_SET = new Set<string>(PREDEFINED_AMENITIES);
+const PREDEFINED_AMENITIES = [
+  { id: "AC", key: "common.amenityPresets.ac" },
+  { id: "Parking", key: "common.amenityPresets.parking" },
+  { id: "Cafe", key: "common.amenityPresets.cafe" },
+  { id: "WiFi", key: "common.amenityPresets.wifi" },
+  { id: "Lounge", key: "common.amenityPresets.lounge" },
+  { id: "Restrooms", key: "common.amenityPresets.restrooms" },
+] as const;
+const PREDEFINED_AMENITY_IDS = PREDEFINED_AMENITIES.map((a) => a.id);
+const PREDEFINED_AMENITY_SET = new Set<string>(PREDEFINED_AMENITY_IDS);
 const MAX_AMENITY_LENGTH = 40;
 const MAX_AMENITIES = 20;
 
 function isPredefinedAmenity(value: string): boolean {
   return PREDEFINED_AMENITY_SET.has(value);
 }
-import { LoyaltyProgrammeSettings } from "./LoyaltyProgrammeSettings";
+// import { LoyaltyProgrammeSettings } from "./LoyaltyProgrammeSettings";
 
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const WEEK_DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+const SLOT_CHIP_KEYS: { min: number; key: string }[] = [
+  { min: 30, key: "common.slotDurationChips.min30" },
+  { min: 60, key: "common.slotDurationChips.hour1" },
+  { min: 90, key: "common.slotDurationChips.hour1_5" },
+  { min: 120, key: "common.slotDurationChips.hours2" },
+  { min: 180, key: "common.slotDurationChips.hours3" },
+];
 const TAB_ORDER = [
   "slots",
   "snacks",
   "kitchen",
-  "loyalty",
+  // "loyalty",
   "livestream",
   "financials",
   "complaints",
   "bookings",
   "documents",
 ] as const;
-const TAB_LABEL: Record<(typeof TAB_ORDER)[number], string> = {
-  slots: "Slots",
-  snacks: "Snacks",
-  kitchen: "Kitchen",
-  loyalty: "Loyalty",
-  livestream: "Live Stream",
-  financials: "Financials",
-  complaints: "Complaints",
-  bookings: "Bookings",
-  documents: "Documents",
-};
-const SLOT_CHIPS: { min: number; label: string }[] = [
-  { min: 30, label: "30 min" },
-  { min: 60, label: "1 hour" },
-  { min: 90, label: "1.5 hours" },
-  { min: 120, label: "2 hours" },
-  { min: 180, label: "3 hours" },
-];
+
+function ownerTabLabel(tab: (typeof TAB_ORDER)[number], tr: (key: string) => string): string {
+  return tr(`common.tabs.owner.${tab}`);
+}
+
 const DEFAULT_CENTER = { latitude: 28.6139, longitude: 77.209 };
 
 type AccordionKey =
@@ -86,30 +90,30 @@ type AccordionKey =
   | "staff"
   | "booking"
   | "gst"
-  | "loyalty"
+  // | "loyalty"
   | "profile"
   | "security";
 
-function hhmmTo12h(hhmm: string): string {
+function hhmmTo12h(hhmm: string, locale: string): string {
   const [h, m] = hhmm.split(":").map((x) => Number(x));
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
   }).format(d);
 }
 
-function formatSpecialWindow(start: string, end: string): string {
-  return `${hhmmTo12h(start)} – ${hhmmTo12h(end)}`;
+function formatSpecialWindow(start: string, end: string, locale: string): string {
+  return `${hhmmTo12h(start, locale)} – ${hhmmTo12h(end, locale)}`;
 }
 
-function dayAbbrevList(days: number[]): string {
+function dayAbbrevList(days: number[], tr: (key: string) => string): string {
   const order = [1, 2, 3, 4, 5, 6, 0];
   return order
     .filter((d) => days.includes(d))
-    .map((d) => DAY_LABELS[d])
+    .map((d) => tr(`common.weekDaysShort.${WEEK_DAY_KEYS[d]}`))
     .join(", ");
 }
 
@@ -118,6 +122,9 @@ export default function OwnerSettingsContent({
 }: {
   onStaffRoleHandoff?: () => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
+  const locale = getCurrentLanguage();
   const router = useRouter();
   const { signOut } = useAuthActions();
   const { refreshRole } = useStaffRole();
@@ -146,12 +153,14 @@ export default function OwnerSettingsContent({
   );
 
   const requestDataExport = useAction(api.ownerAccountActions.requestOwnerDataExport);
+  const exportClubMembers = useAction(api.dataExportActions.ownerExportClubMembersData);
+  const [exportingMembers, setExportingMembers] = useState(false);
 
   const handleSignOut = useCallback(() => {
-    Alert.alert("Log out", "Sign out of the owner app?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("ownerApp.settings.logOutTitle"), t("ownerApp.settings.logOutMessage"), [
+      { text: t("ownerApp.settings.content.cancel"), style: "cancel" },
       {
-        text: "Log out",
+        text: t("ownerApp.settings.logOut"),
         style: "destructive",
         onPress: () => {
           void (async () => {
@@ -166,7 +175,7 @@ export default function OwnerSettingsContent({
         },
       },
     ]);
-  }, [router, signOut]);
+  }, [router, signOut, t]);
 
   const addTable = useMutation(api.slots.addTable);
   const renameTable = useMutation(api.slots.renameTable);
@@ -175,6 +184,8 @@ export default function OwnerSettingsContent({
   const enableTable = useMutation(api.slots.enableTable);
 
   const updateBaseRate = useMutation(api.financials.updateBaseRate);
+  const setTypeBaseRate = useMutation(api.financials.setTypeBaseRate);
+  const removeTypeBaseRate = useMutation(api.financials.removeTypeBaseRate);
   const updateMinBillMinutes = useMutation(api.financials.updateMinBillMinutes);
   const updateCurrency = useMutation(api.financials.updateCurrency);
   const updateTimezone = useMutation(api.financials.updateTimezone);
@@ -203,12 +214,12 @@ export default function OwnerSettingsContent({
   const requestOwnerDeletion = useAction(api.deletionActions.requestOwnerDeletion);
 
   const [open, setOpen] = useState<Record<AccordionKey, boolean>>({
-    tables: true,
+    tables: false,
     rates: true,
     staff: true,
     booking: true,
     gst: false,
-    loyalty: false,
+    // loyalty: false,
     profile: true,
     security: true,
   });
@@ -246,6 +257,16 @@ export default function OwnerSettingsContent({
       (bt) => !activeTypes.has(bt.toLowerCase()),
     );
   }, [club, tables]);
+
+  const tablesByFloor = useMemo(() => groupTablesByFloor(tables ?? []), [tables]);
+
+  const knownFloors = useMemo(() => {
+    const floors = new Set<string>();
+    for (const table of tables ?? []) {
+      if (table.floor?.trim()) floors.add(table.floor.trim());
+    }
+    return [...floors].sort((a, b) => a.localeCompare(b));
+  }, [tables]);
 
   // —— Table modals ——
   const [addTableOpen, setAddTableOpen] = useState(false);
@@ -315,8 +336,8 @@ export default function OwnerSettingsContent({
   const [cancelWin, setCancelWin] = useState("30");
   const [slotOpts, setSlotOpts] = useState<number[]>([30, 60, 90, 120]);
   const [bookTypes, setBookTypes] = useState<string[]>([]);
-  const [bhOpen, setBhOpen] = useState("10:00");
-  const [bhClose, setBhClose] = useState("22:00");
+  const [bhOpen, setBhOpen] = useState("00:00");
+  const [bhClose, setBhClose] = useState("23:59");
   const [bhDays, setBhDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
   const [requireBookingCoupon, setRequireBookingCoupon] = useState(false);
   const [bookingCouponCode, setBookingCouponCode] = useState("");
@@ -337,8 +358,8 @@ export default function OwnerSettingsContent({
   const [desc, setDesc] = useState("");
   const [amenitiesDraft, setAmenitiesDraft] = useState<string[]>([]);
   const [customAmenity, setCustomAmenity] = useState("");
-  const [openTime, setOpenTime] = useState("10:00");
-  const [closeTime, setCloseTime] = useState("22:00");
+  const [openTime, setOpenTime] = useState("00:00");
+  const [closeTime, setCloseTime] = useState("23:59");
   const [opDays, setOpDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
   const [markerCoord, setMarkerCoord] = useState<{ latitude: number; longitude: number } | null>(
     null,
@@ -419,21 +440,30 @@ export default function OwnerSettingsContent({
     const trimmed = customAmenity.trim();
     if (!trimmed) return;
     if (trimmed.length > MAX_AMENITY_LENGTH) {
-      Alert.alert("Too long", `Amenity name must be ${MAX_AMENITY_LENGTH} characters or less.`);
+      Alert.alert(
+        t("ownerApp.settings.amenityTooLong"),
+        t("ownerApp.settings.amenityTooLongBody", { max: MAX_AMENITY_LENGTH }),
+      );
       return;
     }
     const lower = trimmed.toLowerCase();
     if (amenitiesDraft.some((a) => a.toLowerCase() === lower)) {
-      Alert.alert("Already added", "That amenity is already in your list.");
+      Alert.alert(
+        t("ownerApp.settings.amenityAlreadyAdded"),
+        t("ownerApp.settings.amenityAlreadyAddedBody"),
+      );
       return;
     }
     if (amenitiesDraft.length >= MAX_AMENITIES) {
-      Alert.alert("Limit reached", `You can add up to ${MAX_AMENITIES} amenities.`);
+      Alert.alert(
+        t("ownerApp.settings.amenityLimit"),
+        t("ownerApp.settings.amenityLimitBody", { max: MAX_AMENITIES }),
+      );
       return;
     }
     setAmenitiesDraft((prev) => [...prev, trimmed]);
     setCustomAmenity("");
-  }, [amenitiesDraft, customAmenity]);
+  }, [amenitiesDraft, customAmenity, t]);
 
   const toggleAccordion = (k: AccordionKey) =>
     setOpen((o) => ({ ...o, [k]: !o[k] }));
@@ -443,7 +473,10 @@ export default function OwnerSettingsContent({
     if ((club.photos?.length ?? 0) >= 5) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Permission needed", "Allow photo library access to upload club photos.");
+      Alert.alert(
+        t("ownerApp.settings.photoPermission"),
+        t("ownerApp.settings.photoPermissionBody"),
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -466,8 +499,8 @@ export default function OwnerSettingsContent({
       const msg = parseConvexError(e as Error).message;
       if (msg.includes("launchImageLibraryAsync") || msg.includes("ImageLoader")) {
         Alert.alert(
-          "Photo picker unavailable",
-          "Install the latest development build of the owner app to upload club photos. Run: eas build --profile development --platform android",
+          t("ownerApp.settings.photoPickerUnavailable"),
+          t("ownerApp.settings.photoPickerDevBuildBody"),
         );
       } else {
         Alert.alert(msg);
@@ -475,7 +508,7 @@ export default function OwnerSettingsContent({
     } finally {
       setPhotoBusy(false);
     }
-  }, [club, generateUploadUrl, uploadClubPhoto]);
+  }, [club, generateUploadUrl, uploadClubPhoto, t]);
 
   if (user === undefined || (user?.role === "owner" && club === undefined)) {
     return (
@@ -488,14 +521,14 @@ export default function OwnerSettingsContent({
   if (user?.role !== "owner" || !club) {
     return (
       <View style={styles.center}>
-        <Text style={styles.muted}>Owner account required.</Text>
+        <Text style={styles.muted}>{t("ownerApp.settings.ownerRequired")}</Text>
       </View>
     );
   }
 
   const currencySymbol = (() => {
     try {
-      return new Intl.NumberFormat("en", {
+      return new Intl.NumberFormat(locale, {
         style: "currency",
         currency: club.currency,
         currencyDisplay: "narrowSymbol",
@@ -587,11 +620,11 @@ export default function OwnerSettingsContent({
   const saveRole = async () => {
     if (!club) return;
     if (rTabs.length === 0) {
-      setRTabErr("Select at least one tab.");
+      setRTabErr(t("ownerApp.settings.content.selectAtLeastOneTab"));
       return;
     }
     if (!rAllTables && rTableIds.length === 0) {
-      Alert.alert("Select at least one table when using specific tables.");
+      Alert.alert(t("ownerApp.settings.content.selectAtLeastOneTable"));
       return;
     }
     try {
@@ -637,7 +670,7 @@ export default function OwnerSettingsContent({
         r.name.toLowerCase() === "chef",
     );
     if (existing) {
-      Alert.alert("Chef role already exists", "Edit it under Staff Roles if needed.");
+      Alert.alert(t("ownerApp.settings.content.chefRoleExists"), t("ownerApp.settings.content.chefRoleExistsBody"));
       return;
     }
     try {
@@ -648,7 +681,7 @@ export default function OwnerSettingsContent({
         canFileComplaints: false,
         canApplyDiscount: false,
       });
-      Alert.alert("Chef role created", "Kitchen tab only. Assign it when handing the device to kitchen staff.");
+      Alert.alert(t("ownerApp.settings.content.chefRoleCreated"), t("ownerApp.settings.content.chefRoleCreatedBody"));
     } catch (e) {
       Alert.alert(parseConvexError(e as Error).message);
     }
@@ -681,12 +714,12 @@ export default function OwnerSettingsContent({
 
   const onDeleteRole = (role: Doc<"staffRoles">) => {
     Alert.alert(
-      `Delete ${role.name}?`,
-      "If this role is currently active on the device, it will revert to Owner Mode.",
+      t("ownerApp.settings.content.deleteRoleTitle"),
+      t("ownerApp.settings.content.deleteRoleBody"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("ownerApp.settings.content.deleteRoleConfirm"),
           style: "destructive",
           onPress: async () => {
             try {
@@ -721,102 +754,354 @@ export default function OwnerSettingsContent({
       {frozen ? (
         <View style={styles.frozenBanner}>
           <Text style={styles.frozenText}>
-            Your subscription has expired. Renew at{" "}
+            {t("ownerApp.settings.subscriptionExpired", { url: RENEW_URL })}{" "}
             <Text style={styles.link} onPress={() => void Linking.openURL(RENEW_URL)}>
               {RENEW_URL}
-            </Text>{" "}
-            to continue.
+            </Text>
           </Text>
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={[styles.pad, { paddingBottom: bottomPad }]}>
-        <Text style={styles.screenTitle}>Settings</Text>
+      <ScrollView
+        contentContainerStyle={[styles.pad, { paddingBottom: bottomPad }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <Text style={styles.screenTitle}>{t("ownerApp.settings.title")}</Text>
 
         <View style={styles.card}>
           <LanguagePicker />
         </View>
 
+        {/* Club profile */}
+        <View style={styles.card}>
+          {accordionHeader("profile", t("ownerApp.settings.sections.clubProfile"))}
+          {open.profile ? (
+            <View style={styles.accBody}>
+              <View style={styles.rowBetween}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{t("ownerApp.settings.content.showClubInSearch")}</Text>
+                  <Text style={styles.tableMeta}>
+                    {club.isDiscoverable ? t("ownerApp.settings.content.discoverable") : t("ownerApp.settings.content.hidden")}
+                  </Text>
+                </View>
+                <Switch
+                  value={club.isDiscoverable}
+                  disabled={frozen}
+                  onValueChange={async () => {
+                    try {
+                      await toggleDiscoverability({ clubId: club.clubId });
+                    } catch (e) {
+                      Alert.alert(parseConvexError(e as Error).message);
+                    }
+                  }}
+                  trackColor={{ false: colors.bg.tertiary, true: colors.accent.green }}
+                />
+              </View>
+              <Text style={styles.label}>{t("ownerApp.settings.content.descriptionMax")}</Text>
+              <TextInput
+                style={styles.multiline}
+                multiline
+                value={desc}
+                onChangeText={setDesc}
+                maxLength={500}
+                editable={!frozen}
+              />
+              <Text style={styles.counter}>{desc.length}/500</Text>
+              <Pressable
+                style={styles.secondaryBtn}
+                disabled={frozen}
+                onPress={async () => {
+                  try {
+                    await updateDescription({ clubId: club.clubId, description: desc });
+                    Alert.alert(t("ownerApp.settings.content.saved"));
+                  } catch (e) {
+                    Alert.alert(parseConvexError(e as Error).message);
+                  }
+                }}
+              >
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveDescription")}</Text>
+              </Pressable>
+
+              <Text style={styles.label}>{t("ownerApp.settings.content.photos")}</Text>
+              <View style={styles.photoGrid}>
+                {(club.photos ?? []).map((p) => (
+                  <View key={p.storageId} style={styles.photoCell}>
+                    {p.url ? <Image source={{ uri: p.url }} style={styles.photoThumb} /> : null}
+                    <Pressable
+                      style={styles.photoRemove}
+                      disabled={frozen}
+                      onPress={() => void removeClubPhoto({ clubId: club.clubId, storageId: p.storageId })}
+                    >
+                      <Text style={styles.photoRemoveText}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+              {(club.photos ?? []).length < 5 ? (
+                <Pressable style={styles.secondaryBtn} disabled={frozen || photoBusy} onPress={onPickPhoto}>
+                  <Text style={styles.secondaryBtnText}>{photoBusy ? t("ownerApp.settings.content.uploading") : t("ownerApp.settings.content.addPhoto")}</Text>
+                </Pressable>
+              ) : null}
+
+              <Text style={styles.label}>{t("ownerApp.settings.content.amenities")}</Text>
+              <View style={styles.chipWrap}>
+                {PREDEFINED_AMENITIES.map((a) => {
+                  const on = amenitiesDraft.includes(a.id);
+                  return (
+                    <Pressable
+                      key={a.id}
+                      disabled={frozen}
+                      onPress={() =>
+                        setAmenitiesDraft((p) => (on ? p.filter((x) => x !== a.id) : [...p, a.id]))
+                      }
+                      style={[styles.chip, on && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{t(a.key)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {customAmenitiesInDraft.length > 0 ? (
+                <>
+                  <Text style={styles.label}>{t("ownerApp.settings.content.customAmenities")}</Text>
+                  <View style={styles.chipWrap}>
+                    {customAmenitiesInDraft.map((a) => (
+                      <Pressable
+                        key={a}
+                        disabled={frozen}
+                        onPress={() => setAmenitiesDraft((p) => p.filter((x) => x !== a))}
+                        style={[styles.chip, styles.chipOn]}
+                      >
+                        <Text style={[styles.chipText, styles.chipTextOn]}>
+                          {a}
+                          <Text style={styles.chipRemoveMark}> ×</Text>
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              ) : null}
+              <View style={styles.rowInput}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  value={customAmenity}
+                  onChangeText={setCustomAmenity}
+                  placeholder={t("ownerApp.settings.content.customAmenityPlaceholder")}
+                  placeholderTextColor={colors.text.tertiary}
+                  editable={!frozen}
+                  maxLength={MAX_AMENITY_LENGTH}
+                  returnKeyType="done"
+                  onSubmitEditing={addCustomAmenityToDraft}
+                />
+                <Pressable
+                  style={styles.secondaryBtn}
+                  disabled={frozen || customAmenity.trim().length === 0}
+                  onPress={addCustomAmenityToDraft}
+                >
+                  <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.addAmenity")}</Text>
+                </Pressable>
+              </View>
+              <Pressable
+                style={styles.secondaryBtn}
+                disabled={frozen}
+                onPress={async () => {
+                  try {
+                    await updateAmenities({ clubId: club.clubId, amenities: amenitiesDraft });
+                    Alert.alert(t("ownerApp.settings.content.saved"));
+                  } catch (e) {
+                    Alert.alert(parseConvexError(e as Error).message);
+                  }
+                }}
+              >
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveAmenities")}</Text>
+              </Pressable>
+
+              <Text style={styles.label}>{t("ownerApp.settings.content.operatingHours")}</Text>
+              <View style={styles.rowInput}>
+                <HhMmTimeField
+                  label={t("ownerApp.settings.content.opens")}
+                  value={openTime}
+                  onChange={(t) => setOpenTime(normalizeHhmmInput(t))}
+                  disabled={frozen}
+                />
+                <Text style={{ color: colors.text.secondary, alignSelf: "flex-end", paddingBottom: spacing[3] }}>
+                  {t("ownerApp.settings.content.timeTo")}
+                </Text>
+                <HhMmTimeField
+                  label={t("ownerApp.settings.content.closes")}
+                  value={closeTime}
+                  onChange={(t) => setCloseTime(normalizeHhmmInput(t))}
+                  disabled={frozen}
+                />
+              </View>
+              <View style={styles.chipWrap}>
+                {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                  <Pressable
+                    key={d}
+                    disabled={frozen}
+                    onPress={() =>
+                      setOpDays((p) => (p.includes(d) ? p.filter((x) => x !== d) : [...p, d]))
+                    }
+                    style={[styles.chip, opDays.includes(d) && styles.chipOn]}
+                  >
+                    <Text style={[styles.chipText, opDays.includes(d) && styles.chipTextOn]}>
+                      {t(`common.weekDaysShort.${WEEK_DAY_KEYS[d]}`)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              {hoursError ? <Text style={styles.errInline}>{hoursError}</Text> : null}
+              <Pressable
+                style={styles.secondaryBtn}
+                disabled={frozen}
+                onPress={async () => {
+                  setHoursError(null);
+                  try {
+                    await updateOperatingHours({
+                      clubId: club.clubId,
+                      operatingHours: {
+                        open: normalizeHhmmInput(openTime),
+                        close: normalizeHhmmInput(closeTime),
+                        daysOfWeek: opDays,
+                      },
+                    });
+                    Alert.alert(t("ownerApp.settings.content.saved"));
+                  } catch (e) {
+                    const msg = parseConvexError(e as Error).message;
+                    if (msg.includes("CLUB_004")) {
+                      setHoursError(
+                        t("ownerApp.settings.content.bookableHoursMustBeWithin"),
+                      );
+                    } else Alert.alert(msg);
+                  }
+                }}
+              >
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveOperatingHours")}</Text>
+              </Pressable>
+
+              <Text style={styles.label}>{t("ownerApp.settings.content.locationPin")}</Text>
+              <View style={styles.mapBox}>
+                <SafeLocationPicker
+                  initialRegion={mapRegion}
+                  markerCoord={markerCoord}
+                  draggable={!frozen}
+                  onChange={(c) => {
+                    setMarkerCoord(c);
+                    setLocationDirty(true);
+                  }}
+                />
+              </View>
+              {locationDirty ? (
+                <Pressable
+                  style={styles.primaryBtn}
+                  disabled={frozen || !markerCoord}
+                  onPress={async () => {
+                    if (!markerCoord) return;
+                    try {
+                      await updateLocationPin({
+                        clubId: club.clubId,
+                        lat: markerCoord.latitude,
+                        lng: markerCoord.longitude,
+                      });
+                      setLocationDirty(false);
+                      Alert.alert(t("ownerApp.settings.content.locationSaved"));
+                    } catch (e) {
+                      Alert.alert(parseConvexError(e as Error).message);
+                    }
+                  }}
+                >
+                  <Text style={styles.primaryBtnText}>{t("ownerApp.settings.content.saveLocation")}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
         {/* Tables */}
         <View style={styles.card}>
-          {accordionHeader("tables", "Tables")}
+          {accordionHeader("tables", t("ownerApp.settings.sections.tables"))}
           {open.tables ? (
             <View style={styles.accBody}>
               <View style={styles.rowBetween}>
-                <Text style={styles.sectionHint}>Manage billiards tables</Text>
+                <Text style={styles.sectionHint}>{t("ownerApp.settings.content.manageTables")}</Text>
                 <Pressable
                   style={styles.addBtn}
                   onPress={() => setAddTableOpen(true)}
                   disabled={frozen}
                 >
-                  <Text style={styles.addBtnText}>+ Add Table</Text>
+                  <Text style={styles.addBtnText}>{t("ownerApp.settings.content.addTable")}</Text>
                 </Pressable>
               </View>
-              {tables?.map((t) => (
-                <View key={t._id} style={styles.tableRow}>
+              {tablesByFloor.map(({ floor, items }) => (
+                <View key={floor} style={{ marginBottom: spacing[4] }}>
+                  <Text style={styles.floorHeading}>{floor}</Text>
+                  {items.map((tbl) => (
+                <View key={tbl._id} style={styles.tableRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.tableLabel}>{t.label}</Text>
+                    <Text style={styles.tableLabel}>{tbl.label}</Text>
                     <Text style={styles.tableMeta}>
-                      {[t.tableType, t.floor].filter(Boolean).join(" · ") || "—"}
+                      {tbl.tableType ? tableTypeLabel(tbl.tableType) : "—"}
                     </Text>
                     <View
                       style={[
                         styles.badge,
-                        { backgroundColor: t.isActive ? "#1B3D1F" : colors.bg.tertiary },
+                        { backgroundColor: tbl.isActive ? "#1B3D1F" : colors.bg.tertiary },
                       ]}
                     >
                       <Text
                         style={{
                           ...typography.caption,
-                          color: t.isActive ? colors.accent.green : colors.text.secondary,
+                          color: tbl.isActive ? colors.accent.green : colors.text.secondary,
                         }}
                       >
-                        {t.isActive ? "Active" : "Disabled"}
+                        {tbl.isActive ? t("ownerApp.settings.content.tableActive") : t("ownerApp.settings.content.tableDisabled")}
                       </Text>
                     </View>
                   </View>
                   <Pressable
                     onPress={() => {
-                      const occupied = t.currentSessionId != null;
-                      Alert.alert(t.label, undefined, [
+                      const occupied = tbl.currentSessionId != null;
+                      Alert.alert(tbl.label, undefined, [
                         {
-                          text: "Rename",
+                          text: t("ownerApp.settings.rename"),
                           onPress: () => {
-                            setRenameLabel(t.label);
-                            setRenameOpen(t._id);
+                            setRenameLabel(tbl.label);
+                            setRenameOpen(tbl._id);
                           },
                         },
                         {
-                          text: "Set Table Type",
+                          text: t("ownerApp.settings.setTableType"),
                           onPress: () => {
-                            setTypeInput(t.tableType ?? "");
-                            setTypeOpen(t._id);
+                            setTypeInput(tbl.tableType ?? "");
+                            setTypeOpen(tbl._id);
                           },
                         },
-                        ...(t.isActive
+                        ...(tbl.isActive
                           ? [
                               {
-                                text: "Disable",
+                                text: t("ownerApp.settings.disable"),
                                 style: "destructive" as const,
                                 onPress: () => {
                                   if (occupied) {
                                     Alert.alert(
-                                      "Table in use",
-                                      "End the active session first.",
+                                      t("ownerApp.settings.tableInUse"),
+                                      t("ownerApp.settings.tableInUseBody"),
                                     );
                                     return;
                                   }
                                   Alert.alert(
-                                    `Disable ${t.label}?`,
-                                    "This table will be hidden from the session grid. Historical sessions are preserved.",
+                                    t("ownerApp.settings.disableTableTitle", { label: tbl.label }),
+                                    t("ownerApp.settings.disableTableBodyExtended"),
                                     [
-                                      { text: "Cancel", style: "cancel" },
+                                      { text: t("common.cancel"), style: "cancel" },
                                       {
-                                        text: "Disable",
+                                        text: t("ownerApp.settings.disable"),
                                         style: "destructive",
                                         onPress: async () => {
                                           try {
-                                            await disableTable({ tableId: t._id });
+                                            await disableTable({ tableId: tbl._id });
                                           } catch (e) {
                                             Alert.alert(parseConvexError(e as Error).message);
                                           }
@@ -829,22 +1114,24 @@ export default function OwnerSettingsContent({
                             ]
                           : [
                               {
-                                text: "Re-enable",
+                                text: t("ownerApp.settings.reEnable"),
                                 onPress: async () => {
                                   try {
-                                    await enableTable({ tableId: t._id });
+                                    await enableTable({ tableId: tbl._id });
                                   } catch (e) {
                                     Alert.alert(parseConvexError(e as Error).message);
                                   }
                                 },
                               },
                             ]),
-                        { text: "Close", style: "cancel" },
+                        { text: t("ownerApp.settings.close"), style: "cancel" },
                       ]);
                     }}
                   >
                     <MaterialIcons name="more-vert" size={22} color={colors.text.secondary} />
                   </Pressable>
+                </View>
+                  ))}
                 </View>
               ))}
             </View>
@@ -852,16 +1139,13 @@ export default function OwnerSettingsContent({
         </View>
 
         <View style={styles.card}>
-          {accordionHeader("rates", "Rates & Billing")}
+          {accordionHeader("rates", t("ownerApp.settings.sections.ratesBilling"))}
           {open.rates ? (
             <View style={styles.accBody}>
               <View style={styles.infoBanner}>
-                <Text style={styles.infoBannerText}>
-                  ℹ Rate is locked at session start. Sessions crossing a rate boundary are billed at
-                  the rate in effect when the session started.
-                </Text>
+                <Text style={styles.infoBannerText}>ℹ {t("ownerApp.settings.rateLockedNote")}</Text>
               </View>
-              <Text style={styles.label}>Currency (ISO 4217)</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.currencyIso")}</Text>
               <TextInput
                 style={styles.input}
                 value={curDraft}
@@ -869,25 +1153,23 @@ export default function OwnerSettingsContent({
                 autoCapitalize="characters"
                 editable={!frozen}
               />
-              <Text style={styles.note}>
-                Applied to all new sessions. Historical sessions are unaffected.
-              </Text>
+              <Text style={styles.note}>{t("ownerApp.settings.currencyNote")}</Text>
               <Pressable
                 style={styles.secondaryBtn}
                 disabled={frozen}
                 onPress={async () => {
                   try {
                     await updateCurrency({ clubId: club.clubId, currency: curDraft });
-                    Alert.alert("Saved");
+                    Alert.alert(t("ownerApp.settings.content.saved"));
                   } catch (e) {
                     Alert.alert(parseConvexError(e as Error).message);
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save currency</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.saveCurrency")}</Text>
               </Pressable>
 
-              <Text style={styles.label}>Base rate per minute</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.baseRatePerMin")}</Text>
               <View style={styles.rowInput}>
                 <Text style={styles.prefix}>{currencySymbol}</Text>
                 <TextInput
@@ -907,16 +1189,71 @@ export default function OwnerSettingsContent({
                       clubId: club.clubId,
                       baseRatePerMin: Number(baseDraft),
                     });
-                    Alert.alert("Saved");
+                    Alert.alert(t("ownerApp.settings.content.saved"));
                   } catch (e) {
                     Alert.alert(parseConvexError(e as Error).message);
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save base rate</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.saveBaseRate")}</Text>
               </Pressable>
 
-              <Text style={styles.label}>Minimum billable minutes</Text>
+              {distinctActiveTableTypes.length > 0 ? (
+                <>
+                  <Text style={styles.subSection}>{t("ownerApp.settings.ratesByTableType")}</Text>
+                  <Text style={styles.note}>{t("ownerApp.settings.ratesOverrideNote")}</Text>
+                  {distinctActiveTableTypes.map((typeKey) => {
+                    const override = (club.typeBaseRates ?? []).find(
+                      (r) => r.tableType === typeKey,
+                    );
+                    return (
+                      <View key={typeKey} style={styles.rateCard}>
+                        <Text style={styles.tableLabel}>{typeKey}</Text>
+                        <View style={styles.rowInput}>
+                          <Text style={styles.prefix}>{currencySymbol}</Text>
+                          <TextInput
+                            style={[styles.input, { flex: 1 }]}
+                            keyboardType="decimal-pad"
+                            placeholder={String(club.baseRatePerMin)}
+                            placeholderTextColor={colors.text.tertiary}
+                            defaultValue={
+                              override ? String(override.baseRatePerMin) : ""
+                            }
+                            editable={!frozen}
+                            onEndEditing={async (e) => {
+                              const raw = e.nativeEvent.text.trim();
+                              try {
+                                if (!raw) {
+                                  await removeTypeBaseRate({
+                                    clubId: club.clubId,
+                                    tableType: typeKey,
+                                  });
+                                } else {
+                                  const n = Number(raw);
+                                  if (!Number.isFinite(n) || n <= 0) {
+                                    Alert.alert(t("ownerApp.settings.invalidRate"));
+                                    return;
+                                  }
+                                  await setTypeBaseRate({
+                                    clubId: club.clubId,
+                                    tableType: typeKey,
+                                    baseRatePerMin: n,
+                                  });
+                                }
+                                Alert.alert(t("ownerApp.settings.content.saved"));
+                              } catch (err) {
+                                Alert.alert(parseConvexError(err as Error).message);
+                              }
+                            }}
+                          />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </>
+              ) : null}
+
+              <Text style={styles.label}>{t("ownerApp.settings.minBillableMinutes")}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -933,16 +1270,16 @@ export default function OwnerSettingsContent({
                       clubId: club.clubId,
                       minBillMinutes: Number(minBillDraft),
                     });
-                    Alert.alert("Saved");
+                    Alert.alert(t("ownerApp.settings.content.saved"));
                   } catch (e) {
                     Alert.alert(parseConvexError(e as Error).message);
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save minimum minutes</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.saveMinMinutes")}</Text>
               </Pressable>
 
-              <Text style={styles.label}>Timezone (IANA)</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.timezoneIana")}</Text>
               <TextInput
                 style={styles.input}
                 value={tzDraft}
@@ -950,7 +1287,7 @@ export default function OwnerSettingsContent({
                   setTzDraft(t);
                   setTzFilter(t);
                 }}
-                placeholder="Asia/Kolkata"
+                placeholder={t("ownerApp.settings.timezonePlaceholder")}
                 placeholderTextColor={colors.text.tertiary}
                 editable={!frozen}
               />
@@ -963,28 +1300,26 @@ export default function OwnerSettingsContent({
                   ))}
                 </View>
               ) : null}
-              <Text style={styles.warnNote}>
-                Changing timezone affects all future date calculations.
-              </Text>
+              <Text style={styles.warnNote}>{t("ownerApp.settings.timezoneWarning")}</Text>
               <Pressable
                 style={styles.secondaryBtn}
                 disabled={frozen}
                 onPress={async () => {
                   try {
                     await updateTimezone({ clubId: club.clubId, timezone: tzDraft });
-                    Alert.alert("Saved");
+                    Alert.alert(t("ownerApp.settings.content.saved"));
                   } catch (e) {
                     Alert.alert(parseConvexError(e as Error).message);
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save timezone</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.saveTimezone")}</Text>
               </Pressable>
 
               <View style={styles.rowBetween}>
-                <Text style={styles.subSection}>Special Rates</Text>
+                <Text style={styles.subSection}>{t("ownerApp.settings.specialRates")}</Text>
                 <Pressable style={styles.addBtn} onPress={() => openSpecialModal("add")} disabled={frozen}>
-                  <Text style={styles.addBtnText}>+ Add Rate</Text>
+                  <Text style={styles.addBtnText}>{t("ownerApp.settings.addRate")}</Text>
                 </Pressable>
               </View>
               {(club.specialRates ?? []).map((r) => (
@@ -992,19 +1327,22 @@ export default function OwnerSettingsContent({
                   <Text style={styles.tableLabel}>{r.label}</Text>
                   <Text style={styles.tableMeta}>
                     {currencySymbol}
-                    {r.ratePerMin}/min · {formatSpecialWindow(r.startTime, r.endTime)}
+                    {r.ratePerMin}/min · {formatSpecialWindow(r.startTime, r.endTime, locale)}
                   </Text>
-                  <Text style={styles.tableMeta}>{dayAbbrevList(r.daysOfWeek)}</Text>
+                  <Text style={styles.tableMeta}>{dayAbbrevList(r.daysOfWeek, t)}</Text>
                   <View style={styles.iconRow}>
                     <Pressable onPress={() => openSpecialModal("edit", r)} disabled={frozen}>
                       <MaterialIcons name="edit" size={20} color={colors.status.info} />
                     </Pressable>
                     <Pressable
                       onPress={() =>
-                        Alert.alert(`Delete ${r.label}?`, "This will not affect active sessions.", [
-                          { text: "Cancel", style: "cancel" },
+                        Alert.alert(
+                          t("ownerApp.settings.deleteRateTitle", { label: r.label }),
+                          t("ownerApp.settings.deleteRateBody"),
+                          [
+                          { text: t("common.cancel"), style: "cancel" },
                           {
-                            text: "Delete",
+                            text: t("common.delete"),
                             style: "destructive",
                             onPress: async () => {
                               try {
@@ -1029,41 +1367,41 @@ export default function OwnerSettingsContent({
 
         {/* Staff */}
         <View style={styles.card}>
-          {accordionHeader("staff", "Staff Roles")}
+          {accordionHeader("staff", t("ownerApp.settings.sections.staffRoles"))}
           {open.staff ? (
             <View style={styles.accBody}>
               <View style={styles.roleBanner}>
                 <Text style={styles.roleBannerTitle}>
                   {activeRoleId
-                    ? `Active Role: ${activeRoleName ?? "…"}`
-                    : "Owner Mode (Unrestricted)"}
+                    ? t("ownerApp.settings.activeRole", { name: activeRoleName ?? "…" })
+                    : t("ownerApp.settings.content.ownerModeLabel")}
                 </Text>
                 <View style={styles.roleBtnRow}>
                   <Pressable style={styles.smallPrimary} onPress={() => setRolePickerOpen(true)}>
-                    <Text style={styles.smallPrimaryText}>Switch Role</Text>
+                    <Text style={styles.smallPrimaryText}>{t("ownerApp.settings.switchRole")}</Text>
                   </Pressable>
                   {activeRoleId ? (
                     <Pressable
                       style={styles.smallGhost}
                       onPress={() => void pickRole(null)}
                     >
-                      <Text style={styles.smallGhostText}>Switch to Owner Mode…</Text>
+                      <Text style={styles.smallGhostText}>{t("ownerApp.settings.switchOwnerMode")}</Text>
                     </Pressable>
                   ) : null}
                 </View>
               </View>
               <View style={styles.rowBetween}>
-                <Text style={styles.sectionHint}>Roles for staff devices</Text>
+                <Text style={styles.sectionHint}>{t("ownerApp.settings.rolesHint")}</Text>
                 <View style={styles.roleBtnRow}>
                   <Pressable
                     style={styles.smallGhost}
                     disabled={frozen}
                     onPress={() => void createChefPreset()}
                   >
-                    <Text style={styles.smallGhostText}>+ Chef preset</Text>
+                    <Text style={styles.smallGhostText}>{t("ownerApp.settings.chefPreset")}</Text>
                   </Pressable>
                   <Pressable style={styles.addBtn} onPress={() => openRoleEditor("add")} disabled={frozen}>
-                    <Text style={styles.addBtnText}>+ Add Role</Text>
+                    <Text style={styles.addBtnText}>{t("ownerApp.settings.addRole")}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -1071,30 +1409,29 @@ export default function OwnerSettingsContent({
                 <View key={role._id} style={styles.roleCard}>
                   <Text style={styles.tableLabel}>{role.name}</Text>
                   <View style={styles.chipWrap}>
-                    {TAB_ORDER.filter((t) => role.allowedTabs.includes(t)).map((t) => (
-                      <View key={t} style={styles.chip}>
-                        <Text style={styles.chipText}>{TAB_LABEL[t]}</Text>
+                    {TAB_ORDER.filter((tabId) => role.allowedTabs.includes(tabId)).map((tabId) => (
+                      <View key={tabId} style={styles.chip}>
+                        <Text style={styles.chipText}>{ownerTabLabel(tabId, t)}</Text>
                       </View>
                     ))}
                   </View>
                   <Text style={styles.tableMeta}>
                     {!role.allowedTableIds || role.allowedTableIds.length === 0
-                      ? "All tables"
-                      : `${role.allowedTableIds.length} specific tables`}
+                      ? t("ownerApp.settings.content.allTables")
+                      : t("ownerApp.settings.content.specificTables", { count: role.allowedTableIds.length })}
                   </Text>
                   <View style={styles.chipWrap}>
                     {role.canFileComplaints ? (
                       <View style={styles.chip}>
-                        <Text style={styles.chipText}>Can file complaints</Text>
+                        <Text style={styles.chipText}>{t("ownerApp.settings.content.canFileComplaints")}</Text>
                       </View>
                     ) : null}
                     {role.canApplyDiscount ? (
                       <View style={styles.chip}>
                         <Text style={styles.chipText}>
-                          Can apply discount
                           {role.maxDiscountPercent != null
-                            ? ` (max ${role.maxDiscountPercent}%)`
-                            : ""}
+                            ? t("ownerApp.settings.content.canApplyDiscountMax", { pct: role.maxDiscountPercent })
+                            : t("ownerApp.settings.content.canApplyDiscount")}
                         </Text>
                       </View>
                     ) : null}
@@ -1115,16 +1452,16 @@ export default function OwnerSettingsContent({
 
         {/* Online booking */}
         <View style={styles.card}>
-          {accordionHeader("booking", "Online Booking")}
+          {accordionHeader("booking", t("ownerApp.settings.sections.onlineBooking"))}
           {open.booking ? (
             <View style={styles.accBody}>
               <View style={styles.rowBetween}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.tableLabel}>Accept Online Bookings</Text>
+                  <Text style={styles.tableLabel}>{t("ownerApp.settings.content.acceptOnlineBookings")}</Text>
                   <Text style={styles.tableMeta}>
                     {club.bookingSettings.enabled
-                      ? "Your club is accepting online bookings"
-                      : "Customers cannot discover or book your club online"}
+                      ? t("ownerApp.settings.content.bookingsEnabledDesc")
+                      : t("ownerApp.settings.content.bookingsDisabledDesc")}
                   </Text>
                 </View>
                 <Switch
@@ -1149,9 +1486,9 @@ export default function OwnerSettingsContent({
 
               <View style={styles.rowBetween}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.tableLabel}>Require booking coupon</Text>
+                  <Text style={styles.tableLabel}>{t("ownerApp.settings.content.requireBookingCoupon")}</Text>
                   <Text style={styles.tableMeta}>
-                    Customers enter a coupon instead of card payment when booking
+                    {t("ownerApp.settings.content.couponDescription")}
                   </Text>
                 </View>
                 <Switch
@@ -1161,12 +1498,12 @@ export default function OwnerSettingsContent({
                   trackColor={{ false: colors.bg.tertiary, true: colors.accent.green }}
                 />
               </View>
-              <Text style={styles.label}>Booking coupon code</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.bookingCouponCode")}</Text>
               <TextInput
                 style={styles.input}
                 value={bookingCouponCode}
                 onChangeText={(t) => setBookingCouponCode(t.toUpperCase())}
-                placeholder="e.g. TABLE50"
+                placeholder={t("ownerApp.settings.couponPlaceholder")}
                 placeholderTextColor={colors.text.tertiary}
                 autoCapitalize="characters"
                 editable={!frozen}
@@ -1184,13 +1521,16 @@ export default function OwnerSettingsContent({
                         bookingCouponCode: bookingCouponCode.trim() || undefined,
                       },
                     });
-                    Alert.alert("Saved", "Booking coupon settings updated.");
+                    Alert.alert(
+                      t("ownerApp.settings.content.saved"),
+                      t("ownerApp.settings.content.bookingCouponSavedBody"),
+                    );
                   } catch (e) {
                     Alert.alert(parseConvexError(e as Error).message);
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save coupon settings</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveCouponSettings")}</Text>
               </Pressable>
 
               {bookingPrecheck && !bookingPrecheck.allOk && !club.bookingSettings.enabled ? (
@@ -1205,8 +1545,8 @@ export default function OwnerSettingsContent({
                 </View>
               ) : null}
 
-              <Text style={styles.label}>Max advance days</Text>
-              <Text style={styles.note}>How far ahead customers can book</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.maxAdvanceDays")}</Text>
+              <Text style={styles.note}>{t("ownerApp.settings.content.maxAdvanceDaysNote")}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1214,8 +1554,8 @@ export default function OwnerSettingsContent({
                 onChangeText={setMaxAdv}
                 editable={!frozen}
               />
-              <Text style={styles.label}>Min advance minutes</Text>
-              <Text style={styles.note}>Minimum lead time before booking start</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.minAdvanceMinutes")}</Text>
+              <Text style={styles.note}>{t("ownerApp.settings.content.minAdvanceMinutesNote")}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1223,8 +1563,8 @@ export default function OwnerSettingsContent({
                 onChangeText={setMinAdv}
                 editable={!frozen}
               />
-              <Text style={styles.label}>Approval deadline (minutes)</Text>
-              <Text style={styles.note}>Minutes to approve before booking expires</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.approvalDeadline")}</Text>
+              <Text style={styles.note}>{t("ownerApp.settings.content.approvalDeadlineNote")}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1232,8 +1572,8 @@ export default function OwnerSettingsContent({
                 onChangeText={setApprDead}
                 editable={!frozen}
               />
-              <Text style={styles.label}>Cancellation window (minutes)</Text>
-              <Text style={styles.note}>Minutes before start time for late cancellation</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.cancellationWindow")}</Text>
+              <Text style={styles.note}>{t("ownerApp.settings.content.cancellationWindowNote")}</Text>
               <TextInput
                 style={styles.input}
                 keyboardType="number-pad"
@@ -1256,19 +1596,19 @@ export default function OwnerSettingsContent({
                         cancellationWindowMin: Number(cancelWin),
                       },
                     });
-                    Alert.alert("Saved");
+                    Alert.alert(t("ownerApp.settings.content.saved"));
                   } catch (e) {
                     setBookingErr(parseConvexError(e as Error).message);
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save booking rules</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveBookingRules")}</Text>
               </Pressable>
               {bookingErr ? <Text style={styles.errInline}>{bookingErr}</Text> : null}
 
-              <Text style={styles.label}>Slot duration options</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.slotDurationOptions")}</Text>
               <View style={styles.chipWrap}>
-                {SLOT_CHIPS.map(({ min, label }) => {
+                {SLOT_CHIP_KEYS.map(({ min, key }) => {
                   const on = slotOpts.includes(min);
                   return (
                     <Pressable
@@ -1285,7 +1625,7 @@ export default function OwnerSettingsContent({
                       }}
                       style={[styles.chip, on && styles.chipOn]}
                     >
-                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{label}</Text>
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{t(key)}</Text>
                     </Pressable>
                   );
                 })}
@@ -1295,7 +1635,7 @@ export default function OwnerSettingsContent({
                 disabled={frozen}
                 onPress={async () => {
                   if (slotOpts.length === 0) {
-                    Alert.alert("Select at least one slot duration.");
+                    Alert.alert(t("ownerApp.settings.content.selectSlotDuration"));
                     return;
                   }
                   try {
@@ -1303,21 +1643,21 @@ export default function OwnerSettingsContent({
                       clubId: club.clubId,
                       settings: { slotDurationOptions: slotOpts },
                     });
-                    Alert.alert("Saved");
+                    Alert.alert(t("ownerApp.settings.content.saved"));
                   } catch (e) {
                     Alert.alert(parseConvexError(e as Error).message);
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save slot durations</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveSlotDurations")}</Text>
               </Pressable>
 
-              <Text style={styles.label}>Bookable table types</Text>
-              <Text style={styles.note}>Only selected types appear in the customer booking flow.</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.bookableTableTypes")}</Text>
+              <Text style={styles.note}>{t("ownerApp.settings.content.bookableTableTypesNote")}</Text>
               {bookableTypesMismatch ? (
                 <View style={styles.warnCard}>
                   <Text style={styles.warnCardText}>
-                    Some bookable table types have no active tables.
+                    {t("ownerApp.settings.content.bookableTableTypesMismatch")}
                   </Text>
                 </View>
               ) : null}
@@ -1349,45 +1689,44 @@ export default function OwnerSettingsContent({
                       clubId: club.clubId,
                       settings: { bookableTableTypes: bookTypes },
                     });
-                    Alert.alert("Saved");
+                    Alert.alert(t("ownerApp.settings.content.saved"));
                   } catch (e) {
                     Alert.alert(parseConvexError(e as Error).message);
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save bookable types</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveBookableTypes")}</Text>
               </Pressable>
 
-              <Text style={styles.label}>Bookable hours</Text>
-              <Text style={styles.note}>Bookable hours must fall within your operating hours.</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.bookableHours")}</Text>
+              <Text style={styles.note}>{t("ownerApp.settings.content.bookableHoursNote")}</Text>
               {club.operatingHours ? (
                 <Text style={styles.note}>
-                  Operating hours: {formatHhmm12h(club.operatingHours.open)}–
-                  {formatHhmm12h(club.operatingHours.close)} (
+                  {t("ownerApp.settings.content.operatingHoursPrefix")} {hhmmTo12h(club.operatingHours.open, locale)}–
+                  {hhmmTo12h(club.operatingHours.close, locale)} (
                   {club.operatingHours.daysOfWeek
                     .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
-                    .map((d) => DAY_LABELS[d])
+                    .map((d) => t(`common.weekDaysShort.${WEEK_DAY_KEYS[d]}`))
                     .join(", ")}
                   )
                 </Text>
               ) : (
                 <Text style={styles.warnCardText}>
-                  Set operating hours under Club Profile first, then save bookable
-                  hours here.
+                  {t("ownerApp.settings.content.setOperatingHoursFirst")}
                 </Text>
               )}
               <View style={styles.rowInput}>
                 <HhMmTimeField
-                  label="Opens"
+                  label={t("ownerApp.settings.content.opens")}
                   value={bhOpen}
                   onChange={(t) => setBhOpen(normalizeHhmmInput(t))}
                   disabled={frozen}
                 />
                 <Text style={{ color: colors.text.secondary, alignSelf: "flex-end", paddingBottom: spacing[3] }}>
-                  to
+                  {t("ownerApp.settings.content.timeTo")}
                 </Text>
                 <HhMmTimeField
-                  label="Closes"
+                  label={t("ownerApp.settings.content.closes")}
                   value={bhClose}
                   onChange={(t) => setBhClose(normalizeHhmmInput(t))}
                   disabled={frozen}
@@ -1404,7 +1743,7 @@ export default function OwnerSettingsContent({
                     style={[styles.chip, bhDays.includes(d) && styles.chipOn]}
                   >
                     <Text style={[styles.chipText, bhDays.includes(d) && styles.chipTextOn]}>
-                      {DAY_LABELS[d]}
+                      {t(`common.weekDaysShort.${WEEK_DAY_KEYS[d]}`)}
                     </Text>
                   </Pressable>
                 ))}
@@ -1434,7 +1773,7 @@ export default function OwnerSettingsContent({
                       clubId: club.clubId,
                       settings: { bookableHours },
                     });
-                    Alert.alert("Saved");
+                    Alert.alert(t("ownerApp.settings.content.saved"));
                   } catch (e) {
                     const msg = parseConvexError(e as Error).message;
                     if (msg.includes("CLUB_004")) {
@@ -1443,7 +1782,7 @@ export default function OwnerSettingsContent({
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save bookable hours</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveBookableHours")}</Text>
               </Pressable>
               {bookingErr ? <Text style={styles.errInline}>{bookingErr}</Text> : null}
             </View>
@@ -1452,18 +1791,17 @@ export default function OwnerSettingsContent({
 
         {/* GST settings */}
         <View style={styles.card}>
-          {accordionHeader("gst", "GST Settings")}
+          {accordionHeader("gst", t("ownerApp.settings.sections.gst"))}
           {open.gst ? (
             <View style={styles.accBody}>
               <Text style={styles.note}>
-                Inputs for the estimate-only GST Report. Full income-tax reporting
-                will be added after CA consultation.
+                {t("ownerApp.settings.content.gstNote")}
               </Text>
               <View style={styles.rowBetween}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>GST registered</Text>
+                  <Text style={styles.label}>{t("ownerApp.settings.content.gstRegistered")}</Text>
                   <Text style={styles.tableMeta}>
-                    When off, the GST Report shows zero output tax
+                    {t("ownerApp.settings.content.gstRegisteredNote")}
                   </Text>
                 </View>
                 <Switch
@@ -1472,23 +1810,23 @@ export default function OwnerSettingsContent({
                   disabled={frozen}
                 />
               </View>
-              <Text style={styles.label}>GSTIN (optional)</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.gstin")}</Text>
               <TextInput
                 style={styles.input}
                 value={gstin}
                 onChangeText={(t) => setGstin(t.toUpperCase().replace(/\s/g, ""))}
-                placeholder="15-character GSTIN"
+                placeholder={t("ownerApp.settings.gstinPlaceholder")}
                 placeholderTextColor={colors.text.tertiary}
                 maxLength={15}
                 autoCapitalize="characters"
                 editable={!frozen}
               />
-              <Text style={styles.label}>Supply type</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.supplyType")}</Text>
               <View style={styles.chipWrap}>
                 {(
                   [
-                    { k: "intrastate" as const, label: "Intrastate (CGST + SGST)" },
-                    { k: "interstate" as const, label: "Interstate (IGST)" },
+                    { k: "intrastate" as const, label: t("ownerApp.settings.content.supplyIntrastate") },
+                    { k: "interstate" as const, label: t("ownerApp.settings.content.supplyInterstate") },
                   ] as const
                 ).map((opt) => (
                   <Pressable
@@ -1508,7 +1846,7 @@ export default function OwnerSettingsContent({
                   </Pressable>
                 ))}
               </View>
-              <Text style={styles.label}>GST % on table time</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.gstTableTime")}</Text>
               <TextInput
                 style={styles.input}
                 value={tableGstPercent}
@@ -1516,7 +1854,7 @@ export default function OwnerSettingsContent({
                 keyboardType="decimal-pad"
                 editable={!frozen}
               />
-              <Text style={styles.label}>GST % on snacks</Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.gstSnacks")}</Text>
               <TextInput
                 style={styles.input}
                 value={snacksGstPercent}
@@ -1524,16 +1862,14 @@ export default function OwnerSettingsContent({
                 keyboardType="decimal-pad"
                 editable={!frozen}
               />
-              <Text style={styles.label}>Monthly input tax credit estimate (optional)</Text>
-              <Text style={styles.note}>
-                Eligible ITC you expect per month; prorated on the GST Report
-              </Text>
+              <Text style={styles.label}>{t("ownerApp.settings.content.monthlyItc")}</Text>
+              <Text style={styles.note}>{t("ownerApp.settings.itcNote")}</Text>
               <TextInput
                 style={styles.input}
                 value={monthlyItc}
                 onChangeText={setMonthlyItc}
                 keyboardType="decimal-pad"
-                placeholder="0"
+                placeholder={t("common.placeholderZero")}
                 placeholderTextColor={colors.text.tertiary}
                 editable={!frozen}
               />
@@ -1548,15 +1884,15 @@ export default function OwnerSettingsContent({
                   const itc =
                     monthlyItc.trim() === "" ? undefined : Number(monthlyItc);
                   if (!Number.isFinite(tablePct) || tablePct < 0 || tablePct > 100) {
-                    setGstErr("Table GST % must be between 0 and 100.");
+                    setGstErr(t("ownerApp.settings.content.gstTableError"));
                     return;
                   }
                   if (!Number.isFinite(snackPct) || snackPct < 0 || snackPct > 100) {
-                    setGstErr("Snacks GST % must be between 0 and 100.");
+                    setGstErr(t("ownerApp.settings.content.gstSnacksError"));
                     return;
                   }
                   if (itc != null && (!Number.isFinite(itc) || itc < 0)) {
-                    setGstErr("Monthly ITC must be a non-negative number.");
+                    setGstErr(t("ownerApp.settings.content.gstItcError"));
                     return;
                   }
                   try {
@@ -1569,21 +1905,22 @@ export default function OwnerSettingsContent({
                       snacksGstPercent: snackPct,
                       monthlyInputTaxCredit: itc,
                     });
-                    Alert.alert("Saved", "GST settings updated.");
+                    Alert.alert(t("ownerApp.settings.content.saved"));
                   } catch (e) {
                     setGstErr(parseConvexError(e as Error).message);
                   }
                 }}
               >
-                <Text style={styles.secondaryBtnText}>Save GST settings</Text>
+                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveGst")}</Text>
               </Pressable>
               {gstErr ? <Text style={styles.errInline}>{gstErr}</Text> : null}
             </View>
           ) : null}
         </View>
 
+        {/* Loyalty programme disabled
         <View style={styles.card}>
-          {accordionHeader("loyalty", "Loyalty Programme")}
+          {accordionHeader("loyalty", t("ownerApp.settings.content.loyaltyProgramme"))}
           {open.loyalty && club ? (
             <View style={styles.accBody}>
               <LoyaltyProgrammeSettings
@@ -1593,263 +1930,19 @@ export default function OwnerSettingsContent({
             </View>
           ) : null}
         </View>
-
-        {/* Club profile */}
-        <View style={styles.card}>
-          {accordionHeader("profile", "Club Profile")}
-          {open.profile ? (
-            <View style={styles.accBody}>
-              <View style={styles.rowBetween}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Show club in customer search</Text>
-                  <Text style={styles.tableMeta}>
-                    {club.isDiscoverable ? "Discoverable" : "Hidden"}
-                  </Text>
-                </View>
-                <Switch
-                  value={club.isDiscoverable}
-                  disabled={frozen}
-                  onValueChange={async () => {
-                    try {
-                      await toggleDiscoverability({ clubId: club.clubId });
-                    } catch (e) {
-                      Alert.alert(parseConvexError(e as Error).message);
-                    }
-                  }}
-                  trackColor={{ false: colors.bg.tertiary, true: colors.accent.green }}
-                />
-              </View>
-              <Text style={styles.label}>Description (max 500)</Text>
-              <TextInput
-                style={styles.multiline}
-                multiline
-                value={desc}
-                onChangeText={setDesc}
-                maxLength={500}
-                editable={!frozen}
-              />
-              <Text style={styles.counter}>{desc.length}/500</Text>
-              <Pressable
-                style={styles.secondaryBtn}
-                disabled={frozen}
-                onPress={async () => {
-                  try {
-                    await updateDescription({ clubId: club.clubId, description: desc });
-                    Alert.alert("Saved");
-                  } catch (e) {
-                    Alert.alert(parseConvexError(e as Error).message);
-                  }
-                }}
-              >
-                <Text style={styles.secondaryBtnText}>Save description</Text>
-              </Pressable>
-
-              <Text style={styles.label}>Photos</Text>
-              <View style={styles.photoGrid}>
-                {(club.photos ?? []).map((p) => (
-                  <View key={p.storageId} style={styles.photoCell}>
-                    {p.url ? <Image source={{ uri: p.url }} style={styles.photoThumb} /> : null}
-                    <Pressable
-                      style={styles.photoRemove}
-                      disabled={frozen}
-                      onPress={() => void removeClubPhoto({ clubId: club.clubId, storageId: p.storageId })}
-                    >
-                      <Text style={styles.photoRemoveText}>×</Text>
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-              {(club.photos ?? []).length < 5 ? (
-                <Pressable style={styles.secondaryBtn} disabled={frozen || photoBusy} onPress={onPickPhoto}>
-                  <Text style={styles.secondaryBtnText}>{photoBusy ? "Uploading…" : "+ Add Photo"}</Text>
-                </Pressable>
-              ) : null}
-
-              <Text style={styles.label}>Amenities</Text>
-              <View style={styles.chipWrap}>
-                {PREDEFINED_AMENITIES.map((a) => {
-                  const on = amenitiesDraft.includes(a);
-                  return (
-                    <Pressable
-                      key={a}
-                      disabled={frozen}
-                      onPress={() =>
-                        setAmenitiesDraft((p) => (on ? p.filter((x) => x !== a) : [...p, a]))
-                      }
-                      style={[styles.chip, on && styles.chipOn]}
-                    >
-                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{a}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              {customAmenitiesInDraft.length > 0 ? (
-                <>
-                  <Text style={styles.label}>Custom amenities</Text>
-                  <View style={styles.chipWrap}>
-                    {customAmenitiesInDraft.map((a) => (
-                      <Pressable
-                        key={a}
-                        disabled={frozen}
-                        onPress={() => setAmenitiesDraft((p) => p.filter((x) => x !== a))}
-                        style={[styles.chip, styles.chipOn]}
-                      >
-                        <Text style={[styles.chipText, styles.chipTextOn]}>
-                          {a}
-                          <Text style={styles.chipRemoveMark}> ×</Text>
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </>
-              ) : null}
-              <View style={styles.rowInput}>
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  value={customAmenity}
-                  onChangeText={setCustomAmenity}
-                  placeholder="Custom amenity"
-                  placeholderTextColor={colors.text.tertiary}
-                  editable={!frozen}
-                  maxLength={MAX_AMENITY_LENGTH}
-                  returnKeyType="done"
-                  onSubmitEditing={addCustomAmenityToDraft}
-                />
-                <Pressable
-                  style={styles.secondaryBtn}
-                  disabled={frozen || customAmenity.trim().length === 0}
-                  onPress={addCustomAmenityToDraft}
-                >
-                  <Text style={styles.secondaryBtnText}>Add</Text>
-                </Pressable>
-              </View>
-              <Pressable
-                style={styles.secondaryBtn}
-                disabled={frozen}
-                onPress={async () => {
-                  try {
-                    await updateAmenities({ clubId: club.clubId, amenities: amenitiesDraft });
-                    Alert.alert("Saved");
-                  } catch (e) {
-                    Alert.alert(parseConvexError(e as Error).message);
-                  }
-                }}
-              >
-                <Text style={styles.secondaryBtnText}>Save amenities</Text>
-              </Pressable>
-
-              <Text style={styles.label}>Operating hours</Text>
-              <View style={styles.rowInput}>
-                <HhMmTimeField
-                  label="Opens"
-                  value={openTime}
-                  onChange={(t) => setOpenTime(normalizeHhmmInput(t))}
-                  disabled={frozen}
-                />
-                <Text style={{ color: colors.text.secondary, alignSelf: "flex-end", paddingBottom: spacing[3] }}>
-                  to
-                </Text>
-                <HhMmTimeField
-                  label="Closes"
-                  value={closeTime}
-                  onChange={(t) => setCloseTime(normalizeHhmmInput(t))}
-                  disabled={frozen}
-                />
-              </View>
-              <View style={styles.chipWrap}>
-                {[1, 2, 3, 4, 5, 6, 0].map((d) => (
-                  <Pressable
-                    key={d}
-                    disabled={frozen}
-                    onPress={() =>
-                      setOpDays((p) => (p.includes(d) ? p.filter((x) => x !== d) : [...p, d]))
-                    }
-                    style={[styles.chip, opDays.includes(d) && styles.chipOn]}
-                  >
-                    <Text style={[styles.chipText, opDays.includes(d) && styles.chipTextOn]}>
-                      {DAY_LABELS[d]}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              {hoursError ? <Text style={styles.errInline}>{hoursError}</Text> : null}
-              <Pressable
-                style={styles.secondaryBtn}
-                disabled={frozen}
-                onPress={async () => {
-                  setHoursError(null);
-                  try {
-                    await updateOperatingHours({
-                      clubId: club.clubId,
-                      operatingHours: {
-                        open: normalizeHhmmInput(openTime),
-                        close: normalizeHhmmInput(closeTime),
-                        daysOfWeek: opDays,
-                      },
-                    });
-                    Alert.alert("Saved");
-                  } catch (e) {
-                    const msg = parseConvexError(e as Error).message;
-                    if (msg.includes("CLUB_004")) {
-                      setHoursError(
-                        "Bookable hours must fall within operating hours. Update bookable hours first.",
-                      );
-                    } else Alert.alert(msg);
-                  }
-                }}
-              >
-                <Text style={styles.secondaryBtnText}>Save operating hours</Text>
-              </Pressable>
-
-              <Text style={styles.label}>Location pin</Text>
-              <View style={styles.mapBox}>
-                <SafeLocationPicker
-                  initialRegion={mapRegion}
-                  markerCoord={markerCoord}
-                  draggable={!frozen}
-                  onChange={(c) => {
-                    setMarkerCoord(c);
-                    setLocationDirty(true);
-                  }}
-                />
-              </View>
-              {locationDirty ? (
-                <Pressable
-                  style={styles.primaryBtn}
-                  disabled={frozen || !markerCoord}
-                  onPress={async () => {
-                    if (!markerCoord) return;
-                    try {
-                      await updateLocationPin({
-                        clubId: club.clubId,
-                        lat: markerCoord.latitude,
-                        lng: markerCoord.longitude,
-                      });
-                      setLocationDirty(false);
-                      Alert.alert("Location saved");
-                    } catch (e) {
-                      Alert.alert(parseConvexError(e as Error).message);
-                    }
-                  }}
-                >
-                  <Text style={styles.primaryBtnText}>Save Location</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
-        </View>
+        */}
 
         {/* Security */}
         <View style={styles.card}>
-          {accordionHeader("security", "Security")}
+          {accordionHeader("security", t("ownerApp.settings.sections.security"))}
           {open.security ? (
             <View style={styles.accBody}>
               <Pressable style={styles.rowLink} onPress={() => router.push("/change-password")}>
-                <Text style={styles.linkText}>Change account password</Text>
+                <Text style={styles.linkText}>{t("ownerApp.settings.content.changeAccountPassword")}</Text>
                 <MaterialIcons name="chevron-right" size={22} color={colors.text.secondary} />
               </Pressable>
               <Pressable style={styles.rowLink} onPress={() => router.push("/change-passcode")}>
-                <Text style={styles.linkText}>Change settings passcode</Text>
+                <Text style={styles.linkText}>{t("ownerApp.settings.content.changeSettingsPasscode")}</Text>
                 <MaterialIcons name="chevron-right" size={22} color={colors.text.secondary} />
               </Pressable>
               <Pressable
@@ -1858,17 +1951,17 @@ export default function OwnerSettingsContent({
                 onPress={() => {
                   if (!user.email) return;
                   Alert.alert(
-                    "Request data export?",
-                    `Your data export (name, phone, email, club name, subscription history) will be sent to ${user.email} within 72 hours.`,
+                    t("ownerApp.settings.content.requestDataExportTitle"),
+                    t("ownerApp.settings.content.requestDataExportBody", { email: user.email }),
                     [
-                      { text: "Cancel", style: "cancel" },
+                      { text: t("common.cancel"), style: "cancel" },
                       {
-                        text: "Confirm",
+                        text: t("common.confirm"),
                         onPress: () => {
                           void (async () => {
                             try {
                               await requestDataExport({});
-                              Alert.alert("Request submitted");
+                              Alert.alert(t("ownerApp.settings.content.requestSubmitted"));
                             } catch (e) {
                               Alert.alert(parseConvexError(e as Error).message);
                             }
@@ -1879,15 +1972,54 @@ export default function OwnerSettingsContent({
                   );
                 }}
               >
-                <Text style={styles.linkText}>Download my data</Text>
+                <Text style={styles.linkText}>{t("ownerApp.settings.content.downloadMyData")}</Text>
                 {!user.email ? (
-                  <Text style={styles.tableMeta}>Add email first</Text>
+                  <Text style={styles.tableMeta}>{t("ownerApp.settings.content.addEmailFirst")}</Text>
                 ) : null}
+              </Pressable>
+
+              <Pressable
+                style={[styles.rowLink, (!club || frozen) && styles.rowDisabled]}
+                disabled={!club || frozen || exportingMembers}
+                onPress={() => {
+                  if (!club) return;
+                  Alert.alert(
+                    t("ownerApp.settings.content.exportMembersTitle"),
+                    t("ownerApp.settings.content.exportMembersBody"),
+                    [
+                      { text: t("ownerApp.settings.content.cancel"), style: "cancel" },
+                      {
+                        text: t("ownerApp.settings.content.exportDownload"),
+                        onPress: () => {
+                          void (async () => {
+                            setExportingMembers(true);
+                            try {
+                              const data = await exportClubMembers({
+                                clubId: club.clubId,
+                              });
+                              await shareCsvExport(data.filename, data.csv);
+                            } catch (e) {
+                              Alert.alert(parseConvexError(e as Error).message);
+                            } finally {
+                              setExportingMembers(false);
+                            }
+                          })();
+                        },
+                      },
+                    ],
+                  );
+                }}
+              >
+                <Text style={styles.linkText}>
+                  {exportingMembers
+                    ? t("ownerApp.settings.content.exportingMembers")
+                    : t("ownerApp.settings.content.exportClubMembers")}
+                </Text>
               </Pressable>
 
               <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
                 <MaterialIcons name="logout" size={20} color={colors.text.primary} />
-                <Text style={styles.signOutText}>Log out</Text>
+                <Text style={styles.signOutText}>{t("ownerApp.settings.logOut")}</Text>
               </Pressable>
 
               <Pressable
@@ -1898,10 +2030,8 @@ export default function OwnerSettingsContent({
                   setDeleteOpen(true);
                 }}
               >
-                <Text style={styles.destructiveTitle}>Request account deletion</Text>
-                <Text style={styles.tableMeta}>
-                  Requires no active sessions, credits, or confirmed bookings.
-                </Text>
+                <Text style={styles.destructiveTitle}>{t("ownerApp.settings.requestDeletion")}</Text>
+                <Text style={styles.tableMeta}>{t("ownerApp.settings.requestDeletionNote")}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -1913,27 +2043,24 @@ export default function OwnerSettingsContent({
       <Modal visible={deleteOpen} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Delete account</Text>
-            <Text style={styles.tableMeta}>
-              Your login will be blocked immediately. Pending bookings will be auto-cancelled. Your data
-              will be permanently deleted after 30 days. Type DELETE to confirm.
-            </Text>
+            <Text style={styles.modalTitle}>{t("ownerApp.settings.deleteAccountTitle")}</Text>
+            <Text style={styles.tableMeta}>{t("ownerApp.settings.deleteAccountBodyDetailed")}</Text>
             <TextInput
               style={styles.input}
               value={deletePhrase}
               onChangeText={setDeletePhrase}
-              placeholder="DELETE"
+              placeholder={t("common.deleteKeyword")}
               placeholderTextColor={colors.text.tertiary}
             />
             <View style={styles.modalActions}>
               <Pressable onPress={() => setDeleteOpen(false)} style={styles.secondaryBtn}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
+                <Text style={styles.secondaryBtnText}>{t("common.cancel")}</Text>
               </Pressable>
               <Pressable
                 style={styles.primaryBtn}
                 onPress={() => {
-                  if (deletePhrase.trim() !== "DELETE") {
-                    Alert.alert('Type "DELETE" to confirm.');
+                  if (deletePhrase.trim() !== t("common.deleteKeyword")) {
+                    Alert.alert(t("ownerApp.settings.typeDeleteConfirm"));
                     return;
                   }
                   void (async () => {
@@ -1948,7 +2075,7 @@ export default function OwnerSettingsContent({
                   })();
                 }}
               >
-                <Text style={styles.primaryBtnText}>Confirm deletion</Text>
+                <Text style={styles.primaryBtnText}>{t("ownerApp.settings.confirmDeletion")}</Text>
               </Pressable>
             </View>
           </View>
@@ -1958,34 +2085,54 @@ export default function OwnerSettingsContent({
       <Modal visible={addTableOpen} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add table</Text>
+            <Text style={styles.modalTitle}>{t("ownerApp.settings.addTableTitle")}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Label *"
+              placeholder={t("ownerApp.settings.labelPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               value={newTableLabel}
               onChangeText={setNewTableLabel}
             />
+            <Text style={styles.label}>{t("ownerApp.settings.tableTypeLabel")}</Text>
+            <TableTypeSelect value={newTableType} onChange={setNewTableType} />
+            <Text style={styles.label}>{t("ownerApp.settings.floorLabel")}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Table type (optional)"
-              placeholderTextColor={colors.text.tertiary}
-              value={newTableType}
-              onChangeText={setNewTableType}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Floor (optional)"
+              placeholder={t("ownerApp.settings.floorPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               value={newTableFloor}
               onChangeText={setNewTableFloor}
             />
+            {knownFloors.length > 0 ? (
+              <View style={styles.chipWrap}>
+                {knownFloors.map((floor) => (
+                  <Pressable
+                    key={floor}
+                    onPress={() => setNewTableFloor(floor)}
+                    style={[
+                      styles.chip,
+                      newTableFloor === floor && styles.chipOn,
+                      { marginBottom: spacing[1] },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        newTableFloor === floor && styles.chipTextOn,
+                      ]}
+                    >
+                      {floor}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
             <View style={styles.modalActions}>
               <Pressable
                 onPress={() => setAddTableOpen(false)}
                 style={styles.secondaryBtn}
               >
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
+                <Text style={styles.secondaryBtnText}>{t("common.cancel")}</Text>
               </Pressable>
               <Pressable
                 style={styles.primaryBtn}
@@ -2006,7 +2153,7 @@ export default function OwnerSettingsContent({
                   }
                 }}
               >
-                <Text style={styles.primaryBtnText}>Save</Text>
+                <Text style={styles.primaryBtnText}>{t("common.save")}</Text>
               </Pressable>
             </View>
           </View>
@@ -2016,11 +2163,11 @@ export default function OwnerSettingsContent({
       <Modal visible={renameOpen !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Rename table</Text>
+            <Text style={styles.modalTitle}>{t("ownerApp.settings.renameTableTitle")}</Text>
             <TextInput style={styles.input} value={renameLabel} onChangeText={setRenameLabel} />
             <View style={styles.modalActions}>
               <Pressable onPress={() => setRenameOpen(null)} style={styles.secondaryBtn}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
+                <Text style={styles.secondaryBtnText}>{t("common.cancel")}</Text>
               </Pressable>
               <Pressable
                 style={styles.primaryBtn}
@@ -2034,7 +2181,7 @@ export default function OwnerSettingsContent({
                   }
                 }}
               >
-                <Text style={styles.primaryBtnText}>Save</Text>
+                <Text style={styles.primaryBtnText}>{t("common.save")}</Text>
               </Pressable>
             </View>
           </View>
@@ -2044,11 +2191,11 @@ export default function OwnerSettingsContent({
       <Modal visible={typeOpen !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Table type</Text>
-            <TextInput style={styles.input} value={typeInput} onChangeText={setTypeInput} />
+            <Text style={styles.modalTitle}>{t("ownerApp.settings.tableTypeTitle")}</Text>
+            <TableTypeSelect value={typeInput} onChange={setTypeInput} />
             <View style={styles.modalActions}>
               <Pressable onPress={() => setTypeOpen(null)} style={styles.secondaryBtn}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
+                <Text style={styles.secondaryBtnText}>{t("common.cancel")}</Text>
               </Pressable>
               <Pressable
                 style={styles.primaryBtn}
@@ -2062,7 +2209,7 @@ export default function OwnerSettingsContent({
                   }
                 }}
               >
-                <Text style={styles.primaryBtnText}>Save</Text>
+                <Text style={styles.primaryBtnText}>{t("common.save")}</Text>
               </Pressable>
             </View>
           </View>
@@ -2073,21 +2220,36 @@ export default function OwnerSettingsContent({
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {rateModal?.mode === "edit" ? "Edit special rate" : "Add special rate"}
+              {rateModal?.mode === "edit"
+                ? t("ownerApp.settings.editSpecialRate")
+                : t("ownerApp.settings.addSpecialRate")}
             </Text>
-            <TextInput style={styles.input} placeholder="Label" value={srLabel} onChangeText={setSrLabel} />
             <TextInput
               style={styles.input}
-              placeholder="Rate per minute"
+              placeholder={t("ownerApp.settings.labelField")}
+              value={srLabel}
+              onChangeText={setSrLabel}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder={t("ownerApp.settings.ratePerMinute")}
               keyboardType="decimal-pad"
               value={srRate}
               onChangeText={setSrRate}
             />
-            <TextInput style={styles.input} value={srStart} onChangeText={setSrStart} placeholder="HH:MM start" />
-            <TextInput style={styles.input} value={srEnd} onChangeText={setSrEnd} placeholder="HH:MM end" />
-            <Text style={styles.note}>
-              For midnight-crossing rates (e.g. 10 PM – 2 AM), set end time before start time.
-            </Text>
+            <TextInput
+              style={styles.input}
+              value={srStart}
+              onChangeText={setSrStart}
+              placeholder={t("ownerApp.settings.hhmmStart")}
+            />
+            <TextInput
+              style={styles.input}
+              value={srEnd}
+              onChangeText={setSrEnd}
+              placeholder={t("ownerApp.settings.hhmmEnd")}
+            />
+            <Text style={styles.note}>{t("ownerApp.settings.midnightRateNote")}</Text>
             <View style={styles.chipWrap}>
               {[1, 2, 3, 4, 5, 6, 0].map((d) => (
                 <Pressable
@@ -2098,7 +2260,7 @@ export default function OwnerSettingsContent({
                   style={[styles.chip, srDays.includes(d) && styles.chipOn]}
                 >
                   <Text style={[styles.chipText, srDays.includes(d) && styles.chipTextOn]}>
-                    {DAY_LABELS[d]}
+                    {t(`common.weekDaysShort.${WEEK_DAY_KEYS[d]}`)}
                   </Text>
                 </Pressable>
               ))}
@@ -2106,10 +2268,10 @@ export default function OwnerSettingsContent({
             {srError ? <Text style={styles.errInline}>{srError}</Text> : null}
             <View style={styles.modalActions}>
               <Pressable onPress={() => setRateModal(null)} style={styles.secondaryBtn}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
+                <Text style={styles.secondaryBtnText}>{t("common.cancel")}</Text>
               </Pressable>
               <Pressable style={styles.primaryBtn} onPress={() => void saveSpecialRate()}>
-                <Text style={styles.primaryBtnText}>Save</Text>
+                <Text style={styles.primaryBtnText}>{t("common.save")}</Text>
               </Pressable>
             </View>
           </View>
@@ -2120,34 +2282,42 @@ export default function OwnerSettingsContent({
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {roleModal?.mode === "edit" ? "Edit role" : "Add role"}
+              {roleModal?.mode === "edit" ? t("ownerApp.settings.content.editRole") : t("ownerApp.settings.content.addRole")}
             </Text>
-            <TextInput style={styles.input} value={rName} onChangeText={setRName} placeholder="Name" />
-            <Text style={styles.label}>Allowed tabs</Text>
-            {TAB_ORDER.map((t) => {
-              const on = rTabs.includes(t);
+            <TextInput
+              style={styles.input}
+              value={rName}
+              onChangeText={setRName}
+              placeholder={t("ownerApp.settings.nameField")}
+            />
+            <Text style={styles.label}>{t("ownerApp.settings.allowedTabs")}</Text>
+            {TAB_ORDER.map((tabId) => {
+              const on = rTabs.includes(tabId);
               return (
                 <Pressable
-                  key={t}
+                  key={tabId}
                   onPress={() =>
-                    setRTabs((p) => (on ? p.filter((x) => x !== t) : [...p, t]))
+                    setRTabs((p) => (on ? p.filter((x) => x !== tabId) : [...p, tabId]))
                   }
                   style={[styles.chip, on && styles.chipOn, { marginBottom: spacing[1] }]}
                 >
-                  <Text style={[styles.chipText, on && styles.chipTextOn]}>{TAB_LABEL[t]}</Text>
+                  <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                    {ownerTabLabel(tabId, t)}
+                  </Text>
                 </Pressable>
               );
             })}
             {rTabErr ? <Text style={styles.errInline}>{rTabErr}</Text> : null}
             <View style={styles.rowBetween}>
-              <Text style={styles.tableMeta}>All tables</Text>
+              <Text style={styles.tableMeta}>{t("ownerApp.settings.allTables")}</Text>
               <Switch value={rAllTables} onValueChange={setRAllTables} />
             </View>
             {!rAllTables && tables ? (
               <View style={{ marginTop: spacing[2] }}>
-                {tables
-                  .filter((t) => t.isActive)
-                  .map((t) => {
+                {groupTablesByFloor(tables.filter((t) => t.isActive)).map(({ floor, items }) => (
+                  <View key={floor} style={{ marginBottom: spacing[3] }}>
+                    <Text style={styles.floorHeading}>{floor}</Text>
+                    {items.map((t) => {
                     const on = rTableIds.includes(t._id);
                     return (
                       <Pressable
@@ -2163,20 +2333,22 @@ export default function OwnerSettingsContent({
                       </Pressable>
                     );
                   })}
+                  </View>
+                ))}
               </View>
             ) : null}
             <View style={styles.rowBetween}>
-              <Text style={styles.tableMeta}>Can file complaints</Text>
+              <Text style={styles.tableMeta}>{t("ownerApp.settings.canFileComplaints")}</Text>
               <Switch value={rFileComplaints} onValueChange={setRFileComplaints} />
             </View>
             <View style={styles.rowBetween}>
-              <Text style={styles.tableMeta}>Can apply discount</Text>
+              <Text style={styles.tableMeta}>{t("ownerApp.settings.canApplyDiscount")}</Text>
               <Switch value={rDiscount} onValueChange={setRDiscount} />
             </View>
             {rDiscount ? (
               <TextInput
                 style={styles.input}
-                placeholder="Max discount %"
+                placeholder={t("ownerApp.settings.maxDiscountPlaceholder")}
                 keyboardType="number-pad"
                 value={rMaxDisc}
                 onChangeText={setRMaxDisc}
@@ -2184,10 +2356,10 @@ export default function OwnerSettingsContent({
             ) : null}
             <View style={styles.modalActions}>
               <Pressable onPress={() => setRoleModal(null)} style={styles.secondaryBtn}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
+                <Text style={styles.secondaryBtnText}>{t("common.cancel")}</Text>
               </Pressable>
               <Pressable style={styles.primaryBtn} onPress={() => void saveRole()}>
-                <Text style={styles.primaryBtnText}>Save</Text>
+                <Text style={styles.primaryBtnText}>{t("common.save")}</Text>
               </Pressable>
             </View>
           </View>
@@ -2197,26 +2369,25 @@ export default function OwnerSettingsContent({
       <Modal visible={rolePickerOpen} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Select Active Role</Text>
-            <Text style={styles.note}>
-              The selected role will be in effect until you switch again. Hand the device to staff after
-              selecting.
-            </Text>
+            <Text style={styles.modalTitle}>{t("ownerApp.settings.selectActiveRole")}</Text>
+            <Text style={styles.note}>{t("ownerApp.settings.selectActiveRoleHint")}</Text>
             <Pressable style={styles.rowLink} onPress={() => void pickRole(null)}>
-              <Text style={styles.linkText}>Owner Mode (passcode required)</Text>
+              <Text style={styles.linkText}>{t("ownerApp.settings.ownerModePasscode")}</Text>
             </Pressable>
             {roles?.map((role) => (
               <Pressable key={role._id} style={styles.rowLink} onPress={() => void pickRole(role._id)}>
                 <View>
                   <Text style={styles.linkText}>{role.name}</Text>
                   <Text style={styles.tableMeta}>
-                    {role.allowedTabs.map((t) => TAB_LABEL[t as keyof typeof TAB_LABEL] ?? t).join(", ")}
+                    {role.allowedTabs
+                      .map((tabId) => ownerTabLabel(tabId as (typeof TAB_ORDER)[number], t))
+                      .join(", ")}
                   </Text>
                 </View>
               </Pressable>
             ))}
             <Pressable style={styles.secondaryBtn} onPress={() => setRolePickerOpen(false)}>
-              <Text style={styles.secondaryBtnText}>Close</Text>
+              <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.close")}</Text>
             </Pressable>
           </View>
         </View>
@@ -2267,6 +2438,12 @@ const styles = StyleSheet.create({
   accBody: { padding: spacing[3] },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionHint: { ...typography.caption, color: colors.text.secondary, flex: 1 },
+  floorHeading: {
+    ...typography.label,
+    color: colors.text.primary,
+    marginBottom: spacing[2],
+    marginTop: spacing[1],
+  },
   addBtn: { paddingVertical: spacing[1], paddingHorizontal: spacing[2] },
   addBtnText: { ...typography.caption, color: colors.accent.green, fontWeight: "700" },
   tableRow: {
@@ -2451,7 +2628,7 @@ const styles = StyleSheet.create({
   photoRemove: {
     position: "absolute",
     top: 4,
-    right: 4,
+    end: 4,
     backgroundColor: "rgba(0,0,0,0.6)",
     width: 28,
     height: 28,
@@ -2460,6 +2637,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   photoRemoveText: { color: "#fff", fontSize: 18 },
-  mapBox: { marginTop: spacing[2], height: 200, borderRadius: radius.md, overflow: "hidden" },
+  mapBox: { marginTop: spacing[2], minHeight: 360, borderRadius: radius.md, overflow: "hidden" },
   map: { flex: 1 },
 });

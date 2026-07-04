@@ -16,12 +16,11 @@ const STAFF_GATED_TABS = new Set([
   "bookings",
   "documents",
   "kitchen",
-  "loyalty",
   "livestream",
 ]);
 
 /** Stack-style tab routes that must not appear in the bottom bar. */
-const HIDDEN_TAB_ROUTES = new Set(["gst-report"]);
+const HIDDEN_TAB_ROUTES = new Set(["gst-report", "loyalty"]);
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   home: "home",
@@ -32,23 +31,21 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   bookings: "event",
   documents: "folder",
   kitchen: "restaurant",
-  loyalty: "stars",
   livestream: "videocam",
   settings: "settings",
 };
 
 const TAB_LABEL_KEYS: Record<string, string> = {
-  home: "tabs.owner.home",
-  slots: "tabs.owner.slots",
-  snacks: "tabs.owner.snacks",
-  financials: "tabs.owner.financials",
-  complaints: "tabs.owner.complaints",
-  bookings: "tabs.owner.bookings",
-  documents: "tabs.owner.documents",
-  kitchen: "tabs.owner.kitchen",
-  loyalty: "tabs.owner.loyalty",
-  livestream: "tabs.owner.livestream",
-  settings: "tabs.owner.settings",
+  home: "common.tabs.owner.home",
+  slots: "common.tabs.owner.slots",
+  snacks: "common.tabs.owner.snacks",
+  financials: "common.tabs.owner.financials",
+  complaints: "common.tabs.owner.complaints",
+  bookings: "common.tabs.owner.bookings",
+  documents: "common.tabs.owner.documents",
+  kitchen: "common.tabs.owner.kitchen",
+  livestream: "common.tabs.owner.livestream",
+  settings: "common.tabs.owner.settings",
 };
 
 export default function OwnerTabBar({
@@ -86,11 +83,9 @@ export default function OwnerTabBar({
           {visibleRoutes.map((route) => {
             const index = state.routes.findIndex((r) => r.key === route.key);
             const { options } = descriptors[route.key];
-            const label =
-              (options.title as string | undefined) ??
-              (TAB_LABEL_KEYS[route.name]
-                ? t(TAB_LABEL_KEYS[route.name])
-                : route.name);
+            const label = TAB_LABEL_KEYS[route.name]
+              ? t(TAB_LABEL_KEYS[route.name])
+              : ((options.title as string | undefined) ?? route.name);
             const isFocused = state.index === index;
             const iconName = TAB_ICONS[route.name] ?? "circle";
 
@@ -160,8 +155,8 @@ export default function OwnerTabBar({
 const styles = StyleSheet.create({
   outer: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    start: 0,
+    end: 0,
     bottom: 0,
     paddingHorizontal: 16,
     alignItems: "center",
@@ -191,8 +186,8 @@ const styles = StyleSheet.create({
   pillHighlight: {
     position: "absolute",
     top: 0,
-    left: 0,
-    right: 0,
+    start: 0,
+    end: 0,
     height: 1,
     backgroundColor: glass.tabPillInnerHighlight,
     zIndex: 1,
@@ -215,7 +210,7 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: "absolute",
-    right: -8,
+    end: -8,
     top: -4,
     minWidth: 16,
     height: 16,

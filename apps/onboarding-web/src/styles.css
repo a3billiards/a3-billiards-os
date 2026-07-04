@@ -259,6 +259,22 @@ textarea:focus {
   color: var(--accent);
 }
 
+.step-pill-button {
+  font: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.step-pill-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.step-pill-button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 .consent-row {
   display: flex;
   gap: 10px;
@@ -359,13 +375,18 @@ textarea:focus {
 
 .club-location-map {
   position: relative;
-  height: 320px;
+  height: 360px;
   width: 100%;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   overflow: hidden;
-  cursor: crosshair;
+  cursor: grab;
+  touch-action: none;
   background: #1a2332;
+}
+
+.club-location-map--dragging {
+  cursor: grabbing;
 }
 
 .club-location-tile {
@@ -412,6 +433,6 @@ textarea:focus {
   }
 
   .club-location-controls {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: 1fr 1fr;
   }
 }

@@ -9,6 +9,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
+import { convexSiteOrigin } from "./model/convexSiteOrigin";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -19,8 +20,9 @@ export const sendDeletionConfirmationEmail = internalAction({
     role: v.string(),
   },
   handler: async (ctx, { email, cancelToken, role }) => {
+    const site = convexSiteOrigin();
     const base =
-      process.env.CANCEL_DELETION_URL ?? "https://a3billiards.com/cancel-deletion";
+      process.env.CANCEL_DELETION_URL ?? `${site}/cancel-deletion`;
     const cancelLink = `${base.replace(/\/$/, "")}?token=${encodeURIComponent(cancelToken)}`;
     await ctx.runAction(internal.notificationsFcm.sendDeletionConfirmationEmail, {
       email,

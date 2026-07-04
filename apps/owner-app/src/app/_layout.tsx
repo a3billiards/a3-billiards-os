@@ -19,8 +19,11 @@ import {
 } from "react-native";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, glass } from "@a3/ui/theme";
-import { I18nProvider } from "@a3/i18n";
+import { ensureI18nInitialized, useTranslation } from "@a3/i18n";
+import { I18nConvexBridge } from "../lib/I18nConvexBridge";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+
+ensureI18nInitialized();
 
 // Keep splash screen visible until the auth gate decides where to route.
 // Wrapped in try/catch because hot reload can call this twice in dev.
@@ -57,33 +60,28 @@ const secureStorage: TokenStorage = {
 };
 
 function MissingConfigScreen() {
+  const { t } = useTranslation();
   useEffect(() => {
     void SplashScreen.hideAsync().catch(() => {});
   }, []);
   return (
     <View style={configErrorStyles.root}>
       <Text style={configErrorStyles.icon}>⚠️</Text>
-      <Text style={configErrorStyles.heading}>Configuration Error</Text>
-      <Text style={configErrorStyles.body}>
-        EXPO_PUBLIC_CONVEX_URL is missing from this build. The app cannot
-        connect to the backend. Please reinstall the latest build or contact
-        support at support@a3billiards.com.
-      </Text>
+      <Text style={configErrorStyles.heading}>{t("common.config.missingConvexTitle")}</Text>
+      <Text style={configErrorStyles.body}>{t("common.config.missingConvexBody")}</Text>
     </View>
   );
 }
 
 function FrozenScreen({ renewUrl }: { renewUrl: string }) {
+  const { t } = useTranslation();
   return (
     <View style={frozenStyles.root} accessibilityRole="none">
-      <Text style={frozenStyles.lock} accessibilityLabel="Locked">
+      <Text style={frozenStyles.lock} accessibilityLabel={t("common.accessibilityLocked")}>
         🔒
       </Text>
-      <Text style={frozenStyles.heading}>Subscription Ended</Text>
-      <Text style={frozenStyles.body}>
-        Your A3 Billiards OS subscription has expired. Renew to restore full access.
-        All your data, settings, and history are intact.
-      </Text>
+      <Text style={frozenStyles.heading}>{t("common.subscription.endedTitle")}</Text>
+      <Text style={frozenStyles.body}>{t("common.subscription.endedBody")}</Text>
       <Pressable
         style={({ pressed }) => [
           frozenStyles.cta,
@@ -93,27 +91,26 @@ function FrozenScreen({ renewUrl }: { renewUrl: string }) {
           void Linking.openURL(renewUrl);
         }}
       >
-        <Text style={frozenStyles.ctaText}>Renew Subscription</Text>
+        <Text style={frozenStyles.ctaText}>{t("common.subscription.renew")}</Text>
       </Pressable>
-      <Text style={frozenStyles.support}>
-        Questions? Contact support at support@a3billiards.com
-      </Text>
+      <Text style={frozenStyles.support}>{t("common.subscription.support")}</Text>
     </View>
   );
 }
 
 function GraceSubscriptionBanner({ renewUrl }: { renewUrl: string }) {
+  const { t } = useTranslation();
   return (
     <View style={graceStyles.wrap}>
       <Text style={graceStyles.line}>
-        ⚠ Your subscription expires soon. Renew now to avoid interruption.{" "}
+        ⚠ {t("common.subscription.graceBanner")}{" "}
         <Text
           style={graceStyles.link}
           onPress={() => {
             void Linking.openURL(renewUrl);
           }}
         >
-          Renew
+          {t("common.subscription.graceRenew")}
         </Text>
       </Text>
     </View>
@@ -185,10 +182,10 @@ function RootLayout() {
   return (
     <SafeAreaProvider>
       <ConvexAuthProvider client={convex} storage={secureStorage}>
-        <I18nProvider>
+        <I18nConvexBridge>
           <StatusBar style="light" />
           <OwnerSubscriptionShell />
-        </I18nProvider>
+        </I18nConvexBridge>
       </ConvexAuthProvider>
     </SafeAreaProvider>
   );

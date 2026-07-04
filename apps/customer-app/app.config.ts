@@ -67,6 +67,7 @@ export default () => {
       },
     ],
     "expo-router",
+    "expo-localization",
     [
       "expo-location",
       {
@@ -80,6 +81,7 @@ export default () => {
       {
         android: {
           minSdkVersion: 31,
+          softwareKeyboardLayoutMode: "resize",
         },
       },
     ],

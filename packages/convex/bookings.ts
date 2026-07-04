@@ -28,7 +28,6 @@ import {
   hhmmToMinutes,
   zonedWallTimeToUtcMs,
 } from "@a3/utils/timezone";
-import { getApplicableRate } from "@a3/utils/billing";
 import { validateBookableWithinOperating } from "@a3/utils/availability";
 import { countActiveComplaintsForUser } from "./complaints";
 
@@ -345,6 +344,11 @@ export const submitBooking = mutation({
       throw new Error("BOOKING_004: Club not accepting bookings");
     }
 
+    const ownerUser = await ctx.db.get(club.ownerId);
+    if (!ownerUser || ownerUser.isFrozen) {
+      throw new Error("BOOKING_004: Club not accepting bookings");
+    }
+
     const requireCoupon = club.bookingSettings.requireBookingCoupon === true;
     const clubCoupon = normalizeBookingCoupon(
       club.bookingSettings.bookingCouponCode ?? "",
@@ -506,7 +510,11 @@ export const submitBooking = mutation({
     }
 
     // 11 — estimated cost (server only)
-    const ratePerMinute = resolveRatePerMinAtSessionStart(club, requestedStartMs);
+    const ratePerMinute = resolveRatePerMinAtSessionStart(
+      club,
+      requestedStartMs,
+      requestedTypeNormalized,
+    );
     const estimatedCost =
       Math.max(args.requestedDurationMin, club.minBillMinutes) * ratePerMinute;
     const nowMs = Date.now();
@@ -633,6 +641,7 @@ export const getClubBookingFlowContext = query({
       currency: club.currency,
       minBillMinutes: club.minBillMinutes,
       baseRatePerMin: club.baseRatePerMin,
+      typeBaseRates: club.typeBaseRates ?? [],
       specialRates: club.specialRates.map((r) => ({
         daysOfWeek: r.daysOfWeek,
         startTime: r.startTime,
@@ -1028,8 +1037,7 @@ export const cancelBooking = mutation({
       .withIndex("by_bookingId", (q) => q.eq("bookingId", bookingId))
       .unique();
     if (!bookingLog || bookingLog.customerId !== customer.userId) {
-      // Silent reject per customer booking RLS requirements.
-      return null;
+      throw new Error("DATA_003: Booking not found");
     }
     if (
       bookingLog.status === "cancelled_by_customer" ||
@@ -1242,11 +1250,10 @@ export const startSessionFromBooking = mutation({
     }
     ensureRoleCanAssignTable(role.allowedTableIds, targetTableId);
 
-    const ratePerMin = getApplicableRate(
+    const ratePerMin = resolveRatePerMinAtSessionStart(
+      club,
       now,
-      club.specialRates,
-      club.baseRatePerMin,
-      club.timezone,
+      booking.tableType,
     );
 
     const sessionId = await ctx.db.insert("sessions", {
@@ -1338,7 +1345,18 @@ export const listPendingBookings = query({
         q.eq("clubId", clubId).eq("status", "pending_approval"),
       )
       .collect();
-    const sorted = rows.sort((a, b) =>
+    const stillPending = (
+      await Promise.all(
+        rows.map(async (b) => {
+          const log = await ctx.db
+            .query("bookingLogs")
+            .withIndex("by_bookingId", (q) => q.eq("bookingId", b._id))
+            .unique();
+          return log?.status === "pending_approval" ? b : null;
+        }),
+      )
+    ).filter((b): b is (typeof rows)[number] => b !== null);
+    const sorted = stillPending.sort((a, b) =>
       a.requestedDate === b.requestedDate
         ? a.requestedStartTime.localeCompare(b.requestedStartTime)
         : a.requestedDate.localeCompare(b.requestedDate),

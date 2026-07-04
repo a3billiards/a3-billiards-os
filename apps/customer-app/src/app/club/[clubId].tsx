@@ -12,6 +12,7 @@ import {
   NativeScrollEvent,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,23 +20,34 @@ import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { GlassPageBackground } from "@a3/ui/components";
+import { usePullToRefresh } from "@a3/ui/hooks";
 import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { MaterialIcons } from "@expo/vector-icons";
 import { canNavigateToClub, openClubNavigation } from "../../lib/openClubNavigation";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
+import {
+  formatHhmm12h,
+  localizedAmenityLabel,
+  localizedTableTypeLabel,
+} from "@a3/utils/clubDisplay";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const GALLERY_H = 200;
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
-const DAY_LABEL: Record<number, string> = {
-  0: "Sun",
-  1: "Mon",
-  2: "Tue",
-  3: "Wed",
-  4: "Thu",
-  5: "Fri",
-  6: "Sat",
-};
+const DAY_KEYS = [
+  "customerApp.clubProfile.daySun",
+  "customerApp.clubProfile.dayMon",
+  "customerApp.clubProfile.dayTue",
+  "customerApp.clubProfile.dayWed",
+  "customerApp.clubProfile.dayThu",
+  "customerApp.clubProfile.dayFri",
+  "customerApp.clubProfile.daySat",
+] as const;
+
+function dayLabel(d: number, t: (key: string) => string): string {
+  return t(DAY_KEYS[d]);
+}
 
 function currencySymbol(code: string): string {
   if (code === "INR") return "₹";
@@ -44,21 +56,14 @@ function currencySymbol(code: string): string {
   return `${code} `;
 }
 
-function to12h(hhmm: string): string {
-  const [h, m] = hhmm.split(":").map((x) => Number(x));
-  const period = h >= 12 ? "PM" : "AM";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+function formatSpecialWindow(start: string, end: string, locale: string): string {
+  return `${formatHhmm12h(start, locale)} – ${formatHhmm12h(end, locale)}`;
 }
 
-function formatSpecialWindow(start: string, end: string): string {
-  return `${to12h(start)} – ${to12h(end)}`;
-}
-
-function daysAbbrev(days: number[]): string {
+function daysAbbrev(days: number[], t: (key: string) => string): string {
   return [...days]
     .sort((a, b) => a - b)
-    .map((d) => DAY_LABEL[d])
+    .map((d) => dayLabel(d, t))
     .join(", ");
 }
 
@@ -72,6 +77,9 @@ const AMENITY_ICON: Record<string, string> = {
 };
 
 export default function PublicClubProfileScreen(): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = getCurrentLanguage();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { clubId } = useLocalSearchParams<{ clubId: string }>();
@@ -80,10 +88,6 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
     clubId ? { clubId: clubId as any } : "skip",
   );
   const user = useQuery(api.users.getCurrentUser);
-  const loyaltyStatus = useQuery(
-    api.loyalty.getCustomerLoyaltyStatus,
-    user?.role === "customer" && clubId ? { clubId: clubId as Id<"clubs"> } : "skip",
-  );
   const visits = useQuery(
     api.clubDiscovery.getCustomerVisitCountAtClub,
     user?.role === "customer" && clubId ? { clubId: clubId as Id<"clubs"> } : "skip",
@@ -150,8 +154,8 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
     void openClubNavigation(navigationTarget).then((opened) => {
       if (!opened) {
         Alert.alert(
-          "Could not open maps",
-          "Install a maps app or try again later.",
+          t("customerApp.clubProfile.couldNotOpenMaps"),
+          t("customerApp.clubProfile.mapsErrorBody"),
         );
       }
     });
@@ -162,11 +166,17 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.topNav}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
-          <Text style={styles.backBtnText}>{"<"} Back</Text>
+          <Text style={styles.backBtnText}>{t("customerApp.clubProfile.back")}</Text>
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         <FlatList
           data={photoData}
           horizontal
@@ -213,28 +223,28 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
           {showNavigate ? (
             <Pressable style={styles.navigateBtn} onPress={handleNavigate}>
               <MaterialIcons name="directions" size={20} color={glass.ctaBg} />
-              <Text style={styles.navigateBtnText}>Get directions</Text>
+              <Text style={styles.navigateBtnText}>{t("customerApp.clubProfile.getDirections")}</Text>
             </Pressable>
           ) : null}
           {profile.description ? (
             <Text style={styles.desc}>{profile.description}</Text>
           ) : null}
 
-          <Text style={styles.sectionTitle}>Opening Hours</Text>
+          <Text style={styles.sectionTitle}>{t("customerApp.clubProfile.openingHours")}</Text>
           {!oh ? (
-            <Text style={styles.muted}>Hours not available</Text>
+            <Text style={styles.muted}>{t("customerApp.clubProfile.hoursNotAvailable")}</Text>
           ) : (
             DAY_ORDER.map((d) => {
               const open = oh.daysOfWeek.includes(d);
               return (
                 <View key={d} style={styles.hoursRow}>
-                  <Text style={styles.dayLabel}>{DAY_LABEL[d]}</Text>
+                  <Text style={styles.dayLabel}>{dayLabel(d, t)}</Text>
                   {open ? (
                     <Text style={styles.hoursOpen}>
-                      {to12h(oh.open)} – {to12h(oh.close)}
+                      {formatHhmm12h(oh.open, locale)} – {formatHhmm12h(oh.close, locale)}
                     </Text>
                   ) : (
-                    <Text style={styles.closed}>Closed</Text>
+                    <Text style={styles.closed}>{t("customerApp.clubProfile.closed")}</Text>
                   )}
                 </View>
               );
@@ -243,13 +253,13 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
 
           {profile.amenities.length > 0 ? (
             <>
-              <Text style={styles.sectionTitle}>Amenities</Text>
+              <Text style={styles.sectionTitle}>{t("customerApp.clubProfile.amenities")}</Text>
               <View style={styles.amenityWrap}>
                 {profile.amenities.map((a) => (
                   <View key={a} style={styles.amenityChip}>
                     <Text style={styles.amenityText}>
                       {AMENITY_ICON[a] ? `${AMENITY_ICON[a]} ` : ""}
-                      {a}
+                      {localizedAmenityLabel(a, t)}
                     </Text>
                   </View>
                 ))}
@@ -257,81 +267,48 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
             </>
           ) : null}
 
-          <Text style={styles.sectionTitle}>Tables</Text>
+          <Text style={styles.sectionTitle}>{t("customerApp.clubProfile.tables")}</Text>
           {profile.tableTypes.length === 0 ? (
-            <Text style={styles.muted}>No tables listed</Text>
+            <Text style={styles.muted}>{t("customerApp.clubProfile.noTablesListed")}</Text>
           ) : (
             profile.tableTypes.map((row) => (
               <Text key={row.type} style={styles.tableRow}>
-                {row.type} <Text style={styles.tableDot}>•</Text>{" "}
-                {row.count} {row.count === 1 ? "table" : "tables"}
+                {localizedTableTypeLabel(row.type, t)} <Text style={styles.tableDot}>•</Text>{" "}
+                {row.count}{" "}
+                {row.count === 1
+                  ? t("customerApp.clubProfile.tableSingular")
+                  : t("customerApp.clubProfile.tablePlural")}
               </Text>
             ))
           )}
 
-          <Text style={styles.sectionTitle}>Pricing</Text>
+          <Text style={styles.sectionTitle}>{t("customerApp.clubProfile.pricing")}</Text>
           <Text style={styles.rateLine}>
             {currencySymbol(profile.currency)}
-            {profile.baseRatePerMin.toFixed(2)}/min
+            {profile.baseRatePerMin.toFixed(2)}{t("customerApp.clubProfile.perMin")}
           </Text>
           {profile.specialRates.map((r) => (
             <View key={r.id} style={styles.specialBlock}>
               <Text style={styles.specialLabel}>{r.label}</Text>
               <Text style={styles.specialRate}>
                 {currencySymbol(profile.currency)}
-                {r.ratePerMin.toFixed(2)}/min
+                {r.ratePerMin.toFixed(2)}{t("customerApp.clubProfile.perMin")}
               </Text>
-              <Text style={styles.specialMeta}>{formatSpecialWindow(r.startTime, r.endTime)}</Text>
-              <Text style={styles.specialMeta}>{daysAbbrev(r.daysOfWeek)}</Text>
+              <Text style={styles.specialMeta}>
+                {formatSpecialWindow(r.startTime, r.endTime, locale)}
+              </Text>
+              <Text style={styles.specialMeta}>{daysAbbrev(r.daysOfWeek, t)}</Text>
             </View>
           ))}
-
-          {loyaltyStatus ? (
-            <View style={styles.loyaltyCard}>
-              <Text style={styles.sectionTitle}>Your Loyalty at {profile.name}</Text>
-              <Text style={styles.loyaltyScope}>
-                Credits you earn here can only be used at this club — not at other clubs.
-              </Text>
-              <Text style={styles.loyaltyProgramme}>{loyaltyStatus.programmeName}</Text>
-              <Text style={styles.loyaltyCredits}>
-                {loyaltyStatus.availableCredits} free visit
-                {loyaltyStatus.availableCredits === 1 ? "" : "s"} available at {profile.name}
-              </Text>
-              {loyaltyStatus.rewardEarnedThisPeriod ? (
-                <Text style={styles.loyaltyProgress}>
-                  You&apos;ve earned your free visit this period — come back and play more
-                  to earn again.
-                </Text>
-              ) : (
-                <>
-                  <View style={styles.progressTrack}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        { width: `${loyaltyStatus.progressPercent}%` },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.loyaltyProgress}>
-                    {loyaltyStatus.progressMinutes} / {loyaltyStatus.thresholdMinutes} min
-                    played in the last {loyaltyStatus.windowDays} days toward your next
-                    free visit
-                  </Text>
-                </>
-              )}
-              <Text style={styles.loyaltyMeta}>
-                {loyaltyStatus.sessionCountInWindow} visits · {loyaltyStatus.progressMinutes}{" "}
-                min this period · {loyaltyStatus.lifetimeCreditsEarned} credits earned lifetime
-              </Text>
-            </View>
-          ) : null}
 
           {user?.role === "customer" && visits && visits.count > 0 ? (
             <View style={styles.visitBox}>
               <Text style={styles.visitText}>
-                {"You've played here "}
+                {t("customerApp.clubProfile.playedHere")}{" "}
                 {visits.count}{" "}
-                {visits.count === 1 ? "time" : "times"}
+                {visits.count === 1
+                  ? t("customerApp.clubProfile.timeSingular")
+                  : t("customerApp.clubProfile.timePlural")}
               </Text>
               <Pressable
                 onPress={() =>
@@ -341,7 +318,7 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
                   } as any)
                 }
               >
-                <Text style={styles.visitLink}>View History</Text>
+                <Text style={styles.visitLink}>{t("customerApp.clubProfile.viewHistory")}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -356,11 +333,13 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
             style={styles.primaryCta}
             onPress={() => router.push(`/book/${profile.clubId}` as any)}
           >
-            <Text style={styles.primaryCtaText}>Book a Table</Text>
+            <Text style={styles.primaryCtaText}>{t("customerApp.clubProfile.bookTable")}</Text>
           </Pressable>
         ) : (
           <View style={styles.disabledCta}>
-            <Text style={styles.disabledCtaText}>Online Booking Unavailable</Text>
+            <Text style={styles.disabledCtaText}>
+              {t("customerApp.clubProfile.bookingUnavailable")}
+            </Text>
           </View>
         )}
       </View>
@@ -370,11 +349,12 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
 }
 
 function Unavailable({ onDiscover }: { onDiscover: () => void }): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <View style={styles.center}>
-      <Text style={styles.unavailableTitle}>This club is no longer available.</Text>
+      <Text style={styles.unavailableTitle}>{t("customerApp.clubProfile.unavailableTitle")}</Text>
       <Pressable style={styles.primaryCta} onPress={onDiscover}>
-        <Text style={styles.primaryCtaText}>Discover Clubs</Text>
+        <Text style={styles.primaryCtaText}>{t("customerApp.clubProfile.discoverClubs")}</Text>
       </Pressable>
     </View>
   );

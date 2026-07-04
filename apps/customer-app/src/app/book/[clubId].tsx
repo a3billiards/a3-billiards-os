@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -15,6 +16,8 @@ import { useMutation, useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
+import { TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
 import {
   DateStrip,
   TableTypePicker,
@@ -31,61 +34,51 @@ import {
   zonedWallTimeToUtcMs,
 } from "@a3/utils/timezone";
 import { formatHhmm12h } from "@a3/utils/availability";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
-const STEPS = ["Type", "Table", "Date", "Duration", "Time", "Review"] as const;
+const STEP_KEYS = [
+  "customerApp.booking.steps.type",
+  "customerApp.booking.steps.table",
+  "customerApp.booking.steps.date",
+  "customerApp.booking.steps.duration",
+  "customerApp.booking.steps.time",
+  "customerApp.booking.steps.review",
+] as const;
 
-const DURATION_LABELS: Record<number, { chip: string; summary: string; sub?: string }> = {
-  30: { chip: "30m", summary: "30 minutes", sub: "Quick game" },
-  60: { chip: "1h", summary: "1 hour", sub: "Standard session" },
-  90: { chip: "1.5h", summary: "1.5 hours", sub: "Extended play" },
-  120: { chip: "2h", summary: "2 hours", sub: "Tournament practice" },
-  180: { chip: "3h", summary: "3 hours", sub: "Long session" },
+const DURATION_KEY_MAP: Record<number, string> = {
+  30: "d30",
+  60: "d60",
+  90: "d90",
+  120: "d120",
+  180: "d180",
 };
 
-function bookingErrorMessage(err: unknown, minAdvanceMinutes: number): string {
+function bookingErrorMessage(
+  err: unknown,
+  minAdvanceMinutes: number,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
   const raw = err instanceof Error ? err.message : String(err);
-  if (raw.includes("BOOKING_001")) {
-    return "You already have 2 active bookings at this club.";
-  }
-  if (raw.includes("BOOKING_002")) {
-    return "You already have active bookings at 2 clubs. Please complete or cancel existing bookings before booking at a new club.";
-  }
-  if (raw.includes("BOOKING_003")) {
-    return "This slot is no longer available. Please select a different time.";
-  }
-  if (raw.includes("BOOKING_004")) {
-    return "This club is not accepting online bookings at the moment.";
-  }
-  if (raw.includes("BOOKING_008")) {
-    return "The selected time is outside the club's bookable hours or date range.";
-  }
-  if (raw.includes("BOOKING_009")) {
-    return "This table type is not available for online booking.";
-  }
+  if (raw.includes("BOOKING_001")) return t("customerApp.booking.errors.booking001");
+  if (raw.includes("BOOKING_002")) return t("customerApp.booking.errors.booking002");
+  if (raw.includes("BOOKING_003")) return t("customerApp.booking.errors.booking003");
+  if (raw.includes("BOOKING_004")) return t("customerApp.booking.errors.booking004");
+  if (raw.includes("BOOKING_008")) return t("customerApp.booking.errors.booking008");
+  if (raw.includes("BOOKING_009")) return t("customerApp.booking.errors.booking009");
   if (raw.includes("BOOKING_010")) {
-    return `Please book at least ${minAdvanceMinutes} minutes in advance.`;
+    return t("customerApp.booking.errors.booking010", { minutes: minAdvanceMinutes });
   }
-  if (raw.includes("AUTH_002")) {
-    return "Your account is currently suspended.";
-  }
-  if (raw.includes("AUTH_004")) {
-    return "Please verify your phone number before booking.";
-  }
-  if (raw.includes("AUTH_006")) {
-    return "Your account is pending deletion.";
-  }
-  if (raw.includes("SUBSCRIPTION_003")) {
-    return "This club is not accepting online bookings at the moment.";
-  }
-  if (raw.includes("PAYMENT_004")) {
-    return "Invalid coupon code. Check the code from the club and try again.";
-  }
-  return raw.replace(/^[A-Z_]+_\d+:\s*/, "") || "Something went wrong. Please try again.";
+  if (raw.includes("AUTH_002")) return t("customerApp.booking.errors.auth002");
+  if (raw.includes("AUTH_004")) return t("customerApp.booking.errors.auth004");
+  if (raw.includes("AUTH_006")) return t("customerApp.booking.errors.auth006");
+  if (raw.includes("SUBSCRIPTION_003")) return t("customerApp.booking.errors.subscription003");
+  if (raw.includes("PAYMENT_004")) return t("customerApp.booking.errors.payment004");
+  return raw.replace(/^[A-Z_]+_\d+:\s*/, "") || t("customerApp.booking.errors.generic");
 }
 
 function formatMoney(currency: string, amount: number): string {
   try {
-    return new Intl.NumberFormat("en-IN", {
+    return new Intl.NumberFormat(getCurrentLanguage(), {
       style: "currency",
       currency,
       maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
@@ -102,7 +95,9 @@ function capitalizeWords(s: string): string {
     .join(" ");
 }
 
-export default function BookClubScreen() {
+function BookClubScreenContent() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const { clubId: clubIdParam } = useLocalSearchParams<{ clubId: string }>();
   const clubId = (clubIdParam ?? "") as Id<"clubs">;
@@ -167,11 +162,11 @@ export default function BookClubScreen() {
       setSelectedTime(null);
       setStep(4);
       Alert.alert(
-        "Time unavailable",
-        "Your selected time is no longer available for this duration. Please pick a new time.",
+        t("customerApp.booking.alerts.timeUnavailableTitle"),
+        t("customerApp.booking.alerts.timeUnavailableBody"),
       );
     }
-  }, [availableSlots, durationForSlots, selectedTime, step]);
+  }, [availableSlots, durationForSlots, selectedTime, step, t]);
 
   const tzLabel = useMemo(
     () => (ctx ? timeZoneAbbreviation(ctx.timezone) : ""),
@@ -197,7 +192,7 @@ export default function BookClubScreen() {
   const summaryDateLabel = useMemo(() => {
     if (!ctx || !dateYmd) return "";
     const ms = zonedWallTimeToUtcMs(dateYmd, "12:00", ctx.timezone);
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(getCurrentLanguage(), {
       timeZone: ctx.timezone,
       weekday: "short",
       day: "numeric",
@@ -226,7 +221,10 @@ export default function BookClubScreen() {
       return;
     }
     if (ctx.bookingSettings.requireBookingCoupon && !couponCode.trim()) {
-      Alert.alert("Coupon required", "Enter the booking coupon code from the club.");
+      Alert.alert(
+        t("customerApp.booking.alerts.couponRequiredTitle"),
+        t("customerApp.booking.alerts.couponRequiredBody"),
+      );
       return;
     }
     setSubmitting(true);
@@ -244,14 +242,14 @@ export default function BookClubScreen() {
       router.replace("/(tabs)/bookings");
       setTimeout(() => {
         Alert.alert(
-          "Booking request sent!",
-          "You'll be notified once the club responds.",
+          t("customerApp.booking.alerts.requestSentTitle"),
+          t("customerApp.booking.alerts.requestSentBody"),
         );
       }, 0);
     } catch (e) {
       Alert.alert(
-        "Booking failed",
-        bookingErrorMessage(e, ctx.bookingSettings.minAdvanceMinutes),
+        t("customerApp.booking.alerts.bookingFailedTitle"),
+        bookingErrorMessage(e, ctx.bookingSettings.minAdvanceMinutes, t),
       );
     } finally {
       setSubmitting(false);
@@ -263,7 +261,7 @@ export default function BookClubScreen() {
       <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <Text style={styles.errorText}>Missing club.</Text>
+          <Text style={styles.errorText}>{t("customerApp.booking.missingClub")}</Text>
         </View>
       </SafeAreaView>
       </GlassPageBackground>
@@ -291,10 +289,10 @@ export default function BookClubScreen() {
             <MaterialIcons name="arrow-back" size={24} color={colors.text.primary} />
           </Pressable>
           <Text style={styles.disabledTitle}>
-            Online booking is not available at this club.
+            {t("customerApp.booking.onlineBookingUnavailable")}
           </Text>
           <Pressable style={styles.primaryBtn} onPress={handleClose}>
-            <Text style={styles.primaryBtnText}>Go back</Text>
+            <Text style={styles.primaryBtnText}>{t("customerApp.booking.goBack")}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -318,10 +316,10 @@ export default function BookClubScreen() {
         </View>
         <View style={styles.disabledWrap}>
           <Text style={styles.disabledTitle}>
-            Online booking is not available at this club.
+            {t("customerApp.booking.onlineBookingUnavailable")}
           </Text>
           <Pressable style={styles.primaryBtn} onPress={handleClose}>
-            <Text style={styles.primaryBtnText}>Go back</Text>
+            <Text style={styles.primaryBtnText}>{t("customerApp.booking.goBack")}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -346,8 +344,8 @@ export default function BookClubScreen() {
 
       <View style={styles.stepper}>
         <View style={styles.dotsRow}>
-          {STEPS.map((label, i) => (
-            <React.Fragment key={label}>
+          {STEP_KEYS.map((stepKey, i) => (
+            <React.Fragment key={stepKey}>
               {i > 0 ? (
                 <View
                   style={[
@@ -369,8 +367,8 @@ export default function BookClubScreen() {
           ))}
         </View>
         <View style={styles.labelsRow}>
-          {STEPS.map((label, i) => (
-            <View key={label} style={styles.stepLabelCell}>
+          {STEP_KEYS.map((stepKey, i) => (
+            <View key={stepKey} style={styles.stepLabelCell}>
               <Text
                 style={[
                   styles.stepLabel,
@@ -378,7 +376,7 @@ export default function BookClubScreen() {
                   i > step && styles.stepLabelMuted,
                 ]}
               >
-                {label}
+                {t(stepKey)}
               </Text>
             </View>
           ))}
@@ -389,6 +387,9 @@ export default function BookClubScreen() {
         style={styles.body}
         contentContainerStyle={styles.bodyContent}
         keyboardShouldPersistTaps="always"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {step === 0 && (
           <TableTypePicker
@@ -416,12 +417,14 @@ export default function BookClubScreen() {
               setSelectedTime(null);
               setStep(2);
             }}
+            headingLabel={t("customerApp.booking.whichTable")}
+            emptyLabel={t("customerApp.booking.noTablesEmpty")}
           />
         ) : null}
 
         {step === 2 && !bh ? (
           <Text style={styles.errorText}>
-            This club has not finished booking setup (hours missing).
+            {t("customerApp.booking.setupIncomplete")}
           </Text>
         ) : null}
         {step === 2 && bh ? (
@@ -441,20 +444,24 @@ export default function BookClubScreen() {
                 setSelectedTime(null);
                 setStep(3);
               }}
+              headingLabel={t("customerApp.booking.pickDate")}
+              todayLabel={t("customerApp.booking.today")}
+              noDatesLabel={t("customerApp.booking.noDatesAvailable")}
             />
-            <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
+            <Text style={styles.tzHint}>{t("customerApp.booking.timesShownIn", { tz: tzLabel })}</Text>
           </>
         ) : null}
 
         {step === 3 && dateYmd ? (
           <>
-            <Text style={styles.reviewHeading}>How long do you want to play?</Text>
+            <Text style={styles.reviewHeading}>{t("customerApp.booking.durationHeading")}</Text>
             <View style={styles.durGrid}>
               {slotOptions.map((d: number) => {
-                const meta = DURATION_LABELS[d] ?? {
-                  chip: `${d}m`,
-                  summary: `${d} minutes`,
-                };
+                const durKey = DURATION_KEY_MAP[d];
+                const chip = durKey
+                  ? t(`customerApp.booking.durations.${durKey}.chip`)
+                  : t("customerApp.booking.durations.chipFallback", { count: d });
+                const sub = durKey ? t(`customerApp.booking.durations.${durKey}.sub`) : null;
                 const active = durationMin === d;
                 return (
                   <Pressable
@@ -469,10 +476,10 @@ export default function BookClubScreen() {
                     <Text
                       style={[styles.durChip, active && styles.durChipActive]}
                     >
-                      {meta.chip}
+                      {chip}
                     </Text>
-                    {meta.sub ? (
-                      <Text style={styles.durSub}>{meta.sub}</Text>
+                    {sub ? (
+                      <Text style={styles.durSub}>{sub}</Text>
                     ) : null}
                   </Pressable>
                 );
@@ -481,8 +488,9 @@ export default function BookClubScreen() {
             {durationMin !== null && durationMin < ctx.minBillMinutes ? (
               <View style={styles.warnCard}>
                 <Text style={styles.warnText}>
-                  Minimum charge is {ctx.minBillMinutes} minutes. Your booking
-                  will be billed at the {ctx.minBillMinutes}-minute rate.
+                  {t("customerApp.booking.minChargeWarning", {
+                    minutes: ctx.minBillMinutes,
+                  })}
                 </Text>
               </View>
             ) : null}
@@ -502,65 +510,67 @@ export default function BookClubScreen() {
               bookableOpen={bh.open}
               bookableClose={bh.close}
             />
-            <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
+            <Text style={styles.tzHint}>{t("customerApp.booking.timesShownIn", { tz: tzLabel })}</Text>
           </>
         ) : null}
 
         {step === 5 && bh && tableType && selectedTableId && dateYmd && selectedTime && durationMin !== null ? (
           <View style={styles.review}>
-            <Text style={styles.confirmTitle}>Confirm your booking</Text>
+            <Text style={styles.confirmTitle}>{t("customerApp.booking.confirmTitle")}</Text>
             <View style={styles.summaryCard}>
               <Text style={styles.summaryClub}>{ctx.name}</Text>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Table</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryTable")}</Text>
                 <Text style={styles.summaryVal}>
-                  {selectedTableLabel || "—"}
+                  {selectedTableLabel || t("customerApp.booking.emDash")}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Table Type</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryTableType")}</Text>
                 <Text style={styles.summaryVal}>
                   {capitalizeWords(tableType)}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Date</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryDate")}</Text>
                 <Text style={styles.summaryVal}>{summaryDateLabel}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Time</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryTime")}</Text>
                 <Text style={styles.summaryVal}>
                   {formatHhmm12h(selectedTime)}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Duration</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryDuration")}</Text>
                 <Text style={styles.summaryVal}>
                   {durationMin !== null
-                    ? (DURATION_LABELS[durationMin]?.summary ??
-                      `${durationMin} minutes`)
-                    : "—"}
+                    ? (DURATION_KEY_MAP[durationMin]
+                        ? t(`customerApp.booking.durations.${DURATION_KEY_MAP[durationMin]}.summary`)
+                        : t("customerApp.booking.durations.summaryFallback", { count: durationMin }))
+                    : t("customerApp.booking.emDash")}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Estimated Cost</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryEstimatedCost")}</Text>
                 <Text style={styles.summaryVal}>
-                  Est. {formatMoney(ctx.currency, estimatedPreview)} — actual
-                  bill may vary
+                  {t("customerApp.booking.estimatedCostValue", {
+                    amount: formatMoney(ctx.currency, estimatedPreview),
+                  })}
                 </Text>
               </View>
             </View>
-            <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
+            <Text style={styles.tzHint}>{t("customerApp.booking.timesShownIn", { tz: tzLabel })}</Text>
 
             {ctx.bookingSettings.requireBookingCoupon ? (
               <>
-                <Text style={styles.notesLabel}>Booking coupon</Text>
+                <Text style={styles.notesLabel}>{t("customerApp.booking.bookingCoupon")}</Text>
                 <Text style={styles.couponHint}>
-                  Enter the coupon code from the club to confirm this booking (no card payment in app).
+                  {t("customerApp.booking.couponHint")}
                 </Text>
                 <TextInput
                   style={styles.notesInput}
-                  placeholder="Coupon code"
+                  placeholder={t("customerApp.booking.couponPlaceholder")}
                   placeholderTextColor={colors.text.tertiary}
                   value={couponCode}
                   onChangeText={(t: string) => setCouponCode(t.toUpperCase().slice(0, 32))}
@@ -570,17 +580,17 @@ export default function BookClubScreen() {
               </>
             ) : null}
 
-            <Text style={styles.notesLabel}>Notes (optional)</Text>
+            <Text style={styles.notesLabel}>{t("customerApp.booking.notesOptional")}</Text>
             <TextInput
               style={styles.notesInput}
-              placeholder="Add a note for the club"
+              placeholder={t("customerApp.booking.notesPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               value={notes}
               onChangeText={(t: string) => setNotes(t.slice(0, 200))}
               multiline
               maxLength={200}
             />
-            <Text style={styles.counter}>{notes.length}/200</Text>
+            <Text style={styles.counter}>{t("customerApp.booking.notesCounter", { count: notes.length })}</Text>
 
             <Pressable
               style={[
@@ -593,7 +603,7 @@ export default function BookClubScreen() {
               {submitting ? (
                 <ActivityIndicator color={glass.ctaText} />
               ) : (
-                <Text style={styles.primaryBtnText}>Confirm Booking</Text>
+                <Text style={styles.primaryBtnText}>{t("customerApp.booking.confirmBooking")}</Text>
               )}
             </Pressable>
           </View>
@@ -605,6 +615,15 @@ export default function BookClubScreen() {
 }
 
 const DOT_GAP = 4;
+
+export default function BookClubScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("customerApp.clubProfile.bookTable")}>
+      <BookClubScreenContent />
+    </TabErrorBoundary>
+  );
+}
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "transparent" },

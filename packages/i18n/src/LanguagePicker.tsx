@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -9,17 +9,19 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { colors, typography, radius, spacing } from "@a3/ui/theme";
+import { colors, typography, radius, spacing, glass } from "@a3/ui/theme";
 import {
   LOCALE_OPTIONS,
+  isAppLocale,
   type AppLocale,
   type LocaleOption,
 } from "./config";
 import { useAppLocaleOptional } from "./I18nProvider";
+import { applyAppLocale } from "./applyAppLocale";
 
 export interface LanguagePickerProps {
-  /** Compact row for settings screens */
-  variant?: "row" | "inline";
+  /** row = settings row; inline = full list; icon = header globe button */
+  variant?: "row" | "inline" | "icon";
 }
 
 function LocaleRow({
@@ -52,26 +54,90 @@ function LocaleRow({
   );
 }
 
+function LanguagePickerSheet({
+  open,
+  locale,
+  onClose,
+  onSelect,
+}: {
+  open: boolean;
+  locale: AppLocale;
+  onClose: () => void;
+  onSelect: (code: AppLocale) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+
+  return (
+    <Modal
+      visible={open}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>{t("common.language.selectLanguage")}</Text>
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityLabel={t("common.close")}
+            >
+              <MaterialIcons
+                name="close"
+                size={24}
+                color={colors.text.secondary}
+              />
+            </Pressable>
+          </View>
+          <ScrollView style={styles.sheetList}>
+            {LOCALE_OPTIONS.map((option) => (
+              <LocaleRow
+                key={option.code}
+                option={option}
+                selected={option.code === locale}
+                onSelect={onSelect}
+              />
+            ))}
+          </ScrollView>
+          <Text style={styles.sheetHint}>{t("common.language.languageHint")}</Text>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export function LanguagePicker({
   variant = "row",
 }: LanguagePickerProps): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const ctx = useAppLocaleOptional();
   const [open, setOpen] = useState(false);
 
-  const locale = ctx?.locale ?? "en";
-  const setLocale = ctx?.setLocale;
+  const locale: AppLocale =
+    ctx?.locale ??
+    (isAppLocale(i18n.language) ? i18n.language : "en");
   const current =
     LOCALE_OPTIONS.find((o) => o.code === locale) ?? LOCALE_OPTIONS[0];
 
-  const onSelect = (code: AppLocale) => {
-    void setLocale?.(code).then(() => setOpen(false));
-  };
+  const onSelect = useCallback(
+    (code: AppLocale) => {
+      void (async () => {
+        if (ctx?.setLocale) {
+          await ctx.setLocale(code);
+        } else {
+          await applyAppLocale(code, i18n);
+        }
+        setOpen(false);
+      })();
+    },
+    [ctx, i18n],
+  );
 
   if (variant === "inline") {
     return (
       <View style={styles.inlineWrap}>
-        <Text style={styles.label}>{t("settings.language")}</Text>
+        <Text style={styles.label}>{t("common.language.language")}</Text>
         <ScrollView style={styles.inlineList} nestedScrollEnabled>
           {LOCALE_OPTIONS.map((option) => (
             <LocaleRow
@@ -82,8 +148,30 @@ export function LanguagePicker({
             />
           ))}
         </ScrollView>
-        <Text style={styles.hint}>{t("settings.languageHint")}</Text>
+        <Text style={styles.hint}>{t("common.language.languageHint")}</Text>
       </View>
+    );
+  }
+
+  if (variant === "icon") {
+    return (
+      <>
+        <Pressable
+          hitSlop={10}
+          style={styles.iconBtn}
+          onPress={() => setOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.language.selectLanguage")}
+        >
+          <MaterialIcons name="language" size={20} color={glass.textMuted} />
+        </Pressable>
+        <LanguagePickerSheet
+          open={open}
+          locale={locale}
+          onClose={() => setOpen(false)}
+          onSelect={onSelect}
+        />
+      </>
     );
   }
 
@@ -93,7 +181,7 @@ export function LanguagePicker({
         style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={t("settings.selectLanguage")}
+        accessibilityLabel={t("common.language.selectLanguage")}
       >
         <View style={styles.rowLeft}>
           <MaterialIcons
@@ -102,7 +190,7 @@ export function LanguagePicker({
             color={colors.text.secondary}
           />
           <View style={styles.rowTextWrap}>
-            <Text style={styles.rowTitle}>{t("settings.language")}</Text>
+            <Text style={styles.rowTitle}>{t("common.language.language")}</Text>
             <Text style={styles.rowValue}>{current.nativeName}</Text>
           </View>
         </View>
@@ -113,44 +201,12 @@ export function LanguagePicker({
         />
       </Pressable>
 
-      <Modal
-        visible={open}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setOpen(false)}
-      >
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>
-                {t("settings.selectLanguage")}
-              </Text>
-              <Pressable
-                onPress={() => setOpen(false)}
-                hitSlop={12}
-                accessibilityLabel={t("common.close")}
-              >
-                <MaterialIcons
-                  name="close"
-                  size={24}
-                  color={colors.text.secondary}
-                />
-              </Pressable>
-            </View>
-            <ScrollView style={styles.sheetList}>
-              {LOCALE_OPTIONS.map((option) => (
-                <LocaleRow
-                  key={option.code}
-                  option={option}
-                  selected={option.code === locale}
-                  onSelect={onSelect}
-                />
-              ))}
-            </ScrollView>
-            <Text style={styles.sheetHint}>{t("settings.languageHint")}</Text>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <LanguagePickerSheet
+        open={open}
+        locale={locale}
+        onClose={() => setOpen(false)}
+        onSelect={onSelect}
+      />
     </>
   );
 }
@@ -171,6 +227,13 @@ const styles = StyleSheet.create({
   rowTextWrap: { gap: 2 },
   rowTitle: { ...typography.body, color: colors.text.primary },
   rowValue: { ...typography.caption, color: colors.text.secondary },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",

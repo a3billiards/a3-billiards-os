@@ -9,13 +9,17 @@ import {
   Modal,
   TextInput,
   Alert,
+  I18nManager,
+  RefreshControl,
 } from "react-native";
 import { BookingCard, ComplaintBanner, GlassPageBackground } from "@a3/ui/components";
 import { useMutation, useQuery } from "convex/react";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { api } from "@a3/convex/_generated/api";
 import { colors, layout, radius, spacing, typography, glass } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 import { computeBookingUnixTime, timeZoneAbbreviation } from "@a3/utils/timezone";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,18 +42,18 @@ const FIGMA_BOOKINGS = {
 } as const;
 
 const HISTORY_FILTERS = [
-  { key: "all", label: "All" },
-  { key: "rejected", label: "Rejected" },
-  { key: "cancelled_by_customer", label: "Cancelled" },
-  { key: "cancelled_by_club", label: "Cancelled" },
-  { key: "expired", label: "Expired" },
-  { key: "completed", label: "Completed" },
+  { key: "all", labelKey: "ownerApp.bookings.filters.all" },
+  { key: "rejected", labelKey: "ownerApp.bookings.filters.rejected" },
+  { key: "cancelled_by_customer", labelKey: "ownerApp.bookings.filters.cancelled" },
+  { key: "cancelled_by_club", labelKey: "ownerApp.bookings.filters.cancelled" },
+  { key: "expired", labelKey: "ownerApp.bookings.filters.expired" },
+  { key: "completed", labelKey: "ownerApp.bookings.filters.completed" },
 ] as const;
 
-function elapsedLabel(createdAt?: number): string {
+function elapsedLabel(createdAt: number | undefined, tr: (key: string, opts?: { min: number }) => string): string {
   if (!createdAt) return "";
   const min = Math.max(1, Math.floor((Date.now() - createdAt) / 60_000));
-  return `Submitted ${min} min ago`;
+  return tr("ownerApp.bookings.submittedAgo", { min });
 }
 
 function canStartNow(booking: {
@@ -65,7 +69,9 @@ function canStartNow(booking: {
   return now >= start - 15 * 60_000 && now <= start + 30 * 60_000;
 }
 
-export default function BookingsTab() {
+function BookingsTabContent() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const params = useLocalSearchParams<{ segment?: string }>();
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
@@ -149,7 +155,8 @@ export default function BookingsTab() {
   const cancelByClub = useMutation(api.bookings.clubCancelBooking);
   const startSession = useMutation(api.bookings.startSessionFromBooking);
 
-  const timezone = dashboard ? timeZoneAbbreviation("Asia/Kolkata") : "";
+  const clubTimezone = dashboard?.timezone ?? "Asia/Kolkata";
+  const timezone = dashboard ? timeZoneAbbreviation(clubTimezone) : "";
   const noBookings =
     (pending?.items.length ?? 0) +
       (upcoming?.items.length ?? 0) +
@@ -164,7 +171,7 @@ export default function BookingsTab() {
       <GlassPageBackground>
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={glass.ctaBg} />
-        <Text style={styles.loadingText}>Loading bookings...</Text>
+        <Text style={styles.loadingText}>{t("common.loading")}</Text>
       </View>
       </GlassPageBackground>
     );
@@ -175,7 +182,7 @@ export default function BookingsTab() {
   }
 
   if (roleId !== undefined && !canAccessTab("bookings")) {
-    return <TabAccessDenied tabLabel="Bookings" />;
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.bookings")} />;
   }
 
   if (
@@ -186,7 +193,7 @@ export default function BookingsTab() {
       <GlassPageBackground>
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={glass.ctaBg} />
-        <Text style={styles.loadingText}>Loading bookings...</Text>
+        <Text style={styles.loadingText}>{t("common.loading")}</Text>
       </View>
       </GlassPageBackground>
     );
@@ -221,7 +228,7 @@ export default function BookingsTab() {
       });
       setShowApproveModal(false);
     } catch (e) {
-      Alert.alert("Approve failed", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.bookings.approveFailed"), parseConvexError(e as Error).message);
     } finally {
       setInFlight(null);
     }
@@ -237,7 +244,7 @@ export default function BookingsTab() {
       });
       setShowRejectModal(false);
     } catch (e) {
-      Alert.alert("Reject failed", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.bookings.rejectFailed"), parseConvexError(e as Error).message);
     } finally {
       setInFlight(null);
     }
@@ -253,7 +260,7 @@ export default function BookingsTab() {
       });
       setShowCancelModal(false);
     } catch (e) {
-      Alert.alert("Cancel failed", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.bookings.cancelFailed"), parseConvexError(e as Error).message);
     } finally {
       setInFlight(null);
     }
@@ -263,17 +270,15 @@ export default function BookingsTab() {
     if (!dashboard?.bookingSettingsEnabled && noBookings) {
       return (
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>No bookings yet</Text>
-          <Text style={styles.emptyText}>
-            Enable online booking in Settings to start receiving requests.
-          </Text>
+          <Text style={styles.emptyTitle}>{t("ownerApp.bookings.noBookingsYet")}</Text>
+          <Text style={styles.emptyText}>{t("ownerApp.bookings.enableOnlineBooking")}</Text>
         </View>
       );
     }
 
     if (segment === "pending") {
       if (!pending || pending.items.length === 0) {
-        return <Text style={styles.emptyText}>No pending booking requests</Text>;
+        return <Text style={styles.emptyText}>{t("ownerApp.bookings.noPending")}</Text>;
       }
       return pending.items.map((item: any) => (
         <BookingCard
@@ -297,7 +302,7 @@ export default function BookingsTab() {
           complaints={item.complaints}
           customerStats={item.customerStats}
           isLoading={inFlight === item.booking._id}
-          footerText={elapsedLabel(item.booking.createdAt)}
+          footerText={elapsedLabel(item.booking.createdAt, t)}
           onApprove={() =>
             openApprove(item.booking._id, item.booking.confirmedTableId)
           }
@@ -308,10 +313,10 @@ export default function BookingsTab() {
 
     if (segment === "upcoming") {
       if (!upcoming || upcoming.items.length === 0) {
-        return <Text style={styles.emptyText}>No upcoming bookings</Text>;
+        return <Text style={styles.emptyText}>{t("ownerApp.bookings.noUpcoming")}</Text>;
       }
       return upcoming.items.map((item: any) => {
-        const startEnabled = canStartNow(item.booking, "Asia/Kolkata");
+        const startEnabled = canStartNow(item.booking, clubTimezone);
         return (
           <BookingCard
             key={item.booking._id}
@@ -323,7 +328,7 @@ export default function BookingsTab() {
               requestedDate: item.booking.requestedDate,
               requestedStartTime: item.booking.requestedStartTime,
               requestedDurationMin: item.booking.requestedDurationMin,
-              confirmedTableLabel: item.confirmedTableLabel ?? "Table to be assigned",
+              confirmedTableLabel: item.confirmedTableLabel ?? t("ownerApp.bookings.tableToAssign"),
               status: item.booking.status,
             }}
             complaints={item.complaints}
@@ -350,9 +355,9 @@ export default function BookingsTab() {
                           tableId: item.booking.confirmedTableId,
                           roleId: queryRoleId,
                         });
-                        Alert.alert("Success", "Session started successfully.");
+                        Alert.alert(t("ownerApp.bookings.success"), t("ownerApp.bookings.startSuccess"));
                       } catch (e) {
-                        Alert.alert("Start failed", parseConvexError(e as Error).message);
+                        Alert.alert(t("ownerApp.bookings.startFailed"), parseConvexError(e as Error).message);
                       } finally {
                         setInFlight(null);
                       }
@@ -360,7 +365,7 @@ export default function BookingsTab() {
                   }
                 : undefined
             }
-            footerText={`Times shown in ${timezone}`}
+            footerText={t("ownerApp.bookings.timesInTimezone", { timezone })}
           />
         );
       });
@@ -368,7 +373,7 @@ export default function BookingsTab() {
 
     const all = [...historyItems, ...ensureHistoryData];
     if (all.length === 0) {
-      return <Text style={styles.emptyText}>No booking history yet</Text>;
+      return <Text style={styles.emptyText}>{t("ownerApp.bookings.noHistory")}</Text>;
     }
     return (
       <>
@@ -396,7 +401,7 @@ export default function BookingsTab() {
               setHistoryCursor(historyPage.nextCursor!);
             }}
           >
-            <Text style={styles.loadMoreText}>Load more</Text>
+            <Text style={styles.loadMoreText}>{t("common.loadMore")}</Text>
           </Pressable>
         ) : null}
       </>
@@ -407,8 +412,8 @@ export default function BookingsTab() {
     <GlassPageBackground>
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Bookings</Text>
-        <Text style={styles.hint}>Times shown in {timezone}</Text>
+        <Text style={styles.title}>{t("ownerApp.bookings.title")}</Text>
+        <Text style={styles.hint}>{t("ownerApp.bookings.timesInTimezone", { timezone })}</Text>
       </View>
 
       <View style={styles.segmented}>
@@ -419,7 +424,7 @@ export default function BookingsTab() {
             onPress={() => setSegment(s)}
           >
             <Text style={[styles.segText, segment === s && styles.segTextActive]}>
-              {s[0].toUpperCase() + s.slice(1)}
+              {t(`ownerApp.bookings.${s}`)}
             </Text>
           </Pressable>
         ))}
@@ -448,7 +453,7 @@ export default function BookingsTab() {
                       historyFilter === f.key && styles.chipTextActive,
                     ]}
                   >
-                    {f.label}
+                    {t(f.labelKey)}
                   </Text>
                 </Pressable>
               ))}
@@ -457,22 +462,29 @@ export default function BookingsTab() {
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search customer"
+            placeholder={t("ownerApp.bookings.searchPlaceholder")}
             placeholderTextColor={colors.text.tertiary}
             style={styles.search}
           />
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}>{renderSegment()}</ScrollView>
+      <ScrollView
+        contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {renderSegment()}
+      </ScrollView>
 
       <Modal visible={showApproveModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
               {selectedTableId
-                ? "Confirm table assignment"
-                : "Assign a Table (Optional)"}
+                ? t("ownerApp.bookings.confirmTable")
+                : t("ownerApp.bookings.assignTable")}
             </Text>
             <ScrollView style={{ maxHeight: 220 }}>
               {(assignableTables ?? []).map((t: any) => (
@@ -489,10 +501,10 @@ export default function BookingsTab() {
               ))}
             </ScrollView>
             <Pressable style={styles.primaryBtn} onPress={doApprove}>
-              <Text style={styles.primaryBtnText}>Confirm Approval</Text>
+              <Text style={styles.primaryBtnText}>{t("ownerApp.bookings.approve")}</Text>
             </Pressable>
             <Pressable style={styles.secondaryBtn} onPress={() => setShowApproveModal(false)}>
-              <Text style={styles.secondaryBtnText}>Close</Text>
+              <Text style={styles.secondaryBtnText}>{t("common.close")}</Text>
             </Pressable>
           </View>
         </View>
@@ -502,12 +514,12 @@ export default function BookingsTab() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {showRejectModal ? "Reject Booking" : "Cancel Booking"}
+              {showRejectModal ? t("ownerApp.bookings.rejectBooking") : t("ownerApp.bookings.cancelBooking")}
             </Text>
             <TextInput
               value={reasonText}
               onChangeText={(v) => setReasonText(v.slice(0, 300))}
-              placeholder="Reason (optional)"
+              placeholder={t("ownerApp.bookings.reasonOptional")}
               placeholderTextColor={colors.text.tertiary}
               multiline
               style={styles.reasonInput}
@@ -517,7 +529,9 @@ export default function BookingsTab() {
               style={styles.primaryBtn}
               onPress={showRejectModal ? doReject : doCancel}
             >
-              <Text style={styles.primaryBtnText}>Confirm</Text>
+              <Text style={styles.primaryBtnText}>
+                {showRejectModal ? t("ownerApp.bookings.reject") : t("ownerApp.bookings.cancel")}
+              </Text>
             </Pressable>
             <Pressable
               style={styles.secondaryBtn}
@@ -526,7 +540,7 @@ export default function BookingsTab() {
                 setShowCancelModal(false);
               }}
             >
-              <Text style={styles.secondaryBtnText}>Close</Text>
+              <Text style={styles.secondaryBtnText}>{t("common.close")}</Text>
             </Pressable>
           </View>
         </View>
@@ -553,9 +567,9 @@ export default function BookingsTab() {
                         roleId: queryRoleId,
                       });
                       setComplaintGateBooking(null);
-                      Alert.alert("Success", "Session started successfully.");
+                      Alert.alert(t("ownerApp.bookings.success"), t("ownerApp.bookings.startSuccess"));
                     } catch (e) {
-                      Alert.alert("Start failed", parseConvexError(e as Error).message);
+                      Alert.alert(t("ownerApp.bookings.startFailed"), parseConvexError(e as Error).message);
                     } finally {
                       setInFlight(null);
                     }
@@ -739,6 +753,19 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     ...typography.body,
   },
-  counter: { ...typography.caption, color: colors.text.secondary, textAlign: "right" },
+  counter: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    textAlign: I18nManager.isRTL ? "left" : "right",
+  },
 });
+
+export default function BookingsTab() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.owner.bookings")}>
+      <BookingsTabContent />
+    </TabErrorBoundary>
+  );
+}
 

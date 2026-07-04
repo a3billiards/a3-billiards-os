@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  I18nManager,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -16,6 +18,8 @@ import { api } from "@a3/convex/_generated/api";
 import { GlassPageBackground } from "@a3/ui/components";
 import { colors, spacing, radius, typography, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 
 function to12h(hhmm: string): string {
   const [h, m] = hhmm.split(":").map((x) => Number(x));
@@ -24,11 +28,16 @@ function to12h(hhmm: string): string {
   return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
-function durationLabel(min: number): string {
-  if (min === 60) return "1 hour";
-  if (min % 60 === 0) return `${min / 60} hours`;
-  if (min % 30 === 0) return `${(min / 60).toFixed(1)} hours`;
-  return `${min} min`;
+function durationLabel(
+  min: number,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  if (min === 60) return t("customerApp.bookingDetail.durationOneHour");
+  if (min % 60 === 0) return t("customerApp.bookingDetail.durationHours", { count: min / 60 });
+  if (min % 30 === 0) {
+    return t("customerApp.bookingDetail.durationHoursDecimal", { hours: (min / 60).toFixed(1) });
+  }
+  return t("customerApp.bookingDetail.durationMin", { count: min });
 }
 
 function currencySymbol(code: string): string {
@@ -38,14 +47,14 @@ function currencySymbol(code: string): string {
   return `${code} `;
 }
 
-function statusLabel(status: string): string {
-  if (status === "pending_approval") return "Pending";
-  if (status === "confirmed") return "Confirmed";
-  if (status === "rejected") return "Declined";
-  if (status === "cancelled_by_customer") return "Cancelled";
-  if (status === "cancelled_by_club") return "Cancelled by Club";
-  if (status === "expired") return "Expired";
-  return "Completed";
+function statusLabel(
+  status: string,
+  t: (key: string) => string,
+): string {
+  const key = `customerApp.bookingDetail.status.${status}` as const;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  return t("customerApp.bookingDetail.status.completed");
 }
 
 function statusPalette(status: string): { bg: string; fg: string } {
@@ -64,6 +73,8 @@ function statusPalette(status: string): { bg: string; fg: string } {
 }
 
 export default function BookingDetailScreen() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { bookingId } = useLocalSearchParams<{ bookingId: string }>();
@@ -83,17 +94,17 @@ export default function BookingDetailScreen() {
     const club = detail.clubProfile;
     return {
       name: club?.name ?? detail.clubName,
-      address: club?.address ?? detail.clubAddress ?? "Address unavailable",
+      address: club?.address ?? detail.clubAddress ?? t("customerApp.bookingDetail.addressUnavailable"),
       tombstone: club === null,
     };
-  }, [detail]);
+  }, [detail, t]);
 
   if (!bookingId) {
     return (
       <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={styles.muted}>Booking not found.</Text>
+          <Text style={styles.muted}>{t("customerApp.bookingDetail.notFound")}</Text>
         </View>
       </SafeAreaView>
       </GlassPageBackground>
@@ -117,9 +128,9 @@ export default function BookingDetailScreen() {
       <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={styles.muted}>Booking not found.</Text>
+          <Text style={styles.muted}>{t("customerApp.bookingDetail.notFound")}</Text>
           <Pressable style={styles.primaryBtn} onPress={() => router.replace("/bookings")}>
-            <Text style={styles.primaryBtnText}>Go to My Bookings</Text>
+            <Text style={styles.primaryBtnText}>{t("customerApp.bookingDetail.goToMyBookings")}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -130,22 +141,28 @@ export default function BookingDetailScreen() {
   const onCancel = () => {
     if (!canCancel) return;
     Alert.alert(
-      "Cancel Booking?",
+      t("customerApp.myBookings.cancelTitle"),
       detail.status === "pending_approval"
-        ? `Your booking request at ${detail.clubName} will be withdrawn.`
+        ? t("customerApp.myBookings.cancelPendingBody", { clubName: detail.clubName })
         : detail.isLateCancellationNow
-          ? `This is a late cancellation. Cancelling within ${detail.cancellationWindowMin ?? 30} minutes of your booking time may affect your booking record.`
-          : `Your confirmed booking at ${detail.clubName} on ${detail.requestedDate} at ${detail.requestedStartTime} will be cancelled.`,
+          ? t("customerApp.myBookings.cancelLateBody", {
+              minutes: detail.cancellationWindowMin ?? 30,
+            })
+          : t("customerApp.myBookings.cancelConfirmedBody", {
+              clubName: detail.clubName,
+              date: detail.requestedDate,
+              time: detail.requestedStartTime,
+            }),
       [
-        { text: "Keep Booking", style: "cancel" },
+        { text: t("customerApp.myBookings.keepBooking"), style: "cancel" },
         {
-          text: "Cancel Booking",
+          text: t("customerApp.bookingDetail.cancelBooking"),
           style: "destructive",
           onPress: async () => {
             try {
               setLoadingCancel(true);
               await cancelBooking({ bookingId: detail.bookingId, clubId: detail.clubId });
-              Alert.alert("Booking cancelled");
+              Alert.alert(t("customerApp.myBookings.cancelledSuccess"));
             } catch (e) {
               Alert.alert(parseConvexError(e as Error).message);
             } finally {
@@ -164,12 +181,15 @@ export default function BookingDetailScreen() {
         <Pressable onPress={() => router.back()} style={styles.navBtn}>
           <Text style={styles.navBtnText}>{"<"}</Text>
         </Pressable>
-        <Text style={styles.navTitle}>Booking Details</Text>
+        <Text style={styles.navTitle}>{t("customerApp.bookingDetail.title")}</Text>
         <View style={styles.navBtn} />
       </View>
 
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: 140 + insets.bottom }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {detail.thumbnailPhotoUrl ? (
           <Image source={{ uri: detail.thumbnailPhotoUrl }} style={styles.heroImage} resizeMode="cover" />
@@ -178,13 +198,13 @@ export default function BookingDetailScreen() {
         )}
         {venue?.tombstone ? (
           <View style={styles.tombstone}>
-            <Text style={styles.tombstoneText}>This club is no longer on A3 Billiards OS.</Text>
+            <Text style={styles.tombstoneText}>{t("customerApp.bookingDetail.tombstone")}</Text>
           </View>
         ) : null}
 
         <View style={[styles.statusPill, { backgroundColor: statusChip!.bg }]}>
           <Text style={[styles.statusPillText, { color: statusChip!.fg }]}>
-            {statusLabel(detail.status)}
+            {statusLabel(detail.status, t)}
           </Text>
         </View>
         <Text style={styles.clubName}>{venue?.name}</Text>
@@ -192,29 +212,35 @@ export default function BookingDetailScreen() {
 
         {!venue?.tombstone ? (
           <Pressable onPress={() => router.push(`/club/${detail.clubId}` as any)}>
-            <Text style={styles.viewClub}>View Club Profile →</Text>
+            <Text style={styles.viewClub}>{t("customerApp.bookingDetail.viewClubProfile")}</Text>
           </Pressable>
         ) : null}
 
         <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>Booking Information</Text>
-          <Row label="Table Type" value={detail.tableType} />
-          <Row label="Date" value={detail.requestedDate} />
-          <Row label="Time" value={to12h(detail.requestedStartTime)} />
-          <Row label="Duration" value={durationLabel(detail.requestedDurationMin)} />
+          <Text style={styles.infoTitle}>{t("customerApp.bookingDetail.bookingInfo")}</Text>
+          <Row label={t("customerApp.bookingDetail.tableType")} value={detail.tableType} />
+          <Row label={t("customerApp.bookingDetail.date")} value={detail.requestedDate} />
+          <Row label={t("customerApp.bookingDetail.time")} value={to12h(detail.requestedStartTime)} />
+          <Row label={t("customerApp.bookingDetail.duration")} value={durationLabel(detail.requestedDurationMin, t)} />
           {detail.status === "confirmed" && detail.confirmedTableLabel ? (
-            <Row label="Assigned table" value={`Table: ${detail.confirmedTableLabel}`} />
+            <Row
+              label={t("customerApp.bookingDetail.assignedTable")}
+              value={t("customerApp.bookingDetail.assignedTableValue", {
+                label: detail.confirmedTableLabel,
+              })}
+            />
           ) : null}
           <Row
-            label="Estimated Cost"
-            value={`Est. ${currencySymbol(detail.currency)}${detail.estimatedCost ?? 0}`}
+            label={t("customerApp.bookingDetail.estimatedCost")}
+            value={t("customerApp.bookingDetail.estimatedCostValue", {
+              symbol: currencySymbol(detail.currency),
+              amount: detail.estimatedCost ?? 0,
+            })}
           />
-          <Text style={styles.note}>
-            Actual bill may vary based on session duration, discounts, and snacks.
-          </Text>
-          {detail.notes ? <Row label="Your notes" value={detail.notes} /> : null}
+          <Text style={styles.note}>{t("customerApp.bookingDetail.billNote")}</Text>
+          {detail.notes ? <Row label={t("customerApp.bookingDetail.yourNotes")} value={detail.notes} /> : null}
           {detail.status === "rejected" && detail.rejectionReason ? (
-            <Row label="Reason" value={detail.rejectionReason} />
+            <Row label={t("customerApp.bookingDetail.reason")} value={detail.rejectionReason} />
           ) : null}
         </View>
       </ScrollView>
@@ -222,7 +248,7 @@ export default function BookingDetailScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         {!venue?.tombstone ? (
           <Pressable style={styles.secondaryBtn} onPress={() => router.push(`/club/${detail.clubId}` as any)}>
-            <Text style={styles.secondaryBtnText}>View Club</Text>
+            <Text style={styles.secondaryBtnText}>{t("customerApp.bookingDetail.viewClub")}</Text>
           </Pressable>
         ) : null}
         {canCancel ? (
@@ -231,7 +257,7 @@ export default function BookingDetailScreen() {
             onPress={onCancel}
             disabled={loadingCancel}
           >
-            <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+            <Text style={styles.cancelBtnText}>{t("customerApp.bookingDetail.cancelBooking")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -315,7 +341,13 @@ const styles = StyleSheet.create({
   infoTitle: { ...typography.heading3, color: colors.text.primary, marginBottom: spacing[2] },
   row: { flexDirection: "row", justifyContent: "space-between", gap: spacing[3] },
   rowLabel: { ...typography.body, color: colors.text.secondary },
-  rowValue: { ...typography.body, color: colors.text.primary, fontWeight: "600", flexShrink: 1, textAlign: "right" },
+  rowValue: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontWeight: "600",
+    flexShrink: 1,
+    textAlign: I18nManager.isRTL ? "left" : "right",
+  },
   note: { ...typography.caption, color: colors.text.secondary, marginTop: spacing[2] },
   footer: {
     position: "absolute",

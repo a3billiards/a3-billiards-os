@@ -39,6 +39,41 @@ export function getIvsClient(): IvsClient {
   return new IvsClient(config);
 }
 
+export async function provisionStreamIvsChannel(uniqueLabel: string): Promise<{
+  ivsChannelArn: string;
+  ivsIngestEndpoint: string;
+  ivsStreamKeyArn: string;
+  ivsPlaybackUrl: string;
+}> {
+  const client = getIvsClient();
+  try {
+    const channelRes = await client.send(
+      new CreateChannelCommand({
+        name: `a3-stream-${uniqueLabel}`.slice(0, 128),
+        authorized: true,
+        latencyMode: "LOW",
+        type: "STANDARD",
+      }),
+    );
+    const channel = channelRes.channel;
+    const streamKey = channelRes.streamKey;
+    if (!channel?.arn || !channel.ingestEndpoint || !channel.playbackUrl) {
+      throw new Error("CreateChannel returned incomplete channel data");
+    }
+    if (!streamKey?.arn) {
+      throw new Error("CreateChannel returned no stream key");
+    }
+    return {
+      ivsChannelArn: channel.arn,
+      ivsIngestEndpoint: channel.ingestEndpoint,
+      ivsStreamKeyArn: streamKey.arn,
+      ivsPlaybackUrl: channel.playbackUrl,
+    };
+  } catch (err) {
+    wrapIvsError(err);
+  }
+}
+
 export async function provisionClubIvsChannel(clubId: string): Promise<{
   ivsChannelArn: string;
   ivsIngestEndpoint: string;
@@ -110,6 +145,26 @@ export async function stopChannelStream(channelArn: string): Promise<boolean> {
       message.includes("not currently online") ||
       message.includes("StreamUnavailable") ||
       message.includes("NotFoundException")
+    ) {
+      return false;
+    }
+    wrapIvsError(err);
+  }
+}
+
+export async function isChannelBroadcasting(channelArn: string): Promise<boolean> {
+  if (!channelArn.trim()) return false;
+  const client = getIvsClient();
+  try {
+    const res = await client.send(new GetStreamCommand({ channelArn }));
+    return Boolean(res.stream);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (
+      message.includes("ChannelNotBroadcasting") ||
+      message.includes("ResourceNotFound") ||
+      message.includes("not currently online") ||
+      message.includes("StreamUnavailable")
     ) {
       return false;
     }

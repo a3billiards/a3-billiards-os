@@ -78,4 +78,15 @@ export const hi: TranslationBundle = {
     graceBanner: "आपकी सदस्यता जल्द समाप्त होगी। रुकावट से बचने के लिए अभी नवीनीकरण करें।",
     graceRenew: "नवीनीकरण",
   },
+  inbox: {
+    title: "सूचनाएँ",
+    subtitle: "A3 Billiards से संदेश",
+    empty: "अभी कोई सूचना नहीं।",
+    markAllRead: "सभी पढ़ा हुआ मार्क करें",
+    alertView: "देखें",
+    alertLater: "बाद में",
+    fromAdmin: "A3 Billiards",
+    bellAccessibility: "सूचनाएँ",
+    loadMore: "और लोड करें",
+  },
 };

@@ -6,15 +6,24 @@ import {
   Text,
   View,
   Modal,
+  I18nManager,
 } from "react-native";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, radius, spacing, typography } from "@a3/ui/theme";
-import { formatHhmm12h } from "@a3/utils/availability";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
 const PRESET_TIMES = [
+  "00:00",
+  "01:00",
+  "02:00",
+  "03:00",
+  "04:00",
+  "05:00",
+  "06:00",
+  "07:00",
   "08:00",
   "09:00",
   "10:00",
@@ -55,6 +64,19 @@ export function normalizeHhmmInput(raw: string): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+function formatHhmm12hLocale(hhmm: string, locale: string): string {
+  const normalized = normalizeHhmmInput(hhmm);
+  if (!/^\d{2}:\d{2}$/.test(normalized)) return hhmm;
+  const [h, m] = normalized.split(":").map((x) => Number(x));
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return new Intl.DateTimeFormat(locale, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(d);
+}
+
 type Props = {
   label?: string;
   value: string;
@@ -63,15 +85,17 @@ type Props = {
 };
 
 export function HhMmTimeField({ label, value, onChange, disabled }: Props) {
+  const { t } = useTranslation();
+  const locale = getCurrentLanguage();
   const [showPicker, setShowPicker] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
   const display = useMemo(() => {
     const normalized = normalizeHhmmInput(value);
     if (/^\d{2}:\d{2}$/.test(normalized)) {
-      return formatHhmm12h(normalized);
+      return formatHhmm12hLocale(normalized, locale);
     }
-    return value || "Pick time";
-  }, [value]);
+    return value || t("sharedUi.timeField.pickTime");
+  }, [value, locale, t]);
 
   const onPickerChange = (event: DateTimePickerEvent, date?: Date) => {
     if (Platform.OS === "android") {
@@ -100,7 +124,14 @@ export function HhMmTimeField({ label, value, onChange, disabled }: Props) {
         disabled={disabled}
       >
         <MaterialIcons name="schedule" size={20} color={colors.text.secondary} />
-        <Text style={styles.value}>{display}</Text>
+        <Text
+          style={[
+            styles.value,
+            { textAlign: I18nManager.isRTL ? "right" : "left" },
+          ]}
+        >
+          {display}
+        </Text>
         <MaterialIcons name="arrow-drop-down" size={24} color={colors.text.secondary} />
       </Pressable>
 
@@ -116,26 +147,26 @@ export function HhMmTimeField({ label, value, onChange, disabled }: Props) {
 
       {Platform.OS === "ios" && showPicker ? (
         <Pressable style={styles.doneBtn} onPress={() => setShowPicker(false)}>
-          <Text style={styles.doneBtnText}>Done</Text>
+          <Text style={styles.doneBtnText}>{t("sharedUi.timeField.done")}</Text>
         </Pressable>
       ) : null}
 
       <Modal visible={showPresets} transparent animationType="fade" onRequestClose={() => setShowPresets(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowPresets(false)}>
           <View style={styles.presetCard}>
-            <Text style={styles.presetTitle}>Pick a time</Text>
+            <Text style={styles.presetTitle}>{t("sharedUi.timeField.pickATime")}</Text>
             <View style={styles.presetGrid}>
-              {PRESET_TIMES.map((t) => (
+              {PRESET_TIMES.map((preset) => (
                 <Pressable
-                  key={t}
-                  style={[styles.presetChip, value === t && styles.presetChipOn]}
+                  key={preset}
+                  style={[styles.presetChip, value === preset && styles.presetChipOn]}
                   onPress={() => {
-                    onChange(t);
+                    onChange(preset);
                     setShowPresets(false);
                   }}
                 >
-                  <Text style={[styles.presetChipText, value === t && styles.presetChipTextOn]}>
-                    {formatHhmm12h(t)}
+                  <Text style={[styles.presetChipText, value === preset && styles.presetChipTextOn]}>
+                    {formatHhmm12hLocale(preset, locale)}
                   </Text>
                 </Pressable>
               ))}

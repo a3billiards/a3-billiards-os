@@ -10,7 +10,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 
-const STANDARD_LOCK_MS = 30_000;
+const STANDARD_LOCK_MS = 180_000;
 const OTP_FLOW_LOCK_MS = 180_000;
 
 export const acquireTableLock = action({

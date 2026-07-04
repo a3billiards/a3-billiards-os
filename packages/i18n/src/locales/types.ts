@@ -1,4 +1,4 @@
-import type { errorMessagesEn } from "../errors";
+import type { errorMessagesEn } from "./errors";
 
 type StringRecord<T> = {
   [K in keyof T]: T[K] extends string ? string : never;
@@ -24,6 +24,11 @@ export interface TranslationBundle {
     language: string;
     selectLanguage: string;
     languageHint: string;
+  }>;
+  phone: StringRecord<{
+    countryCode: string;
+    selectCountry: string;
+    number: string;
   }>;
   tabs: {
     customer: StringRecord<{
@@ -83,5 +88,22 @@ export interface TranslationBundle {
     graceBanner: string;
     graceRenew: string;
   }>;
+  inbox: StringRecord<{
+    title: string;
+    subtitle: string;
+    empty: string;
+    markAllRead: string;
+    alertView: string;
+    alertLater: string;
+    fromAdmin: string;
+    loadMore: string;
+    bellAccessibility: string;
+  }>;
   errors?: Partial<ErrorMessages>;
+  /** Owner-app screens — merged from locales/owner/ */
+  owner?: Record<string, unknown>;
+  /** Customer-app screens */
+  customer?: Record<string, unknown>;
+  /** Admin-app screens */
+  admin?: Record<string, unknown>;
 }

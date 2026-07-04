@@ -10,10 +10,12 @@ import {
 import { useAuthActions } from "@convex-dev/auth/react";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { LoginLanguagePicker, useTranslation } from "@a3/i18n";
 import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
 import { MaterialIcons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const { signIn } = useAuthActions();
 
   const [email, setEmail] = useState("");
@@ -47,7 +49,7 @@ export default function LoginScreen() {
       });
 
       if (!signingIn) {
-        setError("Sign-in failed. Check your email and password.");
+        setError(t("auth.admin.login.signInFailed"));
         setLoading(false);
         return;
       }
@@ -56,37 +58,36 @@ export default function LoginScreen() {
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
         setFrozen(true);
-        setError("This account is frozen. Contact support.");
+        setError(t("auth.admin.login.frozen"));
       } else if (appError.code === "AUTH_006") {
-        setError("This account is pending deletion.");
+        setError(t("auth.admin.login.pendingDeletion"));
       } else if (appError.code === "AUTH_010") {
         setError(appError.message);
       } else if (
         appError.code === "AUTH_001" ||
         appError.code === "UNKNOWN"
       ) {
-        setError("Invalid email or password.");
+        setError(t("auth.admin.login.invalidCredentials"));
       } else {
         setError(appError.message);
       }
       setLoading(false);
     }
-  }, [canSubmit, email, password, signIn]);
+  }, [canSubmit, email, password, signIn, t]);
 
   return (
     <GlassPageBackground>
       <KeyboardFormScroll contentContainerStyle={styles.scroll}>
           <View style={styles.container}>
+            <LoginLanguagePicker />
             <View style={styles.logoTile}>
               <Text style={styles.logoText}>A3</Text>
             </View>
-            <Text style={styles.title}>Admin Panel</Text>
-            <Text style={styles.subtitle}>
-              Sign in to manage your billiards network
-            </Text>
+            <Text style={styles.title}>{t("auth.admin.login.title")}</Text>
+            <Text style={styles.subtitle}>{t("auth.admin.login.subtitle")}</Text>
 
             <LiquidGlassCard style={styles.form} padding={24}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>{t("auth.admin.login.email")}</Text>
               <View style={styles.inputWrap}>
                 <MaterialIcons
                   name="mail-outline"
@@ -98,7 +99,7 @@ export default function LoginScreen() {
                   style={styles.input}
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="admin@example.com"
+                  placeholder={t("auth.admin.login.emailPlaceholder")}
                   placeholderTextColor="rgba(148,163,184,0.45)"
                   autoCapitalize="none"
                   autoComplete="email"
@@ -107,12 +108,12 @@ export default function LoginScreen() {
                   returnKeyType="next"
                   onSubmitEditing={() => passwordRef.current?.focus()}
                   editable={!loading && !frozen}
-                  accessibilityLabel="Email address"
+                  accessibilityLabel={t("auth.admin.login.email")}
                 />
               </View>
 
               <Text style={[styles.label, { marginTop: spacing[4] }]}>
-                Password
+                {t("auth.admin.login.password")}
               </Text>
               <View style={styles.inputWrap}>
                 <MaterialIcons
@@ -126,14 +127,14 @@ export default function LoginScreen() {
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Enter your password"
+                  placeholder={t("auth.admin.login.passwordPlaceholder")}
                   placeholderTextColor="rgba(148,163,184,0.45)"
                   secureTextEntry
                   textContentType="password"
                   returnKeyType="go"
                   onSubmitEditing={handleLogin}
                   editable={!loading && !frozen}
-                  accessibilityLabel="Password"
+                  accessibilityLabel={t("auth.admin.login.password")}
                 />
               </View>
 
@@ -161,13 +162,13 @@ export default function LoginScreen() {
                 onPress={handleLogin}
                 disabled={!canSubmit || frozen}
                 accessibilityRole="button"
-                accessibilityLabel="Sign in"
+                accessibilityLabel={t("auth.admin.login.signIn")}
                 accessibilityState={{ disabled: !canSubmit || frozen }}
               >
                 {loading ? (
                   <ActivityIndicator color="#000" />
                 ) : (
-                  <Text style={styles.buttonText}>Sign In</Text>
+                  <Text style={styles.buttonText}>{t("auth.admin.login.signIn")}</Text>
                 )}
               </Pressable>
             </LiquidGlassCard>

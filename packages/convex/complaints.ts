@@ -13,7 +13,7 @@ import {
 } from "./_generated/server";
 import type { OwnerViewer } from "./model/viewer";
 import { requireAdminWithMfa, requireCustomer, requireOwner, requireViewer } from "./model/viewer";
-import { parseIndiaE164OrThrow } from "./model/phoneRegistration";
+import { parseGenericE164OrThrow } from "./model/phoneRegistration";
 
 export type complaintType =
   | "violent_behaviour"
@@ -486,13 +486,13 @@ export const searchCustomerByPhone = query({
     requireOwner(viewer);
     let normalized: string;
     try {
-      normalized = parseIndiaE164OrThrow(phone);
+      normalized = parseGenericE164OrThrow(phone);
     } catch {
       return {
         ok: false as const,
         code: "invalid_phone" as const,
         message:
-          "Enter a valid phone in E.164 format (e.g. +91 followed by 10 digits).",
+          "Enter a valid phone in E.164 format (country code + number, e.g. +919876543210).",
       };
     }
     const user = await ctx.db

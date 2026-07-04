@@ -11,18 +11,26 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll, PasswordStrengthBar } from "@a3/ui/components";
+import { usePostLoginNavigation } from "@a3/ui/hooks";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-
-const MIN_LEN = 8;
+import { useTranslation } from "@a3/i18n";
+import {
+  getStrongPasswordError,
+  getPasswordStrength,
+  isStrongPassword,
+  STRONG_PASSWORD_HINT,
+} from "@a3/utils/passwordPolicy";
 
 export default function SetPasswordScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const user = useQuery(api.users.getCurrentUser);
   const hasLoginPassword = useQuery(api.customerAuth.hasLoginPassword);
   const setupLoginPassword = useAction(api.customerAuthActions.setupLoginPassword);
+  const { schedulePostLogin } = usePostLoginNavigation();
 
   const confirmRef = useRef<TextInput>(null);
   const [password, setPassword] = useState("");
@@ -32,11 +40,11 @@ export default function SetPasswordScreen(): React.JSX.Element {
 
   const match = password === confirm;
   const canSubmit =
-    password.length >= MIN_LEN && match && confirm.length >= MIN_LEN && !loading;
+    isStrongPassword(password) && match && confirm.length > 0 && !loading;
 
   const goNext = useCallback(() => {
     if (from === "register") {
-      router.replace("/post-login-gate");
+      schedulePostLogin();
       return;
     }
     if (router.canGoBack()) {
@@ -44,7 +52,7 @@ export default function SetPasswordScreen(): React.JSX.Element {
       return;
     }
     router.replace("/(tabs)/profile");
-  }, [router, from]);
+  }, [router, from, schedulePostLogin]);
 
   useEffect(() => {
     if (user === undefined || hasLoginPassword === undefined) return;
@@ -59,6 +67,11 @@ export default function SetPasswordScreen(): React.JSX.Element {
 
   const onSubmit = useCallback(async () => {
     if (!canSubmit) return;
+    const pwdError = getStrongPasswordError(password);
+    if (pwdError) {
+      setError(pwdError);
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
@@ -66,7 +79,7 @@ export default function SetPasswordScreen(): React.JSX.Element {
       goNext();
     } catch (e) {
       const appErr = parseConvexError(e as Error);
-      setError(appErr.message ?? "Could not save password.");
+      setError(appErr.message ?? t("auth.customer.setPassword.couldNotSave"));
       setLoading(false);
     }
   }, [canSubmit, password, setupLoginPassword, goNext]);
@@ -76,19 +89,16 @@ export default function SetPasswordScreen(): React.JSX.Element {
       <SafeAreaView style={styles.flex} edges={["top", "bottom"]}>
         <KeyboardFormScroll contentContainerStyle={styles.scroll}>
             <View style={styles.container}>
-              <Text style={styles.title}>Create Login Password</Text>
-              <Text style={styles.subtitle}>
-                Optional — set a password to sign in faster next time, or skip
-                and keep using WhatsApp OTP.
-              </Text>
+              <Text style={styles.title}>{t("auth.customer.setPassword.title")}</Text>
+              <Text style={styles.subtitle}>{STRONG_PASSWORD_HINT}</Text>
 
               <LiquidGlassCard style={styles.formCard} padding={20}>
-                <Text style={styles.label}>Password</Text>
+                <Text style={styles.label}>{t("auth.customer.setPassword.password")}</Text>
                 <TextInput
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="At least 8 characters"
+                  placeholder={t("auth.customer.setPassword.passwordPlaceholder")}
                   placeholderTextColor={colors.text.tertiary}
                   secureTextEntry
                   autoComplete="new-password"
@@ -96,14 +106,17 @@ export default function SetPasswordScreen(): React.JSX.Element {
                   onSubmitEditing={() => confirmRef.current?.focus()}
                   editable={!loading}
                 />
+                <PasswordStrengthBar strength={getPasswordStrength(password)} />
 
-                <Text style={[styles.label, styles.fieldGap]}>Confirm Password</Text>
+                <Text style={[styles.label, styles.fieldGap]}>
+                  {t("auth.customer.setPassword.confirmPassword")}
+                </Text>
                 <TextInput
                   ref={confirmRef}
                   style={styles.input}
                   value={confirm}
                   onChangeText={setConfirm}
-                  placeholder="Re-enter password"
+                  placeholder={t("auth.customer.setPassword.confirmPlaceholder")}
                   placeholderTextColor={colors.text.tertiary}
                   secureTextEntry
                   autoComplete="new-password"
@@ -113,7 +126,7 @@ export default function SetPasswordScreen(): React.JSX.Element {
                 />
 
                 {confirm.length > 0 && !match ? (
-                  <Text style={styles.inlineErr}>Passwords do not match.</Text>
+                  <Text style={styles.inlineErr}>{t("auth.customer.setPassword.passwordsMismatch")}</Text>
                 ) : null}
 
                 <Pressable
@@ -128,7 +141,9 @@ export default function SetPasswordScreen(): React.JSX.Element {
                   {loading ? (
                     <ActivityIndicator color="#052e16" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>Save & Continue</Text>
+                    <Text style={styles.primaryButtonText}>
+                      {t("auth.customer.setPassword.saveContinue")}
+                    </Text>
                   )}
                 </Pressable>
 
@@ -139,7 +154,9 @@ export default function SetPasswordScreen(): React.JSX.Element {
                   style={styles.skipRow}
                 >
                   <Text style={styles.skipText}>
-                    {from === "register" ? "Skip for now" : "Cancel"}
+                    {from === "register"
+                      ? t("auth.customer.setPassword.skipForNow")
+                      : t("auth.customer.setPassword.cancel")}
                   </Text>
                 </Pressable>
 

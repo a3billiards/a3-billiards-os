@@ -78,4 +78,15 @@ export const ta: TranslationBundle = {
     graceBanner: "உங்கள் சந்தா விரைவில் முடியும். இடையூறு தவிர்க்க இப்போது புதுப்பிக்கவும்.",
     graceRenew: "புதுப்பி",
   },
+  inbox: {
+    title: "Notifications",
+    subtitle: "Messages from A3 Billiards",
+    empty: "No notifications yet.",
+    markAllRead: "Mark all read",
+    alertView: "View",
+    alertLater: "Later",
+    fromAdmin: "A3 Billiards",
+    bellAccessibility: "Notifications",
+    loadMore: "Load more",
+  },
 };

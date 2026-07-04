@@ -1,4 +1,8 @@
-import { useMemo, useState } from "react";
+/**
+ * Loyalty tab UI — held for a future release. Not registered in the tab navigator.
+ * Restore by moving this back to `app/(tabs)/loyalty.tsx` and re-enabling tab routes.
+ */
+import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +20,7 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { TabAccessDenied } from "../../components/TabAccessDenied";
@@ -27,6 +32,7 @@ import {
 } from "../../lib/StaffRoleContext";
 
 export default function LoyaltyScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
@@ -73,45 +79,53 @@ export default function LoyaltyScreen() {
   }
   if (dashboard === null) return <OwnerNoClubPlaceholder />;
   if (roleId !== undefined && !canAccessTab("loyalty")) {
-    return <TabAccessDenied tabLabel="Loyalty" />;
+    return <TabAccessDenied tabLabel={t("ownerApp.loyalty.tabLabel")} />;
   }
 
   const programmeStatus = overview?.programme
     ? overview.programme.status === "active"
-      ? "Active"
+      ? t("ownerApp.loyalty.statusActive")
       : overview.programme.status
-    : "None configured";
+    : t("ownerApp.loyalty.statusNone");
 
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
-        <Text style={styles.title}>Loyalty</Text>
+        <Text style={styles.title}>{t("ownerApp.loyalty.title")}</Text>
 
         {overview === undefined ? (
           <ActivityIndicator color={colors.accent.green} />
         ) : (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>{overview.programme?.name ?? "No programme"}</Text>
-            <Text style={styles.meta}>Status: {programmeStatus}</Text>
+            <Text style={styles.cardTitle}>
+              {overview.programme?.name ?? t("ownerApp.loyalty.noProgramme")}
+            </Text>
+            <Text style={styles.meta}>
+              {t("ownerApp.loyalty.statusLine", { status: programmeStatus })}
+            </Text>
             {overview.reward ? (
               <Text style={styles.meta}>
-                Rule: play {overview.reward.thresholdMinutes} min within{" "}
-                {overview.reward.windowDays} days → {overview.reward.creditsAwarded} free
-                visit
-                {overview.reward.creditsAwarded === 1 ? "" : "s"}
+                {t("ownerApp.loyalty.ruleDescription", {
+                  threshold: overview.reward.thresholdMinutes,
+                  windowDays: overview.reward.windowDays,
+                })}
               </Text>
             ) : null}
-            <Text style={styles.meta}>Enrolled: {overview.enrolledCount}</Text>
             <Text style={styles.meta}>
-              Credits awarded (lifetime): {overview.totalCreditsAwarded} · Redeemed:{" "}
-              {overview.totalCreditsRedeemed}
+              {t("ownerApp.loyalty.enrolled", { count: overview.enrolledCount })}
+            </Text>
+            <Text style={styles.meta}>
+              {t("ownerApp.loyalty.creditsLifetime", {
+                earned: overview.totalCreditsAwarded,
+                redeemed: overview.totalCreditsRedeemed,
+              })}
             </Text>
             {isOwnerMode ? (
               <Pressable
                 style={styles.linkBtn}
                 onPress={() => router.push("/(tabs)/settings")}
               >
-                <Text style={styles.linkBtnText}>Configure programme in Settings</Text>
+                <Text style={styles.linkBtnText}>{t("ownerApp.loyalty.configureInSettings")}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -119,7 +133,7 @@ export default function LoyaltyScreen() {
 
         <TextInput
           style={styles.search}
-          placeholder="Search customers…"
+          placeholder={t("ownerApp.loyalty.searchPlaceholder")}
           placeholderTextColor={colors.text.tertiary}
           value={search}
           onChangeText={setSearch}
@@ -128,7 +142,7 @@ export default function LoyaltyScreen() {
         {customers === undefined ? (
           <ActivityIndicator color={colors.accent.green} />
         ) : customers.length === 0 ? (
-          <Text style={styles.empty}>No enrolled customers yet.</Text>
+          <Text style={styles.empty}>{t("ownerApp.loyalty.noEnrolled")}</Text>
         ) : (
           customers.map((c) => (
             <Pressable
@@ -138,10 +152,12 @@ export default function LoyaltyScreen() {
             >
               <View>
                 <Text style={styles.rowName}>{c.name}</Text>
-                <Text style={styles.rowSub}>{c.phone ?? "—"}</Text>
+                <Text style={styles.rowSub}>{c.phone ?? t("common.emDash")}</Text>
               </View>
               <View style={styles.rowRight}>
-                <Text style={styles.credits}>{c.availableCredits} credits</Text>
+                <Text style={styles.credits}>
+                  {t("ownerApp.loyalty.creditsCount", { count: c.availableCredits })}
+                </Text>
               </View>
             </Pressable>
           ))
@@ -151,29 +167,36 @@ export default function LoyaltyScreen() {
       <Modal visible={detailUserId !== null} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
-            <Text style={styles.cardTitle}>Customer loyalty</Text>
+            <Text style={styles.cardTitle}>{t("ownerApp.loyalty.customerLoyalty")}</Text>
             {detail === undefined ? (
               <ActivityIndicator color={colors.accent.green} />
             ) : detail ? (
               <>
                 <Text style={styles.rowName}>{detail.user?.name}</Text>
                 <Text style={styles.meta}>
-                  Available: {detail.ledger.availableCredits} · Earned lifetime:{" "}
-                  {detail.ledger.lifetimeCreditsEarned} · Redeemed:{" "}
-                  {detail.ledger.lifetimeCreditsRedeemed}
+                  {t("ownerApp.loyalty.availableEarnedRedeemed", {
+                    available: detail.ledger.availableCredits,
+                    earned: detail.ledger.lifetimeCreditsEarned,
+                    redeemed: detail.ledger.lifetimeCreditsRedeemed,
+                  })}
                 </Text>
-                <Text style={styles.sectionLabel}>Awards</Text>
+                <Text style={styles.sectionLabel}>{t("ownerApp.loyalty.awards")}</Text>
                 {detail.awards.slice(0, 8).map((a) => (
                   <Text key={a._id} style={styles.logLine}>
-                    {new Date(a.awardedAt).toLocaleDateString()} — {a.creditsAwarded} cr (
-                    {a.source})
+                    {t("ownerApp.loyalty.awardLine", {
+                      date: new Date(a.awardedAt).toLocaleDateString(getCurrentLanguage()),
+                      count: a.creditsAwarded,
+                      tier: a.source,
+                    })}
                   </Text>
                 ))}
-                <Text style={styles.sectionLabel}>Redemptions</Text>
+                <Text style={styles.sectionLabel}>{t("ownerApp.loyalty.redemptions")}</Text>
                 {detail.redemptions.slice(0, 8).map((r) => (
                   <Text key={r._id} style={styles.logLine}>
-                    {new Date(r.redeemedAt).toLocaleDateString()} — session billed{" "}
-                    {r.billableMinutes} min
+                    {t("ownerApp.loyalty.redemptionLine", {
+                      date: new Date(r.redeemedAt).toLocaleDateString(getCurrentLanguage()),
+                      sessionId: r.sessionId,
+                    })}
                   </Text>
                 ))}
                 {isOwnerMode ? (
@@ -181,12 +204,12 @@ export default function LoyaltyScreen() {
                     style={styles.primaryBtn}
                     onPress={() => setAdjustOpen(true)}
                   >
-                    <Text style={styles.primaryBtnText}>Manual credit adjustment</Text>
+                    <Text style={styles.primaryBtnText}>{t("ownerApp.loyalty.manualAdjustment")}</Text>
                   </Pressable>
                 ) : null}
               </>
             ) : (
-              <Text style={styles.empty}>Not found.</Text>
+              <Text style={styles.empty}>{t("ownerApp.loyalty.notFound")}</Text>
             )}
             <Pressable
               style={styles.secondaryBtn}
@@ -195,7 +218,7 @@ export default function LoyaltyScreen() {
                 setAdjustOpen(false);
               }}
             >
-              <Text style={styles.secondaryBtnText}>Close</Text>
+              <Text style={styles.secondaryBtnText}>{t("common.close")}</Text>
             </Pressable>
           </View>
         </View>
@@ -204,19 +227,19 @@ export default function LoyaltyScreen() {
       <Modal visible={adjustOpen} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
-            <Text style={styles.cardTitle}>Adjust credits</Text>
-            <Text style={styles.meta}>Use positive to add, negative to remove.</Text>
+            <Text style={styles.cardTitle}>{t("ownerApp.loyalty.adjustCredits")}</Text>
+            <Text style={styles.meta}>{t("ownerApp.loyalty.adjustHint")}</Text>
             <TextInput
               style={styles.search}
               keyboardType="number-pad"
-              placeholder="e.g. 1 or -1"
+              placeholder={t("ownerApp.loyalty.adjustPlaceholder")}
               value={adjustDelta}
               onChangeText={setAdjustDelta}
             />
             <TextInput
               style={[styles.search, { minHeight: 80 }]}
               multiline
-              placeholder="Reason (required)"
+              placeholder={t("ownerApp.loyalty.reasonRequired")}
               value={adjustReason}
               onChangeText={setAdjustReason}
             />
@@ -228,7 +251,10 @@ export default function LoyaltyScreen() {
                   if (!clubId || !detailUserId) return;
                   const delta = Number(adjustDelta);
                   if (!Number.isFinite(delta) || delta === 0) {
-                    Alert.alert("Invalid", "Enter a non-zero number.");
+                    Alert.alert(
+                      t("ownerApp.loyalty.invalidNumber"),
+                      t("ownerApp.loyalty.invalidNumberBody"),
+                    );
                     return;
                   }
                   setAdjustBusy(true);
@@ -242,9 +268,12 @@ export default function LoyaltyScreen() {
                     setAdjustOpen(false);
                     setAdjustDelta("");
                     setAdjustReason("");
-                    Alert.alert("Updated", "Credit balance adjusted.");
+                    Alert.alert(
+                      t("ownerApp.loyalty.updated"),
+                      t("ownerApp.loyalty.updatedBody"),
+                    );
                   } catch (e) {
-                    Alert.alert("Failed", parseConvexError(e as Error).message);
+                    Alert.alert(t("ownerApp.loyalty.failed"), parseConvexError(e as Error).message);
                   } finally {
                     setAdjustBusy(false);
                   }
@@ -252,11 +281,11 @@ export default function LoyaltyScreen() {
               }}
             >
               <Text style={styles.primaryBtnText}>
-                {adjustBusy ? "Saving…" : "Save adjustment"}
+                {adjustBusy ? t("ownerApp.slots.saving") : t("ownerApp.loyalty.saveAdjustment")}
               </Text>
             </Pressable>
             <Pressable style={styles.secondaryBtn} onPress={() => setAdjustOpen(false)}>
-              <Text style={styles.secondaryBtnText}>Cancel</Text>
+              <Text style={styles.secondaryBtnText}>{t("common.cancel")}</Text>
             </Pressable>
           </View>
         </View>

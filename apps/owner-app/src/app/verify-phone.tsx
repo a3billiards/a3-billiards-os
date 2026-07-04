@@ -18,6 +18,8 @@ import {
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { usePostLoginNavigation } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 
 const PIN_LENGTH = 6;
 const RESEND_COOLDOWN_SEC = 60;
@@ -32,7 +34,9 @@ type ScreenMode =
   | "verifying";  // verifyOtp call in flight
 
 export default function VerifyPhoneScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const { schedulePostLogin } = usePostLoginNavigation();
   const raw = useLocalSearchParams<{ phone: string }>().phone;
   // Expo Router can URL-encode '+' as '%2B' — decode it back to E.164
   const phone = Array.isArray(raw)
@@ -89,7 +93,7 @@ export default function VerifyPhoneScreen() {
 
   const requestOtp = useCallback(async () => {
     if (!phone) {
-      setError("Missing phone number. Please login again.");
+      setError(t("auth.owner.verifyPhone.missingPhone"));
       return;
     }
     if (authLoading) return;
@@ -175,7 +179,7 @@ export default function VerifyPhoneScreen() {
   // ── Verify OTP ──
   const handleVerify = useCallback(async () => {
     if (!otpRequested) {
-      setError("Click Send OTP first.");
+      setError(t("auth.owner.verifyPhone.sendOtpFirst"));
       return;
     }
     if (!isComplete || mode !== "input" || !phone) {
@@ -204,7 +208,7 @@ export default function VerifyPhoneScreen() {
         await updateUser({ phone });
       }
 
-      router.replace("/post-login-gate");
+      schedulePostLogin();
     } catch (e) {
       const appError = parseConvexError(e as Error);
       switch (appError.code) {
@@ -218,7 +222,7 @@ export default function VerifyPhoneScreen() {
             setMode("expired");
             setError(null);
           } else {
-            setError(appError.message || "Wrong OTP. Please try again.");
+            setError(appError.message || t("auth.owner.verifyPhone.wrongOtp"));
             setMode("input");
           }
           break;
@@ -245,6 +249,7 @@ export default function VerifyPhoneScreen() {
     currentUser,
     authLoading,
     otpRequested,
+    t,
   ]);
 
   // ── Resend OTP ──
@@ -276,10 +281,10 @@ export default function VerifyPhoneScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} {...iosKeyboardAvoidingProps}>
       <View style={styles.container}>
-        <Text style={styles.logo}>A3</Text>
-        <Text style={styles.title}>Verify Phone</Text>
+        <Text style={styles.logo}>{t("auth.owner.verifyPhone.logo")}</Text>
+        <Text style={styles.title}>{t("auth.owner.verifyPhone.title")}</Text>
         <Text style={styles.subtitle}>
-          Enter the 6-digit code sent via WhatsApp to{"\n"}
+          {t("auth.owner.verifyPhone.subtitle")}{"\n"}
           <Text style={styles.phoneBold}>{maskedPhone}</Text>
         </Text>
 
@@ -287,13 +292,11 @@ export default function VerifyPhoneScreen() {
         {mode === "locked" && (
           <View style={styles.lockBox}>
             <Text style={styles.lockIcon}>⏳</Text>
-            <Text style={styles.lockTitle}>Too many failed attempts</Text>
+            <Text style={styles.lockTitle}>{t("auth.owner.verifyPhone.lockedTitle")}</Text>
             <Text style={styles.lockTimer}>
-              Try again in {formatCountdown(lockCountdown)}
+              {t("auth.owner.verifyPhone.tryAgainIn", { time: formatCountdown(lockCountdown) })}
             </Text>
-            <Text style={styles.lockHint}>
-              Request a new code after the cooldown ends.
-            </Text>
+            <Text style={styles.lockHint}>{t("auth.owner.verifyPhone.lockedHint")}</Text>
           </View>
         )}
 
@@ -301,11 +304,8 @@ export default function VerifyPhoneScreen() {
         {mode === "rateLimited" && (
           <View style={styles.lockBox}>
             <Text style={styles.lockIcon}>🚫</Text>
-            <Text style={styles.lockTitle}>Too many attempts</Text>
-            <Text style={styles.lockHint}>
-              You{"'"}ve reached the maximum OTP requests this hour.{"\n"}
-              Try again in 1 hour.
-            </Text>
+            <Text style={styles.lockTitle}>{t("auth.owner.verifyPhone.rateLimitedTitle")}</Text>
+            <Text style={styles.lockHint}>{t("auth.owner.verifyPhone.rateLimitedBody")}</Text>
           </View>
         )}
 
@@ -313,10 +313,8 @@ export default function VerifyPhoneScreen() {
         {mode === "expired" && (
           <View style={styles.lockBox}>
             <Text style={styles.lockIcon}>⏰</Text>
-            <Text style={styles.lockTitle}>Code expired</Text>
-            <Text style={styles.lockHint}>
-              Your verification code has expired. Request a new one.
-            </Text>
+            <Text style={styles.lockTitle}>{t("auth.owner.verifyPhone.expiredTitle")}</Text>
+            <Text style={styles.lockHint}>{t("auth.owner.verifyPhone.expiredHint")}</Text>
           </View>
         )}
 
@@ -324,9 +322,7 @@ export default function VerifyPhoneScreen() {
         {mode === "sending" && (
           <View style={styles.sendingBox}>
             <ActivityIndicator size="large" color={colors.accent.green} />
-            <Text style={styles.sendingText}>
-              Sending verification code…
-            </Text>
+            <Text style={styles.sendingText}>{t("auth.owner.verifyPhone.sendingCode")}</Text>
           </View>
         )}
 
@@ -341,9 +337,9 @@ export default function VerifyPhoneScreen() {
             onPress={requestOtp}
             disabled={awaitingUser}
             accessibilityRole="button"
-            accessibilityLabel="Send OTP"
+            accessibilityLabel={t("auth.owner.verifyPhone.sendOtp")}
           >
-            <Text style={styles.verifyButtonText}>Send OTP</Text>
+            <Text style={styles.verifyButtonText}>{t("auth.owner.verifyPhone.sendOtp")}</Text>
           </Pressable>
         )}
 
@@ -371,7 +367,10 @@ export default function VerifyPhoneScreen() {
                   maxLength={i === 0 ? PIN_LENGTH : 1}
                   autoFocus={i === 0}
                   editable={mode === "input"}
-                  accessibilityLabel={`Digit ${i + 1} of ${PIN_LENGTH}`}
+                  accessibilityLabel={t("auth.owner.verifyPhone.digitLabel", {
+                    index: i + 1,
+                    total: PIN_LENGTH,
+                  })}
                   selectTextOnFocus
                 />
               ))}
@@ -386,9 +385,9 @@ export default function VerifyPhoneScreen() {
                 ]}
                 onPress={handleVerify}
                 accessibilityRole="button"
-                accessibilityLabel="Verify code"
+                accessibilityLabel={t("auth.owner.verifyPhone.verifyCode")}
               >
-                <Text style={styles.verifyButtonText}>Verify Code</Text>
+                <Text style={styles.verifyButtonText}>{t("auth.owner.verifyPhone.verifyCode")}</Text>
               </Pressable>
             )}
 
@@ -408,7 +407,7 @@ export default function VerifyPhoneScreen() {
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
-            <Text style={styles.errorLabel}>Error</Text>
+            <Text style={styles.errorLabel}>{t("auth.owner.verifyPhone.error")}</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -431,8 +430,8 @@ export default function VerifyPhoneScreen() {
             accessibilityRole="button"
             accessibilityLabel={
               resendCooldown > 0
-                ? `Resend code available in ${resendCooldown} seconds`
-                : "Resend code"
+                ? t("auth.owner.verifyPhone.resendIn", { seconds: resendCooldown })
+                : t("auth.owner.verifyPhone.resendCode")
             }
           >
             <Text
@@ -446,10 +445,10 @@ export default function VerifyPhoneScreen() {
               ]}
             >
               {mode === "expired"
-                ? "Send New Code"
+                ? t("auth.owner.verifyPhone.sendNewCode")
                 : resendCooldown > 0
-                  ? `Resend code in ${resendCooldown}s`
-                  : "Resend Code"}
+                  ? t("auth.owner.verifyPhone.resendIn", { seconds: resendCooldown })
+                  : t("auth.owner.verifyPhone.resendCode")}
             </Text>
           </Pressable>
         )}
@@ -460,16 +459,14 @@ export default function VerifyPhoneScreen() {
             style={styles.resendButtonPrimary}
             onPress={handleResend}
             accessibilityRole="button"
-            accessibilityLabel="Send new code"
+            accessibilityLabel={t("auth.owner.verifyPhone.sendNewCode")}
           >
-            <Text style={styles.resendButtonPrimaryText}>Send New Code</Text>
+            <Text style={styles.resendButtonPrimaryText}>{t("auth.owner.verifyPhone.sendNewCode")}</Text>
           </Pressable>
         )}
 
         {inputVisible && (
-          <Text style={styles.hint}>
-            Complete verification to continue to your owner dashboard.
-          </Text>
+          <Text style={styles.hint}>{t("auth.owner.verifyPhone.continueHint")}</Text>
         )}
       </View>
     </KeyboardAvoidingView>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAction } from "convex/react";
 import { api } from "../convexApi";
 import { parseConvexError } from "../lib/parseConvexError";
@@ -49,6 +50,9 @@ export default function ForgotPassword() {
       >
         {busy ? "Sending…" : "Send reset link"}
       </button>
+      <p className="muted" style={{ marginTop: 12 }}>
+        <Link to="/login">Back to sign in</Link>
+      </p>
     </div>
   );
 }

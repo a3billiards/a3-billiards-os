@@ -13,10 +13,12 @@ import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, glass, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { LoginLanguagePicker, useTranslation } from "@a3/i18n";
 
 const CODE_LENGTH = 6;
 
 export default function MfaScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const verifyMfa = useAction(api.mfaActions.verifyMfaCode);
@@ -68,12 +70,10 @@ export default function MfaScreen() {
         initialSentRef.current = false;
         const appError = parseConvexError(e as Error);
         if (appError.code === "RATE_001") {
-          setError(
-            "Too many codes sent this hour. Check your inbox for the latest 6-digit code, or wait up to 60 minutes and try Re-send.",
-          );
+          setError(t("auth.admin.mfa.rateLimitGenerate"));
         } else if (appError.code === "AUTH_002") {
           setFrozen(true);
-          setError("This account is frozen. Contact support.");
+          setError(t("auth.admin.mfa.frozen"));
         } else {
           setError(appError.message);
         }
@@ -81,7 +81,7 @@ export default function MfaScreen() {
       .finally(() => {
         setSendingInitial(false);
       });
-  }, [authLoading, isAuthenticated, generateMfa]);
+  }, [authLoading, isAuthenticated, generateMfa, t]);
 
   const handleChange = useCallback(
     (text: string, index: number) => {
@@ -145,11 +145,11 @@ export default function MfaScreen() {
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
         setFrozen(true);
-        setError("This account is frozen. Contact support.");
+        setError(t("auth.admin.mfa.frozen"));
       } else if (appError.code === "AUTH_003") {
-        setError("Invalid or expired code. Please try again.");
+        setError(t("auth.admin.mfa.invalidCode"));
       } else if (appError.code === "RATE_001") {
-        setError("Too many attempts. Please wait before trying again.");
+        setError(t("auth.admin.mfa.tooManyAttempts"));
       } else {
         setError(appError.message);
       }
@@ -159,7 +159,7 @@ export default function MfaScreen() {
       setLoading(false);
       verifyInFlightRef.current = false;
     }
-  }, [isComplete, loading, frozen, code, verifyMfa]);
+  }, [isComplete, loading, frozen, code, verifyMfa, t]);
 
   useEffect(() => {
     if (isComplete && !loading && !frozen) {
@@ -186,26 +186,27 @@ export default function MfaScreen() {
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "RATE_001") {
-        setError(
-          "Send limit reached. Use the latest code from your email, or wait up to 60 minutes.",
-        );
+        setError(t("auth.admin.mfa.sendLimitReached"));
       } else {
         setError(appError.message);
       }
     } finally {
       setResending(false);
     }
-  }, [resending, resendCooldown, frozen, generateMfa]);
+  }, [resending, resendCooldown, frozen, generateMfa, t]);
 
   return (
     <KeyboardAvoidingView style={styles.flex} {...iosKeyboardAvoidingProps}>
       <View style={styles.container}>
+        <View style={styles.langRow}>
+          <LoginLanguagePicker />
+        </View>
         <Text style={styles.logo}>A3</Text>
-        <Text style={styles.title}>Verification Code</Text>
+        <Text style={styles.title}>{t("auth.admin.mfa.title")}</Text>
         <Text style={styles.subtitle}>
           {sendingInitial
-            ? "Sending a 6-digit code to your admin email…"
-            : "Enter the 6-digit code sent to your admin email"}
+            ? t("auth.admin.mfa.subtitleSending")
+            : t("auth.admin.mfa.subtitleEnter")}
         </Text>
 
         <View style={styles.codeRow}>
@@ -230,7 +231,10 @@ export default function MfaScreen() {
               textContentType="oneTimeCode"
               autoFocus={i === 0}
               editable={!loading && !frozen}
-              accessibilityLabel={`Digit ${i + 1} of ${CODE_LENGTH}`}
+              accessibilityLabel={t("auth.admin.mfa.digitAccessibility", {
+                index: i + 1,
+                total: CODE_LENGTH,
+              })}
               selectTextOnFocus
             />
           ))}
@@ -249,7 +253,7 @@ export default function MfaScreen() {
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
-            <Text style={styles.errorDot}>Error</Text>
+            <Text style={styles.errorDot}>{t("auth.admin.mfa.errorLabel")}</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -266,8 +270,8 @@ export default function MfaScreen() {
             accessibilityRole="button"
             accessibilityLabel={
               resendCooldown > 0
-                ? `Re-send code available in ${resendCooldown} seconds`
-                : "Re-send code"
+                ? t("auth.admin.mfa.resendAvailableIn", { seconds: resendCooldown })
+                : t("auth.admin.mfa.resendCode")
             }
           >
             <Text
@@ -277,10 +281,10 @@ export default function MfaScreen() {
               ]}
             >
               {resending
-                ? "Sending..."
+                ? t("auth.admin.mfa.resendSending")
                 : resendCooldown > 0
-                  ? `Re-send code (${resendCooldown}s)`
-                  : "Re-send code"}
+                  ? t("auth.admin.mfa.resendCooldown", { seconds: resendCooldown })
+                  : t("auth.admin.mfa.resendCode")}
             </Text>
           </Pressable>
         )}
@@ -302,6 +306,10 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
     width: "100%",
+  },
+  langRow: {
+    alignSelf: "stretch",
+    marginBottom: spacing[4],
   },
   logo: {
     ...typography.heading1,

@@ -62,6 +62,13 @@ function normalizeTableLabel(tableLabel: string | undefined): string | undefined
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function viewerCountFromStream(stream: {
+  currentViewerCount?: number;
+  peakViewerCount?: number;
+}): number {
+  return stream.currentViewerCount ?? stream.peakViewerCount ?? 0;
+}
+
 async function resolveClubBannerUrl(
   ctx: QueryCtx,
   club: Doc<"clubs">,
@@ -113,19 +120,26 @@ export const preflightStartStream = internalQuery({
     roleId: v.optional(v.id("staffRoles")),
     title: v.optional(v.string()),
     tableLabel: v.optional(v.string()),
+    tableId: v.optional(v.id("tables")),
   },
   handler: async (ctx, args) => {
     const user = await assertOwnerClub(ctx, args.clubId);
     await assertStaffTabAllowed(ctx, args.clubId, "livestream", args.roleId);
 
-    const existingLive = await ctx.db
-      .query("liveStreams")
-      .withIndex("by_clubId_status", (q) =>
-        q.eq("clubId", args.clubId).eq("status", "live"),
-      )
-      .first();
-    if (existingLive) {
-      throw new Error("LIVESTREAM_001: A stream is already live for this club");
+    if (args.tableId) {
+      const table = await ctx.db.get(args.tableId);
+      if (!table || table.clubId !== args.clubId || !table.isActive) {
+        throw new Error("DATA_003: Table not found");
+      }
+      const existingOnTable = await ctx.db
+        .query("liveStreams")
+        .withIndex("by_tableId_status", (q) =>
+          q.eq("tableId", args.tableId).eq("status", "live"),
+        )
+        .first();
+      if (existingOnTable) {
+        throw new Error("LIVESTREAM_001: This table is already streaming");
+      }
     }
 
     const club = await ctx.db.get(args.clubId);
@@ -135,12 +149,7 @@ export const preflightStartStream = internalQuery({
       userId: user._id,
       title: normalizeTitle(args.title),
       tableLabel: normalizeTableLabel(args.tableLabel),
-      club: {
-        ivsChannelArn: club.ivsChannelArn ?? null,
-        ivsIngestEndpoint: club.ivsIngestEndpoint ?? null,
-        ivsStreamKeyArn: club.ivsStreamKeyArn ?? null,
-        ivsPlaybackUrl: club.ivsPlaybackUrl ?? null,
-      },
+      tableId: args.tableId,
     };
   },
 });
@@ -151,25 +160,37 @@ export const insertLiveStream = internalMutation({
     startedBy: v.id("users"),
     title: v.optional(v.string()),
     tableLabel: v.optional(v.string()),
+    tableId: v.optional(v.id("tables")),
+    ivsChannelArn: v.string(),
+    ivsIngestEndpoint: v.string(),
+    ivsStreamKeyArn: v.string(),
+    ivsPlaybackUrl: v.string(),
   },
   handler: async (ctx, args) => {
-    const existingLive = await ctx.db
-      .query("liveStreams")
-      .withIndex("by_clubId_status", (q) =>
-        q.eq("clubId", args.clubId).eq("status", "live"),
-      )
-      .first();
-    if (existingLive) {
-      throw new Error("LIVESTREAM_001: A stream is already live for this club");
+    if (args.tableId) {
+      const existingOnTable = await ctx.db
+        .query("liveStreams")
+        .withIndex("by_tableId_status", (q) =>
+          q.eq("tableId", args.tableId).eq("status", "live"),
+        )
+        .first();
+      if (existingOnTable) {
+        throw new Error("LIVESTREAM_001: This table is already streaming");
+      }
     }
 
     const liveStreamId = await ctx.db.insert("liveStreams", {
       clubId: args.clubId,
+      tableId: args.tableId,
       title: args.title,
       tableLabel: args.tableLabel,
       status: "live",
       startedBy: args.startedBy,
       startedAt: Date.now(),
+      ivsChannelArn: args.ivsChannelArn,
+      ivsIngestEndpoint: args.ivsIngestEndpoint,
+      ivsStreamKeyArn: args.ivsStreamKeyArn,
+      ivsPlaybackUrl: args.ivsPlaybackUrl,
     });
 
     return { liveStreamId };
@@ -183,55 +204,79 @@ export const getStreamForPlayback = internalQuery({
     if (!stream || stream.status !== "live") {
       return null;
     }
-    const club = await ctx.db.get(stream.clubId);
-    if (!club?.ivsChannelArn || !club.ivsPlaybackUrl) {
+    let channelArn = stream.ivsChannelArn;
+    let playbackUrl = stream.ivsPlaybackUrl;
+    if (!channelArn || !playbackUrl) {
+      const club = await ctx.db.get(stream.clubId);
+      channelArn = club?.ivsChannelArn;
+      playbackUrl = club?.ivsPlaybackUrl;
+    }
+    if (!channelArn || !playbackUrl) {
       return null;
     }
     return {
-      channelArn: club.ivsChannelArn,
-      playbackUrl: club.ivsPlaybackUrl,
+      channelArn,
+      playbackUrl,
     };
   },
 });
 
 export const updatePeakViewerCount = internalMutation({
   args: {
-    clubId: v.id("clubs"),
+    liveStreamId: v.id("liveStreams"),
     viewerCount: v.number(),
   },
-  handler: async (ctx, { clubId, viewerCount }) => {
-    const live = await ctx.db
-      .query("liveStreams")
-      .withIndex("by_clubId_status", (q) =>
-        q.eq("clubId", clubId).eq("status", "live"),
-      )
-      .first();
-    if (!live) return;
+  handler: async (ctx, { liveStreamId, viewerCount }) => {
+    const live = await ctx.db.get(liveStreamId);
+    if (!live || live.status !== "live") return;
 
     const peak = live.peakViewerCount ?? 0;
+    const patch: { currentViewerCount: number; peakViewerCount?: number } = {
+      currentViewerCount: viewerCount,
+    };
     if (viewerCount > peak) {
-      await ctx.db.patch(live._id, { peakViewerCount: viewerCount });
+      patch.peakViewerCount = viewerCount;
     }
+    await ctx.db.patch(live._id, patch);
   },
 });
 
 const STALE_STREAM_MS = 8 * 60 * 60 * 1000;
 
-async function closeLiveStreamForClub(
+async function closeLiveStreamByChannel(
   ctx: MutationCtx,
-  clubId: Id<"clubs">,
+  channelArn: string,
   endedReason: "connection_lost" | "stale_auto_closed",
   endedAt: number,
 ): Promise<boolean> {
   const live = await ctx.db
     .query("liveStreams")
+    .withIndex("by_ivsChannelArn", (q) => q.eq("ivsChannelArn", channelArn))
+    .first();
+  if (live && live.status === "live") {
+    await ctx.db.patch(live._id, {
+      status: "ended",
+      endedAt,
+      endedReason,
+    });
+    return true;
+  }
+
+  const club = await ctx.db
+    .query("clubs")
+    .withIndex("by_ivsChannelArn", (q) => q.eq("ivsChannelArn", channelArn))
+    .unique();
+  if (!club) return false;
+
+  const legacyLive = await ctx.db
+    .query("liveStreams")
     .withIndex("by_clubId_status", (q) =>
-      q.eq("clubId", clubId).eq("status", "live"),
+      q.eq("clubId", club._id).eq("status", "live"),
     )
     .first();
-  if (!live) return false;
+  if (!legacyLive) return false;
 
-  await ctx.db.patch(live._id, {
+  await ctx.db.patch(legacyLive._id, {
     status: "ended",
     endedAt,
     endedReason,
@@ -265,15 +310,9 @@ export const processIvsEventBridgeEvent = internalMutation({
       return { handled: false as const };
     }
 
-    const club = await ctx.db
-      .query("clubs")
-      .withIndex("by_ivsChannelArn", (q) => q.eq("ivsChannelArn", channelArn))
-      .unique();
-    if (!club) return { handled: false as const };
-
-    const closed = await closeLiveStreamForClub(
+    const closed = await closeLiveStreamByChannel(
       ctx,
-      club._id,
+      channelArn,
       "connection_lost",
       Date.now(),
     );
@@ -301,7 +340,7 @@ export const closeStaleLiveStreams = internalMutation({
         endedReason: "stale_auto_closed",
       });
       await ctx.scheduler.runAfter(0, internal.livestreamActions.stopIvsStream, {
-        clubId: stream.clubId,
+        channelArn: stream.ivsChannelArn ?? "",
       });
       closed += 1;
     }
@@ -323,17 +362,38 @@ export const assertLivestreamBroadcastAccess = internalQuery({
 export const refreshViewerCount = action({
   args: {
     clubId: v.id("clubs"),
+    liveStreamId: v.id("liveStreams"),
     roleId: v.optional(v.id("staffRoles")),
   },
   handler: async (ctx, args): Promise<{ viewerCount: number }> => {
     await ctx.runQuery(internal.livestream.assertLivestreamBroadcastAccess, args);
-    return await ctx.runAction(internal.livestreamActions.getViewerCount, {
-      clubId: args.clubId,
+    const stream = await ctx.runQuery(internal.livestream.getStreamChannelArn, {
+      liveStreamId: args.liveStreamId,
     });
+    if (!stream?.channelArn) return { viewerCount: 0 };
+    const result = await ctx.runAction(internal.livestreamActions.getViewerCount, {
+      channelArn: stream.channelArn,
+      liveStreamId: args.liveStreamId,
+    });
+    return { viewerCount: result.viewerCount };
   },
 });
 
 // ── Public API ───────────────────────────────────────────────────────────────
+
+export const getStreamChannelArn = internalQuery({
+  args: { liveStreamId: v.id("liveStreams") },
+  handler: async (ctx, { liveStreamId }) => {
+    const stream = await ctx.db.get(liveStreamId);
+    if (!stream || stream.status !== "live") return null;
+    if (stream.ivsChannelArn) {
+      return { channelArn: stream.ivsChannelArn };
+    }
+    const club = await ctx.db.get(stream.clubId);
+    if (!club?.ivsChannelArn) return null;
+    return { channelArn: club.ivsChannelArn };
+  },
+});
 
 /** Orchestrates IVS provisioning + stream row (Convex: action required for AWS calls). */
 export const startStream = action({
@@ -342,6 +402,7 @@ export const startStream = action({
     roleId: v.optional(v.id("staffRoles")),
     title: v.optional(v.string()),
     tableLabel: v.optional(v.string()),
+    tableId: v.optional(v.id("tables")),
   },
   handler: async (
     ctx,
@@ -356,34 +417,16 @@ export const startStream = action({
       throw new Error("AUTH_001: Not authenticated");
     }
 
-    const preflight: {
-      userId: Id<"users">;
-      title?: string;
-      tableLabel?: string;
-      club: {
-        ivsChannelArn: string | null;
-        ivsIngestEndpoint: string | null;
-        ivsStreamKeyArn: string | null;
-        ivsPlaybackUrl: string | null;
-      };
-    } = await ctx.runQuery(internal.livestream.preflightStartStream, args);
+    const preflight = await ctx.runQuery(internal.livestream.preflightStartStream, args);
 
-    let club = preflight.club;
-    if (!club.ivsChannelArn) {
-      await ctx.runAction(internal.livestreamActions.createIvsChannel, {
-        clubId: args.clubId,
-      });
-      club = await ctx.runQuery(internal.livestream.getClubIvsFields, {
-        clubId: args.clubId,
-      });
-      if (!club?.ivsChannelArn || !club.ivsIngestEndpoint || !club.ivsStreamKeyArn) {
-        throw new Error("LIVESTREAM_002: AWS IVS API call failed");
-      }
-    }
+    const ivs = await ctx.runAction(internal.livestreamActions.createIvsChannelForStream, {
+      clubId: args.clubId,
+      tableId: args.tableId,
+    });
 
     const { value: streamKeyValue } = await ctx.runAction(
       internal.livestreamActions.getStreamKeyValue,
-      { ivsStreamKeyArn: club.ivsStreamKeyArn! },
+      { ivsStreamKeyArn: ivs.ivsStreamKeyArn },
     );
 
     const { liveStreamId } = await ctx.runMutation(internal.livestream.insertLiveStream, {
@@ -391,11 +434,16 @@ export const startStream = action({
       startedBy: preflight.userId,
       title: preflight.title,
       tableLabel: preflight.tableLabel,
+      tableId: preflight.tableId,
+      ivsChannelArn: ivs.ivsChannelArn,
+      ivsIngestEndpoint: ivs.ivsIngestEndpoint,
+      ivsStreamKeyArn: ivs.ivsStreamKeyArn,
+      ivsPlaybackUrl: ivs.ivsPlaybackUrl,
     });
 
     return {
       liveStreamId,
-      ingestEndpoint: club.ivsIngestEndpoint!,
+      ingestEndpoint: ivs.ivsIngestEndpoint,
       streamKeyValue,
     };
   },
@@ -404,19 +452,15 @@ export const startStream = action({
 export const endStream = mutation({
   args: {
     clubId: v.id("clubs"),
+    liveStreamId: v.id("liveStreams"),
     roleId: v.optional(v.id("staffRoles")),
   },
   handler: async (ctx, args) => {
     await assertLivestreamTab(ctx, args.clubId, args.roleId);
 
-    const live = await ctx.db
-      .query("liveStreams")
-      .withIndex("by_clubId_status", (q) =>
-        q.eq("clubId", args.clubId).eq("status", "live"),
-      )
-      .first();
-    if (!live) {
-      throw new Error("LIVESTREAM_003: No stream is currently live for this club");
+    const live = await ctx.db.get(args.liveStreamId);
+    if (!live || live.clubId !== args.clubId || live.status !== "live") {
+      throw new Error("LIVESTREAM_003: Stream is not live");
     }
 
     const now = Date.now();
@@ -426,9 +470,15 @@ export const endStream = mutation({
       endedReason: "owner_ended",
     });
 
-    await ctx.scheduler.runAfter(0, internal.livestreamActions.stopIvsStream, {
-      clubId: args.clubId,
-    });
+    const channelArn =
+      live.ivsChannelArn ??
+      (await ctx.db.get(args.clubId))?.ivsChannelArn ??
+      "";
+    if (channelArn) {
+      await ctx.scheduler.runAfter(0, internal.livestreamActions.stopIvsStream, {
+        channelArn,
+      });
+    }
 
     return { liveStreamId: live._id, endedAt: now };
   },
@@ -459,7 +509,7 @@ export const getActiveStreamsPlatformWide = query({
           title: stream.title ?? null,
           tableLabel: stream.tableLabel ?? null,
           startedAt: stream.startedAt,
-          viewerCount: stream.peakViewerCount ?? 0,
+          viewerCount: viewerCountFromStream(stream),
         };
       }),
     );
@@ -493,7 +543,7 @@ export const getActiveStreamsForAdmin = query({
           title: stream.title ?? null,
           tableLabel: stream.tableLabel ?? null,
           startedAt: stream.startedAt,
-          viewerCount: stream.peakViewerCount ?? 0,
+          viewerCount: viewerCountFromStream(stream),
           startedByUserId: stream.startedBy,
           startedByName: startedByUser?.name ?? "Unknown",
         };
@@ -536,9 +586,15 @@ export const adminForceEndStream = mutation({
       endedAt: now,
     });
 
-    await ctx.scheduler.runAfter(0, internal.livestreamActions.stopIvsStream, {
-      clubId: stream.clubId,
-    });
+    const channelArn =
+      stream.ivsChannelArn ??
+      (await ctx.db.get(stream.clubId))?.ivsChannelArn ??
+      "";
+    if (channelArn) {
+      await ctx.scheduler.runAfter(0, internal.livestreamActions.stopIvsStream, {
+        channelArn,
+      });
+    }
 
     await ctx.scheduler.runAfter(0, internal.notifications.notifyOwnerStreamForceEnded, {
       clubId: stream.clubId,
@@ -559,6 +615,8 @@ export const getPlaybackToken = action({
     playbackUrl: string;
     token: string;
     expiresInSeconds: number;
+    isBroadcasting: boolean;
+    viewerCount: number;
   }> => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
@@ -575,19 +633,58 @@ export const getPlaybackToken = action({
       throw new Error("LIVESTREAM_004: This stream is not currently active");
     }
 
-    const { token } = await ctx.runAction(internal.livestreamActions.signPlaybackToken, {
-      channelArn: streamInfo.channelArn,
-    });
+    const [{ token }, broadcast] = await Promise.all([
+      ctx.runAction(internal.livestreamActions.signPlaybackToken, {
+        channelArn: streamInfo.channelArn,
+      }),
+      ctx.runAction(internal.livestreamActions.getPlaybackBroadcastState, {
+        channelArn: streamInfo.channelArn,
+      }),
+    ]);
+
+    if (broadcast.isBroadcasting) {
+      await ctx.runMutation(internal.livestream.updatePeakViewerCount, {
+        liveStreamId: args.liveStreamId,
+        viewerCount: broadcast.viewerCount,
+      });
+    }
 
     return {
       playbackUrl: streamInfo.playbackUrl,
       token,
       expiresInSeconds: 3600,
+      isBroadcasting: broadcast.isBroadcasting,
+      viewerCount: broadcast.viewerCount,
     };
   },
 });
 
-/** Owner broadcast screen: current club live state. */
+/** Owner broadcast screen: all live streams for this club. */
+export const getActiveStreamsForClub = query({
+  args: {
+    clubId: v.id("clubs"),
+    roleId: v.optional(v.id("staffRoles")),
+  },
+  handler: async (ctx, { clubId, roleId }) => {
+    await assertLivestreamTab(ctx, clubId, roleId);
+
+    const liveRows = await ctx.db
+      .query("liveStreams")
+      .withIndex("by_clubId_status", (q) => q.eq("clubId", clubId).eq("status", "live"))
+      .collect();
+
+    return liveRows.map((live) => ({
+      liveStreamId: live._id,
+      tableId: live.tableId ?? null,
+      title: live.title ?? null,
+      tableLabel: live.tableLabel ?? null,
+      startedAt: live.startedAt,
+      viewerCount: viewerCountFromStream(live),
+    }));
+  },
+});
+
+/** @deprecated Use getActiveStreamsForClub — returns first live stream for backward compat. */
 export const getActiveStreamForClub = query({
   args: {
     clubId: v.id("clubs"),
@@ -605,10 +702,54 @@ export const getActiveStreamForClub = query({
 
     return {
       liveStreamId: live._id,
+      tableId: live.tableId ?? null,
       title: live.title ?? null,
       tableLabel: live.tableLabel ?? null,
       startedAt: live.startedAt,
-      viewerCount: live.peakViewerCount ?? 0,
+      viewerCount: viewerCountFromStream(live),
+    };
+  },
+});
+
+export const listLiveStreamsForViewerRefresh = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const liveStreams = await ctx.db
+      .query("liveStreams")
+      .withIndex("by_status_startedAt", (q) => q.eq("status", "live"))
+      .collect();
+
+    const rows = await Promise.all(
+      liveStreams.map(async (stream) => {
+        let channelArn = stream.ivsChannelArn;
+        if (!channelArn) {
+          const club = await ctx.db.get(stream.clubId);
+          channelArn = club?.ivsChannelArn;
+        }
+        return channelArn
+          ? { liveStreamId: stream._id, channelArn }
+          : null;
+      }),
+    );
+
+    return rows.filter((r): r is NonNullable<typeof r> => r !== null);
+  },
+});
+
+/** Live viewer count for playback UI (updates via cron + token refresh). */
+export const getLiveStreamPublicMeta = query({
+  args: { liveStreamId: v.id("liveStreams") },
+  handler: async (ctx, { liveStreamId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    const stream = await ctx.db.get(liveStreamId);
+    if (!stream || stream.status !== "live") return null;
+
+    return {
+      viewerCount: viewerCountFromStream(stream),
+      title: stream.title ?? null,
+      tableLabel: stream.tableLabel ?? null,
     };
   },
 });

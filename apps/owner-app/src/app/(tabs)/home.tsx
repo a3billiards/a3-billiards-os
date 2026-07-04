@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,12 +15,16 @@ import { useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import { layout, spacing, typography, glass } from "@a3/ui/theme";
+import { TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
 import {
   GlassPageBackground,
   LiquidGlassCard,
   GlassIconTile,
+  NotificationBellButton,
 } from "@a3/ui/components";
 import { formatCurrency } from "@a3/utils/billing";
+import { useTranslation } from "@a3/i18n";
 import { useStaffRole, staffRoleQueryId } from "../../lib/StaffRoleContext";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { OwnerModePasscodeGate } from "../../components/OwnerModePasscodeGate";
@@ -33,18 +38,18 @@ type QuickTile = {
     | "/(tabs)/complaints"
     | "/(tabs)/bookings"
     | "/(tabs)/settings";
-  label: string;
+  labelKey: string;
   icon: React.ComponentProps<typeof MaterialIcons>["name"];
   tint: string;
 };
 
 const QUICK_TILES: QuickTile[] = [
-  { href: "/(tabs)/slots", label: "Slots", icon: "view-module", tint: "#86efac" },
-  { href: "/(tabs)/bookings", label: "Bookings", icon: "event", tint: "#7dd3fc" },
-  { href: "/(tabs)/snacks", label: "Snacks", icon: "fastfood", tint: "#fbbf24" },
-  { href: "/(tabs)/financials", label: "Financials", icon: "bar-chart", tint: "#fde047" },
-  { href: "/(tabs)/complaints", label: "Complaints", icon: "report-problem", tint: "#fda4af" },
-  { href: "/(tabs)/settings", label: "Settings", icon: "settings", tint: glass.textMuted },
+  { href: "/(tabs)/slots", labelKey: "ownerApp.home.tileSlots", icon: "view-module", tint: "#86efac" },
+  { href: "/(tabs)/bookings", labelKey: "ownerApp.home.tileBookings", icon: "event", tint: "#7dd3fc" },
+  { href: "/(tabs)/snacks", labelKey: "ownerApp.home.tileSnacks", icon: "fastfood", tint: "#fbbf24" },
+  { href: "/(tabs)/financials", labelKey: "ownerApp.home.tileFinancials", icon: "bar-chart", tint: "#fde047" },
+  { href: "/(tabs)/complaints", labelKey: "ownerApp.home.tileComplaints", icon: "report-problem", tint: "#fda4af" },
+  { href: "/(tabs)/settings", labelKey: "ownerApp.home.tileSettings", icon: "settings", tint: glass.textMuted },
 ];
 
 const QUICK_TILE_TAB: Record<QuickTile["href"], string | null> = {
@@ -56,13 +61,16 @@ const QUICK_TILE_TAB: Record<QuickTile["href"], string | null> = {
   "/(tabs)/settings": null,
 };
 
-export default function HomeScreen(): React.JSX.Element {
+function HomeScreenContent(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
   const { roleId, canAccessTab } = useStaffRole();
   const [ownerPasscodeOpen, setOwnerPasscodeOpen] = useState(false);
+  const { refreshing, onRefresh } = usePullToRefresh();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
+  const unreadInbox = useQuery(api.notifications.getUnreadInboxCount);
   const roles = useQuery(
     api.staffRoles.listStaffRoles,
     dashboard ? {} : "skip",
@@ -80,12 +88,12 @@ export default function HomeScreen(): React.JSX.Element {
   const onRolePillPress = useCallback(() => {
     if (roleId && activeRoleName) {
       Alert.alert(
-        `Staff role: ${activeRoleName}`,
-        "Enter the settings passcode to switch to full owner access. Ask the owner to change your staff role.",
+        t("ownerApp.home.alertStaffRoleTitle", { roleName: activeRoleName }),
+        t("ownerApp.home.alertStaffRoleMessage"),
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Owner mode",
+            text: t("ownerApp.home.alertOwnerMode"),
             onPress: () => setOwnerPasscodeOpen(true),
           },
         ],
@@ -93,7 +101,7 @@ export default function HomeScreen(): React.JSX.Element {
       return;
     }
     router.push("/(tabs)/settings");
-  }, [roleId, activeRoleName, router]);
+  }, [roleId, activeRoleName, router, t]);
 
   const canViewFinancials = roleId !== undefined && canAccessTab("financials");
   const canViewBookings = roleId !== undefined && canAccessTab("bookings");
@@ -119,7 +127,7 @@ export default function HomeScreen(): React.JSX.Element {
       <GlassPageBackground>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={glass.accentBlue} />
-          <Text style={styles.centerText}>Loading dashboard…</Text>
+          <Text style={styles.centerText}>{t("ownerApp.home.loadingDashboard")}</Text>
         </View>
       </GlassPageBackground>
     );
@@ -142,6 +150,9 @@ export default function HomeScreen(): React.JSX.Element {
             { paddingTop: spacing[2], paddingBottom: bottomPad },
           ]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         >
           {/* Header row — club name + notifications + role pill */}
           <View style={styles.headerRow}>
@@ -149,28 +160,22 @@ export default function HomeScreen(): React.JSX.Element {
               <Text style={styles.headerTitle} numberOfLines={1}>
                 {dashboard.clubName}
               </Text>
-              <Text style={styles.headerSubtitle}>Home</Text>
+              <Text style={styles.headerSubtitle}>{t("ownerApp.home.subtitle")}</Text>
             </View>
             <View style={styles.headerActions}>
-              <Pressable
-                hitSlop={10}
-                style={styles.bellBtn}
-                onPress={() => router.push("/(tabs)/complaints")}
-                accessibilityLabel="Notifications"
-              >
-                <MaterialIcons
-                  name="notifications-none"
-                  size={20}
-                  color={glass.textMuted}
-                />
-                <View style={styles.bellDot} />
-              </Pressable>
+              <NotificationBellButton
+                unreadCount={unreadInbox?.count}
+                onPress={() => router.push("/inbox-notifications")}
+                accessibilityLabel={t("common.inbox.bellAccessibility")}
+              />
               <Pressable
                 style={styles.ownerPill}
                 onPress={onRolePillPress}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  roleId ? `Staff role ${activeRoleName}. Tap to switch.` : "Owner mode"
+                  roleId && activeRoleName
+                    ? t("ownerApp.home.staffRoleAccessibility", { name: activeRoleName })
+                    : t("ownerApp.home.alertOwnerMode")
                 }
               >
                 <MaterialIcons
@@ -179,7 +184,9 @@ export default function HomeScreen(): React.JSX.Element {
                   color="#7dd3fc"
                 />
                 <Text style={styles.ownerPillText} numberOfLines={1}>
-                  {roleId ? activeRoleName ?? "Staff" : "Owner"}
+                  {roleId
+                    ? (activeRoleName ?? t("ownerApp.home.staffFallback"))
+                    : t("ownerApp.home.ownerMode")}
                 </Text>
               </Pressable>
             </View>
@@ -190,13 +197,13 @@ export default function HomeScreen(): React.JSX.Element {
           <LiquidGlassCard style={styles.revenueHero} padding={24}>
             <View style={styles.revenueLabelRow}>
               <MaterialIcons name="trending-up" size={14} color="#7dd3fc" />
-              <Text style={styles.revenueLabel}>TODAY'S TOTAL REVENUE</Text>
+              <Text style={styles.revenueLabel}>{t("ownerApp.home.todayRevenue")}</Text>
             </View>
             <View style={styles.revenueValueRow}>
               <Text style={styles.currency}>₹</Text>
               <Text style={styles.revenueValue}>
                 {stats === undefined
-                  ? "—"
+                  ? t("common.emDash")
                   : formatCurrency(stats.todayRevenue, stats.currency).replace(
                       /^[^\d]+/,
                       "",
@@ -206,11 +213,11 @@ export default function HomeScreen(): React.JSX.Element {
             <View style={styles.revenueSubRow}>
               <Text style={styles.revenueSubMuted}>
                 {stats === undefined
-                  ? "Loading…"
-                  : `${stats.completedToday} session${stats.completedToday === 1 ? "" : "s"} today`}
+                  ? t("common.loading")
+                  : t("ownerApp.home.sessionsToday", { count: stats.completedToday })}
               </Text>
               <View style={styles.revenueSubDot} />
-              <Text style={styles.revenueSubAccent}>Cash basis</Text>
+              <Text style={styles.revenueSubAccent}>{t("ownerApp.home.cashBasis")}</Text>
             </View>
           </LiquidGlassCard>
           ) : null}
@@ -223,9 +230,9 @@ export default function HomeScreen(): React.JSX.Element {
                   <MaterialIcons name="view-module" size={20} color="#7dd3fc" />
                 </GlassIconTile>
                 <Text style={styles.statValue}>
-                  {activeTablesCount === undefined ? "—" : activeTablesCount}
+                  {activeTablesCount === undefined ? t("common.emDash") : activeTablesCount}
                 </Text>
-                <Text style={styles.statLabel}>Active Tables</Text>
+                <Text style={styles.statLabel}>{t("ownerApp.home.activeTables")}</Text>
               </LiquidGlassCard>
             </View>
             <View style={styles.statCellWrap}>
@@ -238,31 +245,31 @@ export default function HomeScreen(): React.JSX.Element {
                   />
                 </GlassIconTile>
                 <Text style={[styles.statValue, { color: "#86efac" }]}>
-                  {activeSessionsCount === undefined ? "—" : activeSessionsCount}
+                  {activeSessionsCount === undefined ? t("common.emDash") : activeSessionsCount}
                 </Text>
-                <Text style={styles.statLabel}>Sessions Today</Text>
+                <Text style={styles.statLabel}>{t("ownerApp.home.sessionsTodayLabel")}</Text>
               </LiquidGlassCard>
             </View>
           </View>
 
           {/* Quick Access */}
-          <Text style={styles.sectionTitle}>Quick Access</Text>
+          <Text style={styles.sectionTitle}>{t("ownerApp.home.quickAccess")}</Text>
           <View style={styles.quickRow}>
-            {visibleQuickTiles.slice(0, 4).map((t) => (
+            {visibleQuickTiles.slice(0, 4).map((tile) => (
               <Pressable
-                key={t.href}
-                onPress={() => router.push(t.href)}
+                key={tile.href}
+                onPress={() => router.push(tile.href)}
                 style={({ pressed }) => [
                   styles.quickTile,
                   pressed && { opacity: 0.85 },
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel={`Open ${t.label}`}
+                accessibilityLabel={t(tile.labelKey)}
               >
                 <View style={styles.quickIcon}>
-                  <MaterialIcons name={t.icon} size={20} color={t.tint} />
+                  <MaterialIcons name={tile.icon} size={20} color={tile.tint} />
                 </View>
-                <Text style={styles.quickLabel}>{t.label}</Text>
+                <Text style={styles.quickLabel}>{t(tile.labelKey)}</Text>
               </Pressable>
             ))}
           </View>
@@ -270,7 +277,7 @@ export default function HomeScreen(): React.JSX.Element {
           {/* Bookings summary (if enabled) */}
           {showSummary ? (
             <>
-              <Text style={styles.sectionTitle}>Bookings Today</Text>
+              <Text style={styles.sectionTitle}>{t("ownerApp.home.bookingsToday")}</Text>
               <View style={styles.gridThree}>
                 <View style={styles.statCellWrapThird}>
                   <LiquidGlassCard
@@ -283,7 +290,7 @@ export default function HomeScreen(): React.JSX.Element {
                     <Text style={[styles.summaryValue, { color: "#fbbf24" }]}>
                       {summary.pending}
                     </Text>
-                    <Text style={styles.summaryLabel}>Pending</Text>
+                    <Text style={styles.summaryLabel}>{t("ownerApp.home.pending")}</Text>
                   </LiquidGlassCard>
                 </View>
                 <View style={styles.statCellWrapThird}>
@@ -297,7 +304,7 @@ export default function HomeScreen(): React.JSX.Element {
                     <Text style={[styles.summaryValue, { color: "#86efac" }]}>
                       {summary.confirmedToday}
                     </Text>
-                    <Text style={styles.summaryLabel}>Confirmed</Text>
+                    <Text style={styles.summaryLabel}>{t("ownerApp.home.confirmed")}</Text>
                   </LiquidGlassCard>
                 </View>
                 <View style={styles.statCellWrapThird}>
@@ -311,7 +318,7 @@ export default function HomeScreen(): React.JSX.Element {
                     <Text style={[styles.summaryValue, { color: "#7dd3fc" }]}>
                       {summary.completedToday}
                     </Text>
-                    <Text style={styles.summaryLabel}>Completed</Text>
+                    <Text style={styles.summaryLabel}>{t("ownerApp.home.completed")}</Text>
                   </LiquidGlassCard>
                 </View>
               </View>
@@ -324,8 +331,7 @@ export default function HomeScreen(): React.JSX.Element {
                 color={glass.textMuted}
               />
               <Text style={styles.bookingsDisabledText}>
-                Online booking is disabled. Enable it in Settings to track
-                booking activity here.
+                {t("ownerApp.home.bookingsDisabled")}
               </Text>
             </LiquidGlassCard>
           )}
@@ -333,7 +339,7 @@ export default function HomeScreen(): React.JSX.Element {
           {/* Active Sessions */}
           {stats?.activeSessions && stats.activeSessions > 0 ? (
             <>
-              <Text style={styles.sectionTitle}>Active Sessions</Text>
+              <Text style={styles.sectionTitle}>{t("ownerApp.home.activeSessions")}</Text>
               <LiquidGlassCard
                 style={styles.activeSessionCard}
                 padding={18}
@@ -342,12 +348,13 @@ export default function HomeScreen(): React.JSX.Element {
                 <View style={styles.activeRow}>
                   <View style={styles.activeLeft}>
                     <View style={styles.liveDot} />
-                    <View style={{ marginLeft: 12, flex: 1 }}>
+                    <View style={styles.activeTitleBlock}>
                       <Text style={styles.activeTitle}>
-                        {stats.activeSessions} active session
-                        {stats.activeSessions === 1 ? "" : "s"}
+                        {t("ownerApp.home.activeSessionsCount", {
+                          count: stats.activeSessions,
+                        })}
                       </Text>
-                      <Text style={styles.activeSub}>Tap to view tables</Text>
+                      <Text style={styles.activeSub}>{t("ownerApp.home.tapToViewTables")}</Text>
                     </View>
                   </View>
                   <MaterialIcons
@@ -398,7 +405,7 @@ const styles = StyleSheet.create({
   headerTitleBlock: {
     flex: 1,
     minWidth: 0,
-    paddingRight: spacing[3],
+    paddingEnd: spacing[3],
   },
   headerTitle: {
     fontSize: 24,
@@ -479,7 +486,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: glass.textMuted,
     fontWeight: "500",
-    marginRight: 4,
+    marginEnd: 4,
     marginBottom: 4,
   },
   revenueValue: {
@@ -613,6 +620,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
+  activeTitleBlock: {
+    marginStart: 12,
+    flex: 1,
+  },
   liveDot: {
     width: 10,
     height: 10,
@@ -630,3 +641,12 @@ const styles = StyleSheet.create({
     color: glass.textMuted,
   },
 });
+
+export default function HomeScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.owner.home")}>
+      <HomeScreenContent />
+    </TabErrorBoundary>
+  );
+}

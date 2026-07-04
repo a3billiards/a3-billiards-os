@@ -1,0 +1,194 @@
+{
+  "passcodeGate": {
+    "title": "ಸೆಟ್ಟಿಂಗ್‌ಗಳು",
+    "subtitle": "ಮುಂದುವರಿಯಲು ನಿಮ್ಮ 6-ಅಂಕಿಯ ಸೆಟ್ಟಿಂಗ್‌ಗಳ ಪಾಸ್‌ಕೋಡ್ ನಮೂದಿಸಿ.",
+    "invalidFormat": "ನಿಮ್ಮ 6-ಅಂಕಿಯ ಸೆಟ್ಟಿಂಗ್‌ಗಳ ಪಾಸ್‌ಕೋಡ್ ನಮೂದಿಸಿ.",
+    "invalidPasscode": "ಅಮಾನ್ಯ ಪಾಸ್‌ಕೋಡ್.",
+    "unlock": "ಅನ್‌ಲಾಕ್",
+    "cancel": "ರದ್ದುಮಾಡಿ"
+  },
+  "tablePicker": {
+    "title": "ಯಾವ ಟೇಬಲ್?",
+    "empty": "ಈ ಪ್ರಕಾರಕ್ಕೆ ಸಕ್ರಿಯ ಟೇಬಲ್‌ಗಳಿಲ್ಲ. ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಟೇಬಲ್ ಸೆಟಪ್ ಪರಿಶೀಲಿಸಲು ಕ್ಲಬ್‌ಗೆ ಹೇಳಿ."
+  },
+  "tableTypeSelect": {
+    "customName": "ಕಸ್ಟಮ್ ಪ್ರಕಾರದ ಹೆಸರು",
+    "custom": "ಕಸ್ಟಮ್"
+  },
+  "timeSlotGrid": {
+    "loading": "ಸ್ಲಾಟ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ…",
+    "noSlots": "ಈ ದಿನಾಂಕ ಮತ್ತು ಅವಧಿಗೆ ಸಮಯ ಸ್ಲಾಟ್‌ಗಳಿಲ್ಲ.",
+    "pickStart": "ಪ್ರಾರಂಭ ಸಮಯ ಆಯ್ಕೆಮಾಡಿ",
+    "noTimesOpen": "ಈ ದಿನಾಂಕ ಮತ್ತು ಅವಧಿಗೆ ಸಮಯಗಳು ಲಭ್ಯವಿಲ್ಲ. ಬೇರೆ ದಿನಾಂಕ, ಕಡಿಮೆ ಅವಧಿ ಅಥವಾ ಬೇರೆ ಟೇಬಲ್ ಪ್ರಕಾರ ಪ್ರಯತ್ನಿಸಿ.",
+    "unavailable": "ಲಭ್ಯವಿಲ್ಲ",
+    "realtimeNote": "ಲಭ್ಯತೆ ನೈಜ ಸಮಯದಲ್ಲಿ ನವೀಕರಿಸುತ್ತದೆ — ಸಲ್ಲಿಸುವ ಮೊದಲು ನಿಮ್ಮ ಆಯ್ಕೆಯನ್ನು ಮತ್ತೆ ಪರಿಶೀಲಿಸಿ."
+  },
+  "dateStrip": {
+    "heading": "ನೀವು ಯಾವಾಗ ಆಡಲು ಬಯಸುತ್ತೀರಿ?",
+    "today": "ಇಂದು",
+    "noBookableDates": "ಮುಂದಿನ {{maxAdvanceDays}} ದಿನಗಳಲ್ಲಿ ಬುಕ್ ಮಾಡಬಹುದಾದ ದಿನಾಂಕಗಳಿಲ್ಲ. ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಬುಕ್ ಮಾಡಬಹುದಾದ ದಿನಗಳು ಅಥವಾ ಗಂಟೆಗಳನ್ನು ನವೀಕರಿಸಬೇಕಾಗಬಹುದು."
+  },
+  "tableTypePicker": {
+    "heading": "ಯಾವ ರೀತಿಯ ಟೇಬಲ್?",
+    "oneTable": "1 ಟೇಬಲ್ ಲಭ್ಯ",
+    "tablesAvailable": "{{count}} ಟೇಬಲ್‌ಗಳು ಲಭ್ಯ",
+    "ratePerMin": "{{rate}}/ನಿಮಿಷ"
+  },
+  "tableGrid": {
+    "tableFallback": "ಟೇಬಲ್",
+    "disabled": "ನಿಷ್ಕ್ರಿಯ",
+    "occupied": "ಆಕ್ರಮಿಸಲಾಗಿದೆ",
+    "free": "ಖಾಲಿ",
+    "a11yTable": "{{label}}, {{status}}{{tag}}"
+  },
+  "clubCard": {
+    "hoursNotSet": "ಸಮಯಗಳು ಹೊಂದಿಸಲಾಗಿಲ್ಲ",
+    "kmAway": "{{km}} ಕಿಮೀ",
+    "moreAmenities": "+{{overflow}} ಹೆಚ್ಚು",
+    "bookableOnline": "ಆನ್‌ಲೈನ್‌ನಲ್ಲಿ ಬುಕ್ ಮಾಡಬಹುದು"
+  },
+  "liveStreamCard": {
+    "watchA11y": "{{clubName}} ನಿಂದ ಲೈವ್ ಸ್ಟ್ರೀಮ್ ವೀಕ್ಷಿಸಿ",
+    "liveBadge": "LIVE",
+    "viewer": "{{count}} ವೀಕ್ಷಕ",
+    "viewers": "{{count}} ವೀಕ್ಷಕರು"
+  },
+  "complaintBanner": {
+    "warning": "⚠ ಗ್ರಾಹಕರಿಗೆ ಸಕ್ರಿಯ ದೂರು(ಗಳು) ಇವೆ",
+    "filedBy": "{{clubName}} ನಿಂದ ದಾಖಲಿಸಲಾಗಿದೆ",
+    "justNow": "ಈಗ",
+    "minAgo": "{{min}} ನಿಮಿಷದ ಹಿಂದೆ",
+    "hoursAgo": "{{hr}} ಗಂಟೆಯ ಹಿಂದೆ",
+    "hoursAgo_other": "{{hr}} ಗಂಟೆಗಳ ಹಿಂದೆ",
+    "daysAgo": "{{day}} ದಿನದ ಹಿಂದೆ",
+    "daysAgo_other": "{{day}} ದಿನಗಳ ಹಿಂದೆ",
+    "monthsAgo": "{{mo}} ತಿಂಗಳ ಹಿಂದೆ",
+    "monthsAgo_other": "{{mo}} ತಿಂಗಳ ಹಿಂದೆ",
+    "advisory": "ಇದು ಸಲಹಾತ್ಮಕ ಎಚ್ಚರಿಕೆ. ನೀವು ಮುಂದುವರಿಯಬಹುದು ಅಥವಾ ಸೆಷನ್ ರದ್ದುಮಾಡಬಹುದು.",
+    "cancel": "ರದ್ದುಮಾಡಿ",
+    "acknowledge": "ಒಪ್ಪಿಕೊಂಡು ಮುಂದುವರಿಯಿರಿ"
+  },
+  "snackPicker": {
+    "counterTitle": "ಕೌಂಟರ್ ಸ್ನ್ಯಾಕ್‌ಗಳು",
+    "counterDesc": "ಕ್ಯಾಶ್ ಡೆಸ್ಕ್‌ನಲ್ಲಿ ಸಿದ್ಧ — ಬಿಲ್‌ಗೆ ಮಾತ್ರ ಸೇರಿಸಲಾಗುತ್ತದೆ.",
+    "counterEmpty": "ಮೆನುವಿನಲ್ಲಿ ಕೌಂಟರ್ ಸ್ನ್ಯಾಕ್‌ಗಳಿಲ್ಲ. ಸ್ನ್ಯಾಕ್‌ಗಳು → ಕೌಂಟರ್ ಅಡಿಯಲ್ಲಿ ಸೇರಿಸಿ.",
+    "kitchenTitle": "ಅಡುಗೆಮನೆ ವಸ್ತುಗಳು",
+    "kitchenDesc": "ತಯಾರಿಗಾಗಿ ಅಡುಗೆಮನೆ ಡಿಸ್ಪ್ಲೇಗೆ ಕಳುಹಿಸಲಾಗುತ್ತದೆ.",
+    "kitchenEmpty": "ಮೆನುವಿನಲ್ಲಿ ಅಡುಗೆಮನೆ ವಸ್ತುಗಳಿಲ್ಲ. ಸ್ನ್ಯಾಕ್‌ಗಳು → ಅಡುಗೆಮನೆ ಅಡಿಯಲ್ಲಿ ಸೇರಿಸಿ.",
+    "unableTitle": "ವಸ್ತುಗಳನ್ನು ಸೇರಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ",
+    "unableBody": "ಈ ಸೆಷನ್ ಅನ್ನು ಇನ್ನು ಮುಂದೆ ಸಂಪಾದಿಸಲಾಗುವುದಿಲ್ಲ.",
+    "addFailed": "ವಸ್ತುಗಳನ್ನು ಸೇರಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.",
+    "addFailedTitle": "ವಸ್ತುಗಳನ್ನು ಸೇರಿಸಲು ವಿಫಲ",
+    "addToBill": "ಬಿಲ್‌ಗೆ ಸೇರಿಸಿ",
+    "heading": "ಈ ಟೇಬಲ್‌ಗೆ ನೀವು ಏನು ಸೇರಿಸುತ್ತಿದ್ದೀರಿ?",
+    "counterSnack": "ಕೌಂಟರ್ ಸ್ನ್ಯಾಕ್",
+    "counterSnackDesc": "ಚಿಪ್ಸ್, ಪಾನೀಯಗಳು ಇತ್ಯಾದಿ ಕ್ಯಾಶ್ ಕೌಂಟರ್‌ನಲ್ಲಿ — ಬಿಲ್ ಮಾತ್ರ, ಅಡುಗೆಮನೆ ಇಲ್ಲ.",
+    "kitchenItem": "ಅಡುಗೆಮನೆ ವಸ್ತು",
+    "kitchenItemDesc": "ಅಡುಗೆಮನೆಯಲ್ಲಿ ತಯಾರಿಸಿದ ಆಹಾರ — ಅಡುಗೆಮನೆ ಡಿಸ್ಪ್ಲೇಯಲ್ಲಿ ಕಾಣಿಸುತ್ತದೆ.",
+    "cancel": "ರದ್ದುಮಾಡಿ",
+    "changeType": "← ಪ್ರಕಾರ ಬದಲಾಯಿಸಿ",
+    "loadingMenu": "ಮೆನು ಲೋಡ್ ಆಗುತ್ತಿದೆ...",
+    "each": "ಪ್ರತಿ",
+    "decreaseA11y": "{{name}} ಕಡಿಮೆ ಮಾಡಿ",
+    "increaseA11y": "{{name}} ಹೆಚ್ಚಿಸಿ",
+    "subtotal": "ಉಪಮೊತ್ತ",
+    "adding": "ಸೇರಿಸಲಾಗುತ್ತಿದೆ...",
+    "addToBillButton": "ಬಿಲ್‌ಗೆ ಸೇರಿಸಿ"
+  },
+  "bookingCard": {
+    "customerFallback": "ಗ್ರಾಹಕ",
+    "tableLabel": "ಟೇಬಲ್: {{label}}",
+    "reasonLabel": "ಕಾರಣ: {{reason}}",
+    "estimated": "ಅಂದಾಜು {{amount}}",
+    "requestedTable": "ವಿನಂತಿಸಿದ ಟೇಬಲ್: {{label}}",
+    "assignedTable": "ನಿಯೋಜಿಸಲಾಗಿದೆ: {{label}}",
+    "statsAtClub": "ಈ ಕ್ಲಬ್‌ನಲ್ಲಿ: {{bookings}} ಬುಕಿಂಗ್‌ಗಳು, {{noShows}} ನೋ-ಶೋ | ಪ್ಲಾಟ್‌ಫಾರ್ಮ್-ವ್ಯಾಪಿ: {{platformBookings}} ಬುಕಿಂಗ್‌ಗಳು, {{platformNoShows}} ನೋ-ಶೋ",
+    "cancel": "ರದ್ದುಮಾಡಿ",
+    "approve": "ಅನುಮೋದಿಸಿ",
+    "reject": "ತಿರಸ್ಕರಿಸಿ",
+    "startSession": "ಸೆಷನ್ ಪ್ರಾರಂಭಿಸಿ",
+    "statusPending": "ಬಾಕಿ",
+    "statusConfirmed": "ದೃಢೀಕರಿಸಲಾಗಿದೆ",
+    "statusDeclined": "ತಿರಸ್ಕರಿಸಲಾಗಿದೆ",
+    "statusCancelled": "ರದ್ದು",
+    "statusCancelledByClub": "ಕ್ಲಬ್ ರದ್ದುಮಾಡಿದೆ",
+    "statusExpired": "ಅವಧಿ ಮುಗಿದಿದೆ",
+    "statusCompleted": "ಪೂರ್ಣಗೊಂಡಿದೆ",
+    "awaitingApproval": "ಅನುಮೋದನೆಗಾಗಿ ಕಾಯುತ್ತಿದೆ",
+    "duration30": "30 ನಿಮಿಷ",
+    "duration1Hour": "1 ಗಂಟೆ",
+    "durationHours": "{{count}} ಗಂಟೆಗಳು",
+    "durationMinutes": "{{min}} ನಿಮಿಷ"
+  },
+  "passwordStrength": {
+    "weak": "ದುರ್ಬಲ",
+    "good": "ಒಳ್ಳೆಯದು",
+    "strong": "ಬಲಶಾಲಿ",
+    "hint": "ಕನಿಷ್ಠ 8 ಅಕ್ಷರಗಳು, ದೊಡ್ಡ ಮತ್ತು ಸಣ್ಣ ಅಕ್ಷರ, ಸಂಖ್ಯೆ ಮತ್ತು ವಿಶೇಷ ಅಕ್ಷರ.",
+    "minLength": "ಪಾಸ್‌ವರ್ಡ್ ಕನಿಷ್ಠ {{min}} ಅಕ್ಷರಗಳಾಗಿರಬೇಕು.",
+    "uppercase": "ಪಾಸ್‌ವರ್ಡ್‌ನಲ್ಲಿ ಕನಿಷ್ಠ ಒಂದು ದೊಡ್ಡ ಅಕ್ಷರ ಇರಬೇಕು.",
+    "lowercase": "ಪಾಸ್‌ವರ್ಡ್‌ನಲ್ಲಿ ಕನಿಷ್ಠ ಒಂದು ಸಣ್ಣ ಅಕ್ಷರ ಇರಬೇಕು.",
+    "number": "ಪಾಸ್‌ವರ್ಡ್‌ನಲ್ಲಿ ಕನಿಷ್ಠ ಒಂದು ಸಂಖ್ಯೆ ಇರಬೇಕು.",
+    "special": "ಪಾಸ್‌ವರ್ಡ್‌ನಲ್ಲಿ ಕನಿಷ್ಠ ಒಂದು ವಿಶೇಷ ಅಕ್ಷರ ಇರಬೇಕು."
+  },
+  "shareExport": {
+    "tooLargeTitle": "ರಫ್ತು ತುಂಬಾ ದೊಡ್ಡದು",
+    "tooLargeBody": "ಈ ಸಾಧನದಲ್ಲಿ ಪಠ್ಯವಾಗಿ ಹಂಚಿಕೊಳ್ಳಲು ಫೈಲ್ ತುಂಬಾ ದೊಡ್ಡದಾಗಿದೆ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಫಿಲ್ಟರ್ ವ್ಯಾಪ್ತಿಯನ್ನು ಕಡಿಮೆ ಮಾಡಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+    "shareTitle": "ರಫ್ತು ಹಂಚಿಕೊಳ್ಳಿ",
+    "saveShare": "ಫೈಲ್ ಉಳಿಸಿ ಮತ್ತು ಹಂಚಿಕೊಳ್ಳಿ",
+    "savedTitle": "ಉಳಿಸಲಾಗಿದೆ",
+    "savedBody": "ರಫ್ತು ಉಳಿಸಲಾಗಿದೆ. ತೆರೆಯಲು ಫೈಲ್ ಮ್ಯಾನೇಜರ್ ಅಥವಾ ಸ್ಪ್ರೆಡ್‌ಶೀಟ್ ಅಪ್ಲಿಕೇಶನ್ ಸ್ಥಾಪಿಸಿ.",
+    "failedTitle": "ರಫ್ತು ವಿಫಲ",
+    "couldNotShare": "ಉಳಿಸಿದ ಫೈಲ್ ಹಂಚಿಕೊಳ್ಳಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.",
+    "couldNotOpenSheet": "ಶೇರ್ ಶೀಟ್ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.",
+    "shareAsText": "ಪಠ್ಯವಾಗಿ ಹಂಚಿಕೊಳ್ಳಿ",
+    "cancel": "ರದ್ದುಮಾಡಿ",
+    "readyTitle": "ರಫ್ತು ಸಿದ್ಧ",
+    "readyBody": "ನಿಮ್ಮ ಡೇಟಾವನ್ನು ಉಳಿಸಲು ಅಥವಾ ಹಂಚಿಕೊಳ್ಳಲು ಹೇಗೆ ಎಂಬುದನ್ನು ಆಯ್ಕೆಮಾಡಿ."
+  },
+  "financialDateRange": {
+    "datesInTz": "{{tzAbbr}} ನಲ್ಲಿ ದಿನಾಂಕಗಳು",
+    "from": "ಇಂದ",
+    "to": "ವರೆಗೆ",
+    "fromDate": "ಪ್ರಾರಂಭ ದಿನಾಂಕ",
+    "toDate": "ಅಂತಿಮ ದಿನಾಂಕ",
+    "done": "ಮುಗಿದಿದೆ",
+    "last7Days": "ಕಳೆದ 7 ದಿನಗಳು",
+    "last30Days": "ಕಳೆದ 30 ದಿನಗಳು",
+    "thisMonth": "ಈ ತಿಂಗಳು",
+    "lastMonth": "ಕಳೆದ ತಿಂಗಳು",
+    "endBeforeStart": "ಅಂತಿಮ ದಿನಾಂಕ ಪ್ರಾರಂಭ ದಿನಾಂಕಕ್ಕಿಂತ ಮೊದಲು ಇರಲು ಸಾಧ್ಯವಿಲ್ಲ.",
+    "largeRangeWarning": "ದೊಡ್ಡ ದಿನಾಂಕ ವ್ಯಾಪ್ತಿಗಳನ್ನು ಲೋಡ್ ಮಾಡಲು ಸ್ವಲ್ಪ ಸಮಯ ಬೇಕಾಗಬಹುದು."
+  },
+  "timeField": {
+    "pickTime": "ಸಮಯ ಆಯ್ಕೆಮಾಡಿ",
+    "done": "ಮುಗಿದಿದೆ",
+    "pickATime": "ಒಂದು ಸಮಯ ಆಯ್ಕೆಮಾಡಿ"
+  },
+  "safeLocationPicker": {
+    "mapUnavailable": "ನಕ್ಷೆ ಲಭ್ಯವಿಲ್ಲ",
+    "fallbackInstructions": "Google Maps ತೆರೆಯಿರಿ, ನಿಮ್ಮ ಕ್ಲಬ್ ವಿಳಾಸ ಹುಡುಕಿ, ಪಿನ್ ಮೇಲೆ ದೀರ್ಘವಾಗಿ ಒತ್ತಿ, ಮತ್ತು ಕೆಳಗೆ ತೋರಿಸಿದ ನಿರ್ದೇಶಾಂಕಗಳನ್ನು ನಕಲಿಸಿ.",
+    "latitude": "ಅಕ್ಷಾಂಶ",
+    "longitude": "ರೇಖಾಂಶ",
+    "latError": "ಅಕ್ಷಾಂಶ -90 ಮತ್ತು 90 ನಡುವೆ ಸಂಖ್ಯೆಯಾಗಿರಬೇಕು.",
+    "lngError": "ರೇಖಾಂಶ -180 ಮತ್ತು 180 ನಡುವೆ ಸಂಖ್ಯೆಯಾಗಿರಬೇಕು.",
+    "useCoordinates": "ಈ ನಿರ್ದೇಶಾಂಕಗಳನ್ನು ಬಳಸಿ"
+  },
+  "safeBarChart": {
+    "noData": "ಈ ಅವಧಿಗೆ ಪ್ರದರ್ಶಿಸಲು ಡೇಟಾ ಇಲ್ಲ.",
+    "unavailable": "ಚಾರ್ಟ್ ಲಭ್ಯವಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
+  },
+  "broadcastPermissions": {
+    "cameraMic": "ಲೈವ್ ಹೋಗಲು ಕ್ಯಾಮರಾ ಮತ್ತು ಮೈಕ್ರೋಫೋನ್ ಪ್ರವೇಶ ಅಗತ್ಯ.",
+    "cameraOnly": "ಲೈವ್ ಹೋಗಲು ಕ್ಯಾಮರಾ ಪ್ರವೇಶ ಅಗತ್ಯ.",
+    "micOnly": "ಪ್ರಸಾರದಲ್ಲಿ ಆಡಿಯೋ ಸೇರಿಸಲು ಮೈಕ್ರೋಫೋನ್ ಪ್ರವೇಶ ಅಗತ್ಯ."
+  },
+  "placeholders": {
+    "offlineScreen": "OfflineScreen",
+    "passcodeSetupModal": "PasscodeSetupModal",
+    "billModal": "BillModal",
+    "networkGuard": "NetworkGuard",
+    "sessionTimer": "SessionTimer",
+    "userSelector": "UserSelector"
+  }
+}

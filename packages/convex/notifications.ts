@@ -13,6 +13,7 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  mutation,
   query,
 } from "./_generated/server";
 import { requireAdminWithMfa, requireViewer } from "./model/viewer";
@@ -55,6 +56,30 @@ function countMatchingUsers(
   if (!targetUserIds || targetUserIds.length === 0) return 0;
   const idSet = new Set(targetUserIds);
   return allUsers.filter((u) => idSet.has(u._id)).length;
+}
+
+/** All users matching broadcast audience (in-app inbox), regardless of push tokens. */
+function resolveAllTargetUsers(
+  allUsers: Doc<"users">[],
+  args: {
+    targetType: "all" | "role" | "selected";
+    targetRole?: "owner" | "customer";
+    targetUserIds?: Id<"users">[];
+  },
+): Doc<"users">[] {
+  const { targetType, targetRole, targetUserIds } = args;
+  if (targetType === "all") {
+    return allUsers.filter((u) => !u.isFrozen);
+  }
+  if (targetType === "role") {
+    if (targetRole !== "owner" && targetRole !== "customer") return [];
+    return allUsers.filter(
+      (u) => u.role === targetRole && !u.isFrozen,
+    );
+  }
+  if (!targetUserIds || targetUserIds.length === 0) return [];
+  const idSet = new Set(targetUserIds);
+  return allUsers.filter((u) => idSet.has(u._id));
 }
 
 /** Resolve users who will receive a broadcast (with ≥1 token). */
@@ -260,6 +285,8 @@ export const internalInsertAdminBroadcast = internalMutation({
     createdAt: v.number(),
   },
   handler: async (ctx, args) => {
+    const allUsers = await ctx.db.query("users").collect();
+    const targetUsers = resolveAllTargetUsers(allUsers, args);
     const id = await ctx.db.insert("adminNotifications", {
       sentByAdminId: args.sentByAdminId,
       title: args.title,
@@ -270,7 +297,18 @@ export const internalInsertAdminBroadcast = internalMutation({
       deliveryStatus: {},
       createdAt: args.createdAt,
     });
-    return { notificationId: id };
+    for (const user of targetUsers) {
+      await ctx.db.insert("userInboxNotifications", {
+        userId: user._id,
+        adminNotificationId: id,
+        kind: "admin_broadcast",
+        title: args.title,
+        body: args.body,
+        isRead: false,
+        createdAt: args.createdAt,
+      });
+    }
+    return { notificationId: id, inboxCount: targetUsers.length };
   },
 });
 
@@ -338,6 +376,136 @@ export const getNotificationRecipientBreakdown = query({
     }
 
     return { delivered, failed, moreDelivered, moreFailed };
+  },
+});
+
+// ── User in-app inbox (owner + customer) ────────────────────────────────────
+
+async function requireInboxViewer(ctx: Parameters<typeof requireViewer>[0]) {
+  const viewer = await requireViewer(ctx);
+  if (
+    viewer.role !== "owner" &&
+    viewer.role !== "customer"
+  ) {
+    throwErr("PERM_001: Inbox not available for this account");
+  }
+  return viewer;
+}
+
+export const getUnreadInboxCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const viewer = await requireInboxViewer(ctx);
+    const rows = await ctx.db
+      .query("userInboxNotifications")
+      .withIndex("by_user_isRead_createdAt", (q) =>
+        q.eq("userId", viewer.userId).eq("isRead", false),
+      )
+      .collect();
+    return { count: rows.length };
+  },
+});
+
+export const getLatestUnreadInboxNotification = query({
+  args: {},
+  handler: async (ctx) => {
+    const viewer = await requireInboxViewer(ctx);
+    const rows = await ctx.db
+      .query("userInboxNotifications")
+      .withIndex("by_user_isRead_createdAt", (q) =>
+        q.eq("userId", viewer.userId).eq("isRead", false),
+      )
+      .order("desc")
+      .take(1);
+    const latest = rows[0];
+    if (!latest) return null;
+    return {
+      _id: latest._id,
+      title: latest.title,
+      body: latest.body,
+      kind: latest.kind,
+      isRead: latest.isRead,
+      createdAt: latest.createdAt,
+    };
+  },
+});
+
+export const listMyInboxNotifications = query({
+  args: {
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { cursor, limit: limitArg }) => {
+    const viewer = await requireInboxViewer(ctx);
+    const limit = Math.min(Math.max(limitArg ?? 30, 1), 50);
+
+    let maxCreatedAtExclusive: number | undefined;
+    if (cursor !== undefined && cursor.length > 0) {
+      const ts = Number(cursor.split(":")[0]);
+      if (!Number.isNaN(ts)) maxCreatedAtExclusive = ts;
+    }
+
+    let q = ctx.db
+      .query("userInboxNotifications")
+      .withIndex("by_user_createdAt", (iq) => {
+        const base = iq.eq("userId", viewer.userId);
+        return maxCreatedAtExclusive !== undefined
+          ? base.lt("createdAt", maxCreatedAtExclusive)
+          : base;
+      })
+      .order("desc");
+
+    const batch = await q.take(limit + 1);
+    const hasMore = batch.length > limit;
+    const slice = hasMore ? batch.slice(0, limit) : batch;
+    const nextCursor =
+      hasMore && slice.length > 0
+        ? `${slice[slice.length - 1].createdAt}:${slice[slice.length - 1]._id}`
+        : null;
+
+    return {
+      notifications: slice.map((row) => ({
+        _id: row._id,
+        title: row.title,
+        body: row.body,
+        kind: row.kind,
+        isRead: row.isRead,
+        createdAt: row.createdAt,
+      })),
+      nextCursor,
+    };
+  },
+});
+
+export const markInboxNotificationRead = mutation({
+  args: { notificationId: v.id("userInboxNotifications") },
+  handler: async (ctx, { notificationId }) => {
+    const viewer = await requireInboxViewer(ctx);
+    const row = await ctx.db.get(notificationId);
+    if (!row || row.userId !== viewer.userId) {
+      throwErr("DATA_003: Notification not found");
+    }
+    if (!row.isRead) {
+      await ctx.db.patch(notificationId, { isRead: true });
+    }
+    return { ok: true as const };
+  },
+});
+
+export const markAllInboxNotificationsRead = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const viewer = await requireInboxViewer(ctx);
+    const unread = await ctx.db
+      .query("userInboxNotifications")
+      .withIndex("by_user_isRead_createdAt", (q) =>
+        q.eq("userId", viewer.userId).eq("isRead", false),
+      )
+      .collect();
+    for (const row of unread) {
+      await ctx.db.patch(row._id, { isRead: true });
+    }
+    return { marked: unread.length };
   },
 });
 

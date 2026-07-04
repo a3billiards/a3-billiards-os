@@ -1,1 +1,10 @@
-{"functions": "."}
+{
+  "functions": ".",
+  "node": {
+    "externalPackages": [
+      "@aws-sdk/client-ivs",
+      "firebase-admin",
+      "jsonwebtoken"
+    ]
+  }
+}

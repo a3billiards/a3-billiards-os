@@ -1,0 +1,194 @@
+{
+  "passcodeGate": {
+    "title": "सेटिंग्स",
+    "subtitle": "जारी रखने के लिए अपना 6-अंकीय सेटिंग्स पासकोड दर्ज करें।",
+    "invalidFormat": "अपना 6-अंकीय सेटिंग्स पासकोड दर्ज करें।",
+    "invalidPasscode": "अमान्य पासकोड।",
+    "unlock": "अनलॉक करें",
+    "cancel": "रद्द करें"
+  },
+  "tablePicker": {
+    "title": "कौन सी टेबल?",
+    "empty": "इस प्रकार के लिए कोई सक्रिय टेबल नहीं। क्लब से सेटिंग्स में टेबल सेटअप जाँचने को कहें।"
+  },
+  "tableTypeSelect": {
+    "customName": "कस्टम प्रकार का नाम",
+    "custom": "कस्टम"
+  },
+  "timeSlotGrid": {
+    "loading": "स्लॉट लोड हो रहे हैं…",
+    "noSlots": "इस तारीख और अवधि के लिए कोई समय स्लॉट नहीं।",
+    "pickStart": "शुरुआती समय चुनें",
+    "noTimesOpen": "इस तारीख और अवधि के लिए कोई समय उपलब्ध नहीं। दूसरी तारीख, छोटा सत्र या अलग टेबल प्रकार आज़माएँ।",
+    "unavailable": "अनुपलब्ध",
+    "realtimeNote": "उपलब्धता वास्तविक समय में अपडेट होती है — सबमिट करने से पहले अपनी पसंद फिर से जाँचें।"
+  },
+  "dateStrip": {
+    "heading": "आप कब खेलना चाहते हैं?",
+    "today": "आज",
+    "noBookableDates": "अगले {{maxAdvanceDays}} दिनों में कोई बुक करने योग्य तारीख नहीं। क्लब को सेटिंग्स में बुक करने योग्य दिन या घंटे अपडेट करने की आवश्यकता हो सकती है।"
+  },
+  "tableTypePicker": {
+    "heading": "किस प्रकार की टेबल?",
+    "oneTable": "1 टेबल उपलब्ध",
+    "tablesAvailable": "{{count}} टेबल उपलब्ध",
+    "ratePerMin": "{{rate}}/मिनट"
+  },
+  "tableGrid": {
+    "tableFallback": "टेबल",
+    "disabled": "अक्षम",
+    "occupied": "व्यस्त",
+    "free": "खाली",
+    "a11yTable": "{{label}}, {{status}}{{tag}}"
+  },
+  "clubCard": {
+    "hoursNotSet": "घंटे सेट नहीं",
+    "kmAway": "{{km}} किमी",
+    "moreAmenities": "+{{overflow}} और",
+    "bookableOnline": "ऑनलाइन बुक करने योग्य"
+  },
+  "liveStreamCard": {
+    "watchA11y": "{{clubName}} से लाइव स्ट्रीम देखें",
+    "liveBadge": "LIVE",
+    "viewer": "{{count}} दर्शक",
+    "viewers": "{{count}} दर्शक"
+  },
+  "complaintBanner": {
+    "warning": "⚠ ग्राहक की सक्रिय शिकायत(एँ) हैं",
+    "filedBy": "{{clubName}} द्वारा दर्ज",
+    "justNow": "अभी",
+    "minAgo": "{{min}} मिनट पहले",
+    "hoursAgo": "{{hr}} घंटा पहले",
+    "hoursAgo_other": "{{hr}} घंटे पहले",
+    "daysAgo": "{{day}} दिन पहले",
+    "daysAgo_other": "{{day}} दिन पहले",
+    "monthsAgo": "{{mo}} महीना पहले",
+    "monthsAgo_other": "{{mo}} महीने पहले",
+    "advisory": "यह एक सलाहकार चेतावनी है। आप जारी रख सकते हैं या सत्र रद्द कर सकते हैं।",
+    "cancel": "रद्द करें",
+    "acknowledge": "स्वीकार करें और जारी रखें"
+  },
+  "snackPicker": {
+    "counterTitle": "काउंटर स्नैक्स",
+    "counterDesc": "कैश डेस्क पर तैयार — केवल बिल में जोड़ा जाता है।",
+    "counterEmpty": "मेनू में कोई काउंटर स्नैक नहीं। स्नैक्स → काउंटर के अंतर्गत जोड़ें।",
+    "kitchenTitle": "रसोई आइटम",
+    "kitchenDesc": "तैयारी के लिए रसोई डिस्प्ले पर भेजा जाता है।",
+    "kitchenEmpty": "मेनू में कोई रसोई आइटम नहीं। स्नैक्स → रसोई के अंतर्गत जोड़ें।",
+    "unableTitle": "आइटम जोड़ने में असमर्थ",
+    "unableBody": "इस सत्र को अब संपादित नहीं किया जा सकता।",
+    "addFailed": "आइटम जोड़े नहीं जा सके।",
+    "addFailedTitle": "आइटम जोड़ने में विफल",
+    "addToBill": "बिल में जोड़ें",
+    "heading": "इस टेबल के लिए आप क्या जोड़ रहे हैं?",
+    "counterSnack": "काउंटर स्नैक",
+    "counterSnackDesc": "चिप्स, पेय आदि कैश काउंटर पर — केवल बिल, रसोई नहीं।",
+    "kitchenItem": "रसोई आइटम",
+    "kitchenItemDesc": "रसोई में तैयार भोजन — रसोई डिस्प्ले पर दिखता है।",
+    "cancel": "रद्द करें",
+    "changeType": "← प्रकार बदलें",
+    "loadingMenu": "मेनू लोड हो रहा है...",
+    "each": "प्रति",
+    "decreaseA11y": "{{name}} घटाएँ",
+    "increaseA11y": "{{name}} बढ़ाएँ",
+    "subtotal": "उप-योग",
+    "adding": "जोड़ा जा रहा है...",
+    "addToBillButton": "बिल में जोड़ें"
+  },
+  "bookingCard": {
+    "customerFallback": "ग्राहक",
+    "tableLabel": "टेबल: {{label}}",
+    "reasonLabel": "कारण: {{reason}}",
+    "estimated": "अनुमानित {{amount}}",
+    "requestedTable": "अनुरोधित टेबल: {{label}}",
+    "assignedTable": "निर्धारित: {{label}}",
+    "statsAtClub": "इस क्लब में: {{bookings}} बुकिंग, {{noShows}} नो-शो | प्लेटफ़ॉर्म-व्यापी: {{platformBookings}} बुकिंग, {{platformNoShows}} नो-शो",
+    "cancel": "रद्द करें",
+    "approve": "स्वीकृत करें",
+    "reject": "अस्वीकार करें",
+    "startSession": "सत्र शुरू करें",
+    "statusPending": "लंबित",
+    "statusConfirmed": "पुष्टि",
+    "statusDeclined": "अस्वीकृत",
+    "statusCancelled": "रद्द",
+    "statusCancelledByClub": "क्लब द्वारा रद्द",
+    "statusExpired": "समाप्त",
+    "statusCompleted": "पूर्ण",
+    "awaitingApproval": "अनुमोदन की प्रतीक्षा",
+    "duration30": "30 मिनट",
+    "duration1Hour": "1 घंटा",
+    "durationHours": "{{count}} घंटे",
+    "durationMinutes": "{{min}} मिनट"
+  },
+  "passwordStrength": {
+    "weak": "कमज़ोर",
+    "good": "अच्छा",
+    "strong": "मज़बूत",
+    "hint": "कम से कम 8 अक्षर, बड़े और छोटे अक्षर, एक संख्या और एक विशेष वर्ण।",
+    "minLength": "पासवर्ड कम से कम {{min}} अक्षरों का होना चाहिए।",
+    "uppercase": "पासवर्ड में कम से कम एक बड़ा अक्षर होना चाहिए।",
+    "lowercase": "पासवर्ड में कम से कम एक छोटा अक्षर होना चाहिए।",
+    "number": "पासवर्ड में कम से कम एक संख्या होनी चाहिए।",
+    "special": "पासवर्ड में कम से कम एक विशेष वर्ण होना चाहिए।"
+  },
+  "shareExport": {
+    "tooLargeTitle": "निर्यात बहुत बड़ा",
+    "tooLargeBody": "फ़ाइल इस डिवाइस पर टेक्स्ट के रूप में साझा करने के लिए बहुत बड़ी है। कृपया अपनी फ़िल्टर सीमा कम करें और पुनः प्रयास करें।",
+    "shareTitle": "निर्यात साझा करें",
+    "saveShare": "फ़ाइल सहेजें और साझा करें",
+    "savedTitle": "सहेजा गया",
+    "savedBody": "निर्यात सहेजा गया। इसे खोलने के लिए फ़ाइल मैनेजर या स्प्रेडशीट ऐप इंस्टॉल करें।",
+    "failedTitle": "निर्यात विफल",
+    "couldNotShare": "सहेजी गई फ़ाइल साझा नहीं की जा सकी।",
+    "couldNotOpenSheet": "शेयर शीट नहीं खोली जा सकी।",
+    "shareAsText": "टेक्स्ट के रूप में साझा करें",
+    "cancel": "रद्द करें",
+    "readyTitle": "निर्यात तैयार",
+    "readyBody": "अपना डेटा सहेजने या साझा करने का तरीका चुनें।"
+  },
+  "financialDateRange": {
+    "datesInTz": "{{tzAbbr}} में तारीखें",
+    "from": "से",
+    "to": "तक",
+    "fromDate": "प्रारंभ तारीख",
+    "toDate": "समाप्ति तारीख",
+    "done": "हो गया",
+    "last7Days": "पिछले 7 दिन",
+    "last30Days": "पिछले 30 दिन",
+    "thisMonth": "इस महीने",
+    "lastMonth": "पिछले महीने",
+    "endBeforeStart": "समाप्ति तारीख प्रारंभ तारीख से पहले नहीं हो सकती।",
+    "largeRangeWarning": "बड़ी तारीख सीमा लोड होने में कुछ समय ले सकती है।"
+  },
+  "timeField": {
+    "pickTime": "समय चुनें",
+    "done": "हो गया",
+    "pickATime": "एक समय चुनें"
+  },
+  "safeLocationPicker": {
+    "mapUnavailable": "मानचित्र अनुपलब्ध",
+    "fallbackInstructions": "Google Maps खोलें, अपने क्लब का पता खोजें, पिन पर लंबा दबाएँ, और नीचे दिखाए गए निर्देशांक कॉपी करें।",
+    "latitude": "अक्षांश",
+    "longitude": "देशांतर",
+    "latError": "अक्षांश -90 और 90 के बीच एक संख्या होनी चाहिए।",
+    "lngError": "देशांतर -180 और 180 के बीच एक संख्या होनी चाहिए।",
+    "useCoordinates": "ये निर्देशांक उपयोग करें"
+  },
+  "safeBarChart": {
+    "noData": "इस अवधि के लिए प्रदर्शित करने हेतु कोई डेटा नहीं।",
+    "unavailable": "चार्ट अनुपलब्ध। कृपया पुनः प्रयास करें।"
+  },
+  "broadcastPermissions": {
+    "cameraMic": "लाइव जाने के लिए कैमरा और माइक्रोफ़ोन की अनुमति आवश्यक है।",
+    "cameraOnly": "लाइव जाने के लिए कैमरा की अनुमति आवश्यक है।",
+    "micOnly": "प्रसारण में ऑडियो शामिल करने के लिए माइक्रोफ़ोन की अनुमति आवश्यक है।"
+  },
+  "placeholders": {
+    "offlineScreen": "OfflineScreen",
+    "passcodeSetupModal": "PasscodeSetupModal",
+    "billModal": "BillModal",
+    "networkGuard": "NetworkGuard",
+    "sessionTimer": "SessionTimer",
+    "userSelector": "UserSelector"
+  }
+}

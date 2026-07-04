@@ -16,9 +16,9 @@ import { MaterialIcons } from "@expo/vector-icons";
 import Svg, { Path, Circle } from "react-native-svg";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
 import { GlassPageBackground, LiquidGlassCard, GlassIconTile } from "@a3/ui/components";
-import { LanguagePicker } from "@a3/i18n";
+import { LanguagePicker, getCurrentLanguage, useTranslation } from "@a3/i18n";
 import { adminShell, adminTabBarTotalInset } from "../../theme/adminShell";
 import { useAdminAuth } from "../../lib/adminAuth";
 
@@ -33,11 +33,11 @@ type DashboardData = {
 };
 
 function formatInt(n: number): string {
-  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat(getCurrentLanguage(), { maximumFractionDigits: 0 }).format(n);
 }
 
 function formatUpdated(ts: number): string {
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat(getCurrentLanguage(), {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
@@ -144,7 +144,12 @@ function DecorativeRevenueChart(): React.JSX.Element {
 }
 
 class DashboardErrorBoundary extends Component<
-  { children: React.ReactNode; onRetry: () => void },
+  {
+    children: React.ReactNode;
+    onRetry: () => void;
+    loadError: string;
+    retryLabel: string;
+  },
   { message: string | null }
 > {
   state = { message: null as string | null };
@@ -162,9 +167,7 @@ class DashboardErrorBoundary extends Component<
       return (
         <View style={styles.errorBanner}>
           <MaterialIcons name="error-outline" size={20} color={colors.status.error} />
-          <Text style={styles.errorText}>
-            Failed to load dashboard data. Pull to refresh.
-          </Text>
+          <Text style={styles.errorText}>{this.props.loadError}</Text>
           <Pressable
             style={styles.retryBtn}
             onPress={() => {
@@ -172,7 +175,7 @@ class DashboardErrorBoundary extends Component<
               this.props.onRetry();
             }}
           >
-            <Text style={styles.retryBtnText}>Retry</Text>
+            <Text style={styles.retryBtnText}>{this.props.retryLabel}</Text>
           </Pressable>
         </View>
       );
@@ -181,7 +184,8 @@ class DashboardErrorBoundary extends Component<
   }
 }
 
-export default function DashboardScreen(): React.JSX.Element {
+function DashboardScreenContent(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { signOutAdmin } = useAdminAuth();
@@ -230,24 +234,31 @@ export default function DashboardScreen(): React.JSX.Element {
         >
           {/* Hero card */}
           <LiquidGlassCard style={styles.heroCard} padding={24}>
-            <View style={styles.heroTopRow}>
+              <View style={styles.heroTopRow}>
               <View style={styles.heroTitles}>
-                <Text style={styles.heroTitle}>Admin Dashboard</Text>
-                <Text style={styles.heroSubtitle}>Platform Overview &amp; Analytics</Text>
+                <Text style={styles.heroTitle}>{t("adminApp.dashboard.title")}</Text>
+                <Text style={styles.heroSubtitle}>{t("adminApp.dashboard.subtitle")}</Text>
               </View>
-              <Pressable
+              <View style={styles.heroActions}>
+                <LanguagePicker variant="icon" />
+                <Pressable
                 onPress={onLogout}
                 hitSlop={12}
                 style={({ pressed }) => [styles.heroIconBtn, pressed && { opacity: 0.75 }]}
-                accessibilityLabel="Log out"
+                accessibilityLabel={t("adminApp.dashboard.logOutAccessibility")}
               >
                 <MaterialIcons name="logout" size={20} color={glass.accentBlue} />
               </Pressable>
+              </View>
             </View>
             {dash ? (
               <View style={styles.updatedRow}>
                 <View style={styles.statusDot} />
-                <Text style={styles.updated}>Live · Updated {formatUpdated(dash.fetchedAt)}</Text>
+                <Text style={styles.updated}>
+                  {t("adminApp.dashboard.liveUpdated", {
+                    time: formatUpdated(dash.fetchedAt),
+                  })}
+                </Text>
               </View>
             ) : null}
           </LiquidGlassCard>
@@ -255,6 +266,8 @@ export default function DashboardScreen(): React.JSX.Element {
           <DashboardErrorBoundary
             key={boundaryNonce}
             onRetry={() => setBoundaryNonce((n) => n + 1)}
+            loadError={t("adminApp.dashboard.loadError")}
+            retryLabel={t("adminApp.dashboard.retry")}
           >
             {!canQuery || dash === undefined ? (
               <SkeletonGrid />
@@ -264,24 +277,24 @@ export default function DashboardScreen(): React.JSX.Element {
                   <GlassStatCard
                     icon="people"
                     value={formatInt(dash.totalUsers)}
-                    label="Total Users"
+                    label={t("adminApp.dashboard.totalUsers")}
                     onPress={() => router.push("/(tabs)/users")}
                   />
                   <GlassStatCard
                     icon="business"
                     value={formatInt(dash.activeClubs)}
-                    label="Active Clubs"
+                    label={t("adminApp.dashboard.activeClubs")}
                     onPress={() =>
                       router.push({
                         pathname: "/(tabs)/users",
-                        params: { role: "owner" },
+                        params: { role: "owner", activeClubs: "1" },
                       } as never)
                     }
                   />
                   <GlassStatCard
                     icon="play-circle-filled"
                     value={formatInt(dash.activeSessions)}
-                    label="Active Sessions"
+                    label={t("adminApp.dashboard.activeSessions")}
                     valueColor={
                       dash.activeSessions > 0 ? glass.trendPositive : glass.textPrimary
                     }
@@ -291,7 +304,7 @@ export default function DashboardScreen(): React.JSX.Element {
                   <GlassStatCard
                     icon="report-problem"
                     value={formatInt(dash.openComplaints)}
-                    label="Open Complaints"
+                    label={t("adminApp.dashboard.openComplaints")}
                     valueColor={
                       dash.openComplaints > 0 ? colors.status.error : glass.textPrimary
                     }
@@ -300,7 +313,7 @@ export default function DashboardScreen(): React.JSX.Element {
                   <GlassStatCard
                     icon="pending-actions"
                     value={formatInt(dash.pendingBookings)}
-                    label="Pending Bookings"
+                    label={t("adminApp.dashboard.pendingBookings")}
                     valueColor={
                       dash.pendingBookings > 0 ? colors.accent.amberLight : glass.textPrimary
                     }
@@ -309,7 +322,7 @@ export default function DashboardScreen(): React.JSX.Element {
                 </View>
 
                 <LiquidGlassCard style={styles.revenueCard} padding={24}>
-                  <Text style={styles.revenueLabel}>Platform Revenue (Live)</Text>
+                  <Text style={styles.revenueLabel}>{t("adminApp.dashboard.platformRevenue")}</Text>
                   <Text style={styles.revenueValue}>₹{formatInt(dash.revenue.allTime)}</Text>
                   <View style={styles.revenueRow}>
                     <MaterialIcons
@@ -318,7 +331,9 @@ export default function DashboardScreen(): React.JSX.Element {
                       color={glass.trendPositive}
                     />
                     <Text style={styles.revenueTrend}>
-                      Today ₹{formatInt(dash.revenue.today)}
+                      {t("adminApp.dashboard.todayRevenue", {
+                        amount: formatInt(dash.revenue.today),
+                      })}
                     </Text>
                   </View>
                   <DecorativeRevenueChart />
@@ -326,10 +341,6 @@ export default function DashboardScreen(): React.JSX.Element {
               </>
             )}
           </DashboardErrorBoundary>
-
-          <LiquidGlassCard style={styles.languageCard} padding={16}>
-            <LanguagePicker />
-          </LiquidGlassCard>
         </ScrollView>
       </SafeAreaView>
     </GlassPageBackground>
@@ -385,6 +396,11 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   heroTitles: { flex: 1, minWidth: 0 },
+  heroActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
+  },
   heroIconBtn: {
     width: 40,
     height: 40,
@@ -535,8 +551,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg.secondary,
   },
   retryBtnText: { ...typography.caption, color: colors.text.primary, fontWeight: "600" },
-  languageCard: {
-    marginTop: spacing[4],
-    width: "100%",
-  },
 });
+
+export default function DashboardScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.admin.index")}>
+      <DashboardScreenContent />
+    </TabErrorBoundary>
+  );
+}

@@ -7,6 +7,7 @@ import {
   Image,
   Platform,
 } from "react-native";
+import { useTranslation } from "@a3/i18n";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing, radius } from "../theme/spacing";
@@ -27,6 +28,7 @@ export type LiveStreamCardProps = {
 };
 
 export function LiveStreamCard({ stream, onPress }: LiveStreamCardProps): React.JSX.Element {
+  const { t } = useTranslation();
   const subtitle = [stream.title, stream.tableLabel].filter(Boolean).join(" · ");
 
   return (
@@ -58,7 +60,7 @@ export function LiveStreamCard({ stream, onPress }: LiveStreamCardProps): React.
           </Text>
         ) : null}
         <Text style={styles.viewers}>
-          {stream.viewerCount} viewer{stream.viewerCount === 1 ? "" : "s"}
+          {t("sharedUi.liveStreamCard.viewers", { count: stream.viewerCount })}
         </Text>
       </View>
     </Pressable>

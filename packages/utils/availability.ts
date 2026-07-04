@@ -113,6 +113,99 @@ export function validateBookableWithinOperating(
   return { ok: true };
 }
 
+/** Bookable wall clock in club TZ; supports overnight windows (open > close). */
+export function withinBookableWallClock(
+  startMin: number,
+  durationMin: number,
+  openMin: number,
+  closeMin: number,
+): boolean {
+  const endMin = startMin + durationMin;
+  if (openMin <= closeMin) {
+    return startMin >= openMin && endMin <= closeMin;
+  }
+  if (startMin >= openMin) {
+    return endMin <= 1440 + closeMin;
+  }
+  if (startMin < closeMin) {
+    return endMin <= closeMin;
+  }
+  return false;
+}
+
+/** Slot start times (minutes from midnight) for a bookable window; supports overnight close. */
+export function enumerateBookableSlotStarts(
+  openMin: number,
+  closeMin: number,
+  durationMin: number,
+  step = 30,
+): number[] {
+  const out: number[] = [];
+  if (openMin <= closeMin) {
+    for (let t = openMin; t + durationMin <= closeMin; t += step) {
+      out.push(t);
+    }
+    return out;
+  }
+  for (let t = openMin; t < 1440; t += step) {
+    if (withinBookableWallClock(t, durationMin, openMin, closeMin)) {
+      out.push(t);
+    }
+  }
+  for (let t = 0; t < closeMin; t += step) {
+    if (withinBookableWallClock(t, durationMin, openMin, closeMin)) {
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+export function minutesToHhmm(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** True if some slot on this day can start ≥ minAdvanceMinutes from now. */
+export function dateAllowsMinAdvance(
+  ymd: string,
+  timeZone: string,
+  nowMs: number,
+  minAdvanceMinutes: number,
+  openHm: string,
+  closeHm: string,
+  minDurationMin: number,
+  zonedWallTimeToUtcMs: (ymd: string, hhmm: string, tz: string) => number,
+): boolean {
+  const openMin = hhmmToMinutes(openHm);
+  const closeMin = hhmmToMinutes(closeHm);
+  const minStartMs = nowMs + minAdvanceMinutes * 60_000;
+  const starts = enumerateBookableSlotStarts(
+    openMin,
+    closeMin,
+    minDurationMin,
+    30,
+  );
+  for (const s of starts) {
+    const slotStartMs = zonedWallTimeToUtcMs(ymd, minutesToHhmm(s), timeZone);
+    if (slotStartMs >= minStartMs) return true;
+  }
+  return false;
+}
+
+export function buildBookableSlotTimes(
+  openHm: string,
+  closeHm: string,
+  durationMin: number,
+  step = 30,
+): string[] {
+  const openMin = hhmmToMinutes(openHm);
+  const closeMin = hhmmToMinutes(closeHm);
+  return enumerateBookableSlotStarts(openMin, closeMin, durationMin, step).map(
+    minutesToHhmm,
+  );
+}
+
 export function doRatesOverlap(a: SpecialRateWindow, b: SpecialRateWindow): boolean {
   const daysA = new Set(a.daysOfWeek);
   const shared = b.daysOfWeek.filter((d) => daysA.has(d));

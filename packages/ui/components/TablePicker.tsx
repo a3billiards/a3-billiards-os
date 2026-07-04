@@ -21,6 +21,10 @@ export interface TablePickerProps {
   tables: BookableTableOption[];
   selectedTableId: string | null;
   onSelectTable: (tableId: string) => void;
+  /** Override "Which table?" heading */
+  headingLabel?: string;
+  /** Override empty state message */
+  emptyLabel?: string;
 }
 
 function capitalizeWords(s: string): string {
@@ -35,6 +39,8 @@ export function TablePicker({
   tables,
   selectedTableId,
   onSelectTable,
+  headingLabel = "Which table?",
+  emptyLabel = "No active tables for this type. Ask the club to check table setup in Settings.",
 }: TablePickerProps): React.JSX.Element {
   return (
     <ScrollView
@@ -42,15 +48,12 @@ export function TablePicker({
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.title}>Which table?</Text>
+      <Text style={styles.title}>{headingLabel}</Text>
       <Text style={styles.subtitle}>
         {capitalizeWords(tableType)} — pick a table number
       </Text>
       {tables.length === 0 ? (
-        <Text style={styles.empty}>
-          No active tables for this type. Ask the club to check table setup in
-          Settings.
-        </Text>
+        <Text style={styles.empty}>{emptyLabel}</Text>
       ) : (
         <View style={styles.list}>
           {tables.map((t) => {

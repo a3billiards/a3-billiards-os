@@ -5,7 +5,7 @@
 
 import { v } from "convex/values";
 import {
-  parseIndiaE164OrThrow,
+  parseGenericE164OrThrow,
   throwIfPhoneUnavailableForNewAccount,
 } from "./model/phoneRegistration";
 import { ensureGoogleLinkedToUser } from "./googleAuthOps";
@@ -112,7 +112,7 @@ export const createGoogleUser = internalMutation({
     const trimmedName = args.name.trim();
     if (trimmedName.length === 0) throwErr("DATA_001: Name is required");
 
-    const phone = parseIndiaE164OrThrow(args.phone);
+    const phone = parseGenericE164OrThrow(args.phone);
 
     const existingGoogle = await ctx.db
       .query("users")
@@ -215,7 +215,7 @@ export const createOwnerGoogleUser = internalMutation({
     const trimmedName = args.name.trim();
     if (trimmedName.length === 0) throwErr("DATA_001: Name is required");
 
-    const phone = parseIndiaE164OrThrow(args.phone);
+    const phone = parseGenericE164OrThrow(args.phone);
 
     const existingGoogle = await ctx.db
       .query("users")

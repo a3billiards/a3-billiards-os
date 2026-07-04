@@ -5,6 +5,7 @@ import { PasscodeGate } from "@a3/ui/components";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors } from "@a3/ui/theme";
+import { useTranslation } from "@a3/i18n";
 import { setActiveRoleId } from "../lib/activeRoleStorage";
 import { useStaffRole } from "../lib/StaffRoleContext";
 
@@ -21,6 +22,7 @@ export function OwnerModePasscodeGate({
   onCancel,
   onSuccess,
 }: OwnerModePasscodeGateProps): React.JSX.Element {
+  const { t } = useTranslation();
   const verifyPasscode = useAction(api.passcodeActions.verifyPasscode);
   const setActiveRoleMutation = useMutation(api.staffRoles.setActiveRole);
   const { refreshRole } = useStaffRole();
@@ -37,8 +39,8 @@ export function OwnerModePasscodeGate({
     <Modal visible={visible} animationType="slide">
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <PasscodeGate
-          title="Owner mode"
-          subtitle="Enter your 6-digit settings passcode to switch to full owner access."
+          title={t("ownerApp.settings.passcode.ownerModeTitle")}
+          subtitle={t("ownerApp.settings.passcode.ownerModeSubtitle")}
           verifyPasscode={async (passcode) => {
             await verifyPasscode({ passcode });
           }}

@@ -1,0 +1,7 @@
+{
+  "googleAuth": {
+    "expoGo": "GOOGLE_AUTH_001: تسجيل الدخول عبر Google غير متاح في Expo Go. استخدم تسجيل الدخول بالبريد الإلكتروني أو شغّل نسخة تطوير.",
+    "missingToken": "GOOGLE_AUTH_001: رمز Google ID مفقود — أكمل تسجيل الدخول عبر Google للمتابعة"
+  },
+  "checkInPayload": "a3customer:{{userId}}"
+}

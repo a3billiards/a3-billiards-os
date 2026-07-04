@@ -15,6 +15,7 @@ import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { useTranslation } from "@a3/i18n";
 
 const PIN_LENGTH = 6;
 
@@ -54,6 +55,7 @@ function PinRow({
 }
 
 export default function ChangePasscodeScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const changePasscode = useAction(api.passcodeActions.changePasscode);
   const resetViaEmail = useAction(api.passcodeActions.resetPasscodeViaEmail);
@@ -121,10 +123,10 @@ export default function ChangePasscodeScreen(): React.JSX.Element {
 
   const stageTitle =
     stage === "current"
-      ? "Enter current passcode"
+      ? t("ownerApp.settings.passcode.enterCurrent")
       : stage === "new"
-        ? "Enter new passcode"
-        : "Confirm new passcode";
+        ? t("ownerApp.settings.passcode.enterNew")
+        : t("ownerApp.settings.passcode.confirmNew");
 
   const handleSubmit = useCallback(async () => {
     if (!isComplete || loading) return;
@@ -144,7 +146,7 @@ export default function ChangePasscodeScreen(): React.JSX.Element {
     }
 
     if (code !== newPasscode) {
-      setError("Passcodes do not match. Try again.");
+      setError(t("ownerApp.settings.passcode.mismatch"));
       setStage("new");
       setNewPasscode("");
       resetDigits();
@@ -155,13 +157,13 @@ export default function ChangePasscodeScreen(): React.JSX.Element {
     setError(null);
     try {
       await changePasscode({ currentPasscode, newPasscode: code });
-      Alert.alert("Passcode updated", "Your settings passcode has been changed.", [
-        { text: "OK", onPress: () => router.back() },
+      Alert.alert(t("ownerApp.settings.passcode.updatedTitle"), t("ownerApp.settings.passcode.updatedBody"), [
+        { text: t("ownerApp.settings.passcode.ok"), onPress: () => router.back() },
       ]);
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "PASSCODE_001") {
-        setError("Current passcode is incorrect.");
+        setError(t("ownerApp.settings.passcode.currentIncorrect"));
         setStage("current");
         setCurrentPasscode("");
         setNewPasscode("");
@@ -182,6 +184,7 @@ export default function ChangePasscodeScreen(): React.JSX.Element {
     changePasscode,
     resetDigits,
     router,
+    t,
   ]);
 
   return (
@@ -192,12 +195,12 @@ export default function ChangePasscodeScreen(): React.JSX.Element {
             onPress={() => router.back()}
             style={styles.backHit}
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={t("auth.owner.changePasscode.back")}
           >
-            <Text style={styles.backLabel}>‹ Back</Text>
+            <Text style={styles.backLabel}>{t("auth.owner.changePasscode.back")}</Text>
           </Pressable>
 
-          <Text style={styles.title}>Change settings passcode</Text>
+          <Text style={styles.title}>{t("ownerApp.settings.passcode.changeTitle")}</Text>
           <Text style={styles.body}>{stageTitle}</Text>
 
           <PinRow
@@ -218,7 +221,9 @@ export default function ChangePasscodeScreen(): React.JSX.Element {
               <ActivityIndicator color="#0D1117" />
             ) : (
               <Text style={styles.primaryText}>
-                {stage === "confirm" ? "Update passcode" : "Continue"}
+                {stage === "confirm"
+                  ? t("ownerApp.settings.passcode.updatePasscode")
+                  : t("ownerApp.settings.passcode.continue")}
               </Text>
             )}
           </Pressable>
@@ -228,21 +233,21 @@ export default function ChangePasscodeScreen(): React.JSX.Element {
             disabled={loading}
             onPress={() => {
               Alert.alert(
-                "Reset via email?",
-                "We will email you a reset link. Your passcode will be cleared until you set a new one in Settings.",
+                t("ownerApp.settings.passcode.resetViaEmailTitle"),
+                t("ownerApp.settings.passcode.resetViaEmailBody"),
                 [
-                  { text: "Cancel", style: "cancel" },
+                  { text: t("auth.owner.changePasscode.cancel"), style: "cancel" },
                   {
-                    text: "Send email",
+                    text: t("ownerApp.settings.passcode.sendEmail"),
                     onPress: () => {
                       void (async () => {
                         setLoading(true);
                         try {
                           await resetViaEmail({});
                           Alert.alert(
-                            "Check your email",
-                            "Follow the link to reset your passcode.",
-                            [{ text: "OK", onPress: () => router.back() }],
+                            t("ownerApp.settings.passcode.checkEmailTitle"),
+                            t("ownerApp.settings.passcode.checkEmailBody"),
+                            [{ text: t("ownerApp.settings.passcode.ok"), onPress: () => router.back() }],
                           );
                         } catch (e) {
                           Alert.alert(parseConvexError(e as Error).message);
@@ -256,7 +261,7 @@ export default function ChangePasscodeScreen(): React.JSX.Element {
               );
             }}
           >
-            <Text style={styles.link}>Forgot passcode? Reset via email</Text>
+            <Text style={styles.link}>{t("ownerApp.settings.passcode.forgotResetLink")}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

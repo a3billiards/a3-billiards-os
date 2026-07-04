@@ -14,8 +14,11 @@ import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll, PhoneInput } from "@a3/ui/components";
+import { usePostLoginNavigation } from "@a3/ui/hooks";
+import { DEFAULT_PHONE_E164, isValidE164 } from "@a3/utils/phone";
 import { resolveGoogleIdTokenForConvexAuth } from "../lib/googleIdToken";
+import { useTranslation } from "@a3/i18n";
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
 const TOS_URL = "https://a3billiards.com/terms";
@@ -24,6 +27,7 @@ const TOS_URL = "https://a3billiards.com/terms";
  * Owner Google registration (TDD §3.2): consent + phone + age, then Convex session.
  */
 export default function OwnerRegisterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{
     googleId?: string;
@@ -32,13 +36,14 @@ export default function OwnerRegisterScreen() {
   }>();
 
   const { signIn } = useAuthActions();
+  const { schedulePostLogin } = usePostLoginNavigation();
   const completeOwnerReg = useAction(
     api.googleAuthActions.completeOwnerGoogleRegistration,
   );
 
   const [name, setName] = useState(params.googleName ?? "");
   const [email, setEmail] = useState(params.googleEmail ?? "");
-  const [phone, setPhone] = useState("+91");
+  const [phone, setPhone] = useState(DEFAULT_PHONE_E164);
   const [age, setAge] = useState("");
   const [consent, setConsent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -56,7 +61,7 @@ export default function OwnerRegisterScreen() {
 
   const parsedAge = Number(age);
   const ageValid = age.length > 0 && Number.isInteger(parsedAge) && parsedAge > 0;
-  const phoneValid = /^\+91\d{10}$/.test(phone.replace(/\s/g, ""));
+  const phoneValid = isValidE164(phone.replace(/\s/g, ""));
   const emailValid = email.trim().length > 0 && email.includes("@");
   const nameValid = name.trim().length > 0;
 
@@ -75,7 +80,7 @@ export default function OwnerRegisterScreen() {
       setError(null);
 
       if (parsedAge < 18) {
-        setError("You must be 18 or older to register.");
+        setError(t("auth.owner.register.mustBe18"));
         return;
       }
 
@@ -139,7 +144,7 @@ export default function OwnerRegisterScreen() {
           );
         }
 
-        router.replace("/post-login-gate");
+        schedulePostLogin();
       } catch (e) {
         let serialized = "";
         try {
@@ -159,25 +164,23 @@ export default function OwnerRegisterScreen() {
         const appError = parseConvexError(e as Error);
         switch (appError.code) {
           case "AUTH_005":
-            setError("You must agree to the Privacy Policy and Terms.");
+            setError(t("auth.owner.register.mustAgreeConsent"));
             break;
           case "AUTH_007":
-            setError("You must be 18 or older to register.");
+            setError(t("auth.owner.register.mustBe18"));
             break;
           case "OTP_006":
           case "OTP_007":
-            setError("This phone number cannot be used for registration.");
+            setError(t("auth.owner.register.phoneCannotRegister"));
             break;
           case "CLUB_003":
-            setError("This email is already registered. Try signing in.");
+            setError(t("auth.owner.register.emailAlreadyRegistered"));
             break;
           case "GOOGLE_AUTH_001":
-            setError(
-              "Google session could not be restored. Return to login and use Continue with Google again.",
-            );
+            setError(t("auth.owner.register.googleSessionFailed"));
             break;
           default:
-            setError(appError.message || "Registration failed. Please try again.");
+            setError(appError.message || t("auth.owner.register.registrationFailed"));
         }
       } finally {
         setLoading(false);
@@ -195,6 +198,7 @@ export default function OwnerRegisterScreen() {
     completeOwnerReg,
     signIn,
     router,
+    t,
   ]);
 
   if (!params.googleId) {
@@ -206,21 +210,19 @@ export default function OwnerRegisterScreen() {
     <KeyboardFormScroll contentContainerStyle={styles.scroll}>
         <View style={styles.container}>
           <View style={styles.logoTile}>
-            <Text style={styles.logoText}>A3</Text>
+            <Text style={styles.logoText}>{t("auth.owner.register.logo")}</Text>
           </View>
-          <Text style={styles.title}>Create Owner Account</Text>
-          <Text style={styles.subtitle}>
-            Complete your profile to access the owner panel
-          </Text>
+          <Text style={styles.title}>{t("auth.owner.register.title")}</Text>
+          <Text style={styles.subtitle}>{t("auth.owner.register.subtitle")}</Text>
 
           <LiquidGlassCard style={styles.formCard} padding={20}>
           <View style={styles.form}>
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={styles.label}>{t("auth.owner.register.fullName")}</Text>
             <TextInput
               style={styles.input}
               value={name}
               onChangeText={setName}
-              placeholder="Your full name"
+              placeholder={t("auth.owner.register.fullNamePlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               autoCapitalize="words"
               autoComplete="name"
@@ -228,16 +230,16 @@ export default function OwnerRegisterScreen() {
               returnKeyType="next"
               onSubmitEditing={() => emailRef.current?.focus()}
               editable={!loading}
-              accessibilityLabel="Full name"
+              accessibilityLabel={t("auth.owner.register.fullName")}
             />
 
-            <Text style={[styles.label, styles.fieldGap]}>Email</Text>
+            <Text style={[styles.label, styles.fieldGap]}>{t("auth.owner.register.email")}</Text>
             <TextInput
               ref={emailRef}
               style={[styles.input, styles.inputDisabled]}
               value={email}
               onChangeText={setEmail}
-              placeholder="you@example.com"
+              placeholder={t("auth.owner.register.emailPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               autoCapitalize="none"
               autoComplete="email"
@@ -246,38 +248,36 @@ export default function OwnerRegisterScreen() {
               returnKeyType="next"
               onSubmitEditing={() => phoneRef.current?.focus()}
               editable={false}
-              accessibilityLabel="Email address"
+              accessibilityLabel={t("auth.owner.register.email")}
             />
 
-            <Text style={[styles.label, styles.fieldGap]}>Phone Number</Text>
-            <TextInput
-              ref={phoneRef}
-              style={styles.input}
+            <Text style={[styles.label, styles.fieldGap]}>{t("auth.owner.register.phone")}</Text>
+            <PhoneInput
+              inputRef={phoneRef}
               value={phone}
-              onChangeText={setPhone}
-              placeholder="+91XXXXXXXXXX"
-              placeholderTextColor={colors.text.tertiary}
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
+              onChangeValue={setPhone}
+              editable={!loading}
               returnKeyType="next"
               onSubmitEditing={() => ageRef.current?.focus()}
-              editable={!loading}
-              accessibilityLabel="Phone number"
+              countryCodeLabel={t("auth.phone.countryCode")}
+              selectCountryLabel={t("auth.phone.selectCountry")}
+              accessibilityLabel={t("auth.phone.number")}
+              inputStyle={styles.input}
             />
-            <Text style={styles.hint}>E.164 format: +91 followed by 10 digits</Text>
+            <Text style={styles.hint}>{t("auth.owner.register.phoneHint")}</Text>
 
-            <Text style={[styles.label, styles.fieldGap]}>Age</Text>
+            <Text style={[styles.label, styles.fieldGap]}>{t("auth.owner.register.age")}</Text>
             <TextInput
               ref={ageRef}
               style={styles.input}
               value={age}
-              onChangeText={(t) => setAge(t.replace(/\D/g, ""))}
-              placeholder="18"
+              onChangeText={(txt) => setAge(txt.replace(/\D/g, ""))}
+              placeholder={t("auth.owner.register.agePlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               keyboardType="number-pad"
               returnKeyType="done"
               editable={!loading}
-              accessibilityLabel="Age"
+              accessibilityLabel={t("auth.owner.register.age")}
             />
 
             <Pressable
@@ -286,7 +286,7 @@ export default function OwnerRegisterScreen() {
               disabled={loading}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: consent }}
-              accessibilityLabel="Agree to Privacy Policy and Terms of Service"
+              accessibilityLabel={`${t("auth.owner.register.consentPrefix")} ${t("auth.owner.register.privacyPolicy")} ${t("auth.owner.register.and")} ${t("auth.owner.register.termsOfService")}`}
             >
               <View
                 style={[
@@ -297,21 +297,21 @@ export default function OwnerRegisterScreen() {
                 {consent && <Text style={styles.checkmark}>✓</Text>}
               </View>
               <Text style={styles.consentText}>
-                I agree to the{" "}
+                {t("auth.owner.register.consentPrefix")}{" "}
                 <Text
                   style={styles.consentLink}
                   onPress={() => Linking.openURL(PRIVACY_URL)}
                   accessibilityRole="link"
                 >
-                  Privacy Policy
+                  {t("auth.owner.register.privacyPolicy")}
                 </Text>{" "}
-                and{" "}
+                {t("auth.owner.register.and")}{" "}
                 <Text
                   style={styles.consentLink}
                   onPress={() => Linking.openURL(TOS_URL)}
                   accessibilityRole="link"
                 >
-                  Terms of Service
+                  {t("auth.owner.register.termsOfService")}
                 </Text>
               </Text>
             </Pressable>
@@ -325,12 +325,12 @@ export default function OwnerRegisterScreen() {
               onPress={handleSubmit}
               disabled={!canSubmit}
               accessibilityRole="button"
-              accessibilityLabel="Create owner account"
+              accessibilityLabel={t("auth.owner.register.createAccount")}
             >
               {loading ? (
                 <ActivityIndicator color={colors.bg.primary} />
               ) : (
-                <Text style={styles.primaryButtonText}>Create Account</Text>
+                <Text style={styles.primaryButtonText}>{t("auth.owner.register.createAccount")}</Text>
               )}
             </Pressable>
           </View>
@@ -341,21 +341,21 @@ export default function OwnerRegisterScreen() {
               accessibilityRole="alert"
               accessibilityLiveRegion="polite"
             >
-              <Text style={styles.errorLabel}>Error</Text>
+              <Text style={styles.errorLabel}>{t("auth.owner.register.error")}</Text>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
           </LiquidGlassCard>
 
           <View style={styles.loginRow}>
-            <Text style={styles.loginText}>Already have an account? </Text>
+            <Text style={styles.loginText}>{t("auth.owner.register.alreadyHaveAccount")} </Text>
             <Pressable
               onPress={() => router.replace("/login")}
               disabled={loading}
               hitSlop={8}
               accessibilityRole="link"
             >
-              <Text style={styles.loginLink}>Sign In</Text>
+              <Text style={styles.loginLink}>{t("auth.owner.register.signIn")}</Text>
             </Pressable>
           </View>
         </View>
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15, 23, 42, 0.5)",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: spacing[3],
+    marginEnd: spacing[3],
     marginTop: 1,
   },
   checkboxChecked: {

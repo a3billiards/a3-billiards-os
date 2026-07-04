@@ -1,6 +1,5 @@
 // Single source of truth. JS-parseable for EAS (no param type annotations).
-// Asset references (icon, splash, adaptiveIcon) intentionally omitted until
-// real assets are added under ./assets/images/.
+// Place app icons under ./assets/images/ (icon.png, notification-icon.png).
 
 import fs from "fs";
 import path from "path";
@@ -29,6 +28,11 @@ function resolveGoogleServicesJsonPath(): string | undefined {
   return undefined;
 }
 
+function resolveAsset(relativePath: string): string | undefined {
+  const absolutePath = path.join(__dirname, relativePath);
+  return fs.existsSync(absolutePath) ? relativePath : undefined;
+}
+
 export default () => {
   const googleSchemes = googleIosUrlSchemes();
   const plistPath = process.env.GOOGLE_SERVICE_INFO_PLIST;
@@ -37,6 +41,63 @@ export default () => {
   const googleMapsAndroidKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY;
   const googleMapsIosKey = process.env.GOOGLE_MAPS_IOS_API_KEY;
   const isDevClientBuild = process.env.EAS_BUILD_PROFILE === "development";
+  const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+  const sentryEnabled =
+    typeof sentryDsn === "string" &&
+    sentryDsn.startsWith("https://") &&
+    !sentryDsn.includes("xxxx");
+  const appIcon = resolveAsset("assets/images/icon.png");
+  const notificationIcon = resolveAsset("assets/images/notification-icon.png");
+
+  const plugins: (string | [string, Record<string, unknown>])[] = [
+    ...(isDevClientBuild ? (["expo-dev-client"] as const) : []),
+    ...(appIcon
+      ? ([
+          [
+            "expo-splash-screen",
+            {
+              backgroundColor: "#0D1117",
+              image: appIcon,
+              imageWidth: 200,
+            },
+          ],
+        ] as const)
+      : []),
+    "expo-router",
+    "expo-secure-store",
+    [
+      "expo-build-properties",
+      {
+        android: {
+          minSdkVersion: 31,
+          softwareKeyboardLayoutMode: "resize",
+        },
+      },
+    ],
+    "./plugins/withIvsBroadcastPermissions.js",
+    "@react-native-google-signin/google-signin",
+    [
+      "expo-camera",
+      {
+        cameraPermission:
+          "A3 Billiards needs camera access to scan customer check-in QR codes and broadcast live games.",
+        microphonePermission:
+          "A3 Billiards needs microphone access to include audio in live broadcasts.",
+        recordAudioAndroid: true,
+      },
+    ],
+    [
+      "expo-notifications",
+      {
+        ...(notificationIcon ? { icon: notificationIcon } : {}),
+        color: "#43A047",
+        defaultChannel: "default",
+      },
+    ],
+  ];
+  if (sentryEnabled) {
+    plugins.push("@sentry/react-native/expo");
+  }
 
   const ios: Record<string, unknown> = {
     supportsTablet: true,
@@ -58,7 +119,7 @@ export default () => {
         },
       ],
       NSCameraUsageDescription:
-        "A3 Billiards needs camera access to broadcast live games from your club.",
+        "A3 Billiards needs camera access to scan customer check-in QR codes and broadcast live games.",
       NSMicrophoneUsageDescription:
         "A3 Billiards needs microphone access to include audio in live broadcasts.",
     };
@@ -66,7 +127,7 @@ export default () => {
     ios.infoPlist = {
       ...(ios.infoPlist as Record<string, unknown> | undefined),
       NSCameraUsageDescription:
-        "A3 Billiards needs camera access to broadcast live games from your club.",
+        "A3 Billiards needs camera access to scan customer check-in QR codes and broadcast live games.",
       NSMicrophoneUsageDescription:
         "A3 Billiards needs microphone access to include audio in live broadcasts.",
     };
@@ -104,31 +165,29 @@ export default () => {
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     owner: "a3333",
-    ios,
-    android,
-    plugins: [
-      ...(isDevClientBuild ? (["expo-dev-client"] as const) : []),
-      "expo-router",
-      "expo-secure-store",
-      [
-        "expo-build-properties",
-        {
-          android: {
-            minSdkVersion: 31,
+    ...(appIcon
+      ? {
+          icon: appIcon,
+          splash: {
+            image: appIcon,
+            resizeMode: "contain",
+            backgroundColor: "#0D1117",
           },
-        },
-      ],
-      "./plugins/withIvsBroadcastPermissions.js",
-      "@react-native-google-signin/google-signin",
-      [
-        "expo-notifications",
-        {
-          color: "#43A047",
-          defaultChannel: "default",
-        },
-      ],
-      "@sentry/react-native/expo",
-    ],
+        }
+      : {}),
+    ios,
+    android: {
+      ...android,
+      ...(appIcon
+        ? {
+            adaptiveIcon: {
+              foregroundImage: appIcon,
+              backgroundColor: "#0D1117",
+            },
+          }
+        : {}),
+    },
+    plugins,
     experiments: {
       typedRoutes: false,
     },

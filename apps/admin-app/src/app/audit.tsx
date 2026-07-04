@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Pressable,
   Platform,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "convex/react";
@@ -15,6 +16,8 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, glass } from "@a3/ui/theme";
 import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
+import { usePullToRefresh } from "@a3/ui/hooks";
 import { adminTabBarTotalInset } from "../theme/adminShell";
 
 type AuditEntry = {
@@ -33,7 +36,7 @@ type AuditEntry = {
 
 function formatWhen(ts: number): string {
   const d = new Date(ts);
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(getCurrentLanguage(), {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -64,6 +67,7 @@ function actionIcon(action: string): keyof typeof MaterialIcons.glyphMap {
 }
 
 export default function AuditLogScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const user = useQuery(api.users.getCurrentUser, {});
   const canQuery =
@@ -97,11 +101,13 @@ export default function AuditLogScreen(): React.JSX.Element {
     setLoadingMore(false);
   }, [page, cursor]);
 
-  const onRefresh = useCallback(() => {
-    setCursor(undefined);
-    setRows([]);
-    setNextCursor(null);
-  }, []);
+  const { refreshing, onRefresh } = usePullToRefresh(
+    useCallback(() => {
+      setCursor(undefined);
+      setRows([]);
+      setNextCursor(null);
+    }, []),
+  );
 
   const onEndReached = useCallback(() => {
     if (!nextCursor || loadingMore || !canQuery) return;
@@ -115,15 +121,13 @@ export default function AuditLogScreen(): React.JSX.Element {
     <GlassPageBackground>
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={[styles.header, { paddingHorizontal: spacing[4] }]}>
-          <Text style={styles.title}>Audit Log</Text>
-          <Text style={styles.subtitle}>
-            Immutable record of sensitive admin actions
-          </Text>
+          <Text style={styles.title}>{t("adminApp.audit.title")}</Text>
+          <Text style={styles.subtitle}>{t("adminApp.audit.subtitle")}</Text>
           <Pressable
             onPress={onRefresh}
             hitSlop={12}
             style={({ pressed }) => [styles.refreshBtn, pressed && { opacity: 0.7 }]}
-            accessibilityLabel="Refresh audit log"
+            accessibilityLabel={t("adminApp.audit.refreshAccessibility")}
           >
             <MaterialIcons name="refresh" size={20} color={glass.accentBlue} />
           </Pressable>
@@ -136,17 +140,17 @@ export default function AuditLogScreen(): React.JSX.Element {
         ) : rows.length === 0 ? (
           <View style={styles.center}>
             <MaterialIcons name="history" size={40} color={glass.textMuted} />
-            <Text style={styles.emptyTitle}>No audit entries yet</Text>
-            <Text style={styles.emptyBody}>
-              Admin actions such as user freezes, password resets, and complaint
-              dismissals will appear here.
-            </Text>
+            <Text style={styles.emptyTitle}>{t("adminApp.audit.emptyTitle")}</Text>
+            <Text style={styles.emptyBody}>{t("adminApp.audit.emptyBody")}</Text>
           </View>
         ) : (
           <FlatList
             data={rows}
             keyExtractor={(item) => item._id}
             contentContainerStyle={{ paddingBottom: bottomPad, paddingHorizontal: spacing[4] }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
             onEndReached={onEndReached}
             onEndReachedThreshold={0.4}
             ListFooterComponent={
@@ -180,12 +184,12 @@ export default function AuditLogScreen(): React.JSX.Element {
                   <View style={styles.changeRow}>
                     {item.previousValue ? (
                       <Text style={styles.changeText} numberOfLines={2}>
-                        From: {item.previousValue}
+                        {t("adminApp.audit.from", { value: item.previousValue })}
                       </Text>
                     ) : null}
                     {item.newValue ? (
                       <Text style={styles.changeText} numberOfLines={2}>
-                        To: {item.newValue}
+                        {t("adminApp.audit.to", { value: item.newValue })}
                       </Text>
                     ) : null}
                   </View>

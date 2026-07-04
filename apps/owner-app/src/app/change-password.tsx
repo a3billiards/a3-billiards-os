@@ -15,9 +15,13 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { KeyboardFormScroll } from "@a3/ui/components";
-
-const MIN_LEN = 8;
+import { KeyboardFormScroll, PasswordStrengthBar } from "@a3/ui/components";
+import { useTranslation } from "@a3/i18n";
+import {
+  getStrongPasswordError,
+  getPasswordStrength,
+  isStrongPassword,
+} from "@a3/utils/passwordPolicy";
 
 const changePasswordAction = api.passwordResetActions.changePassword;
 const requestPasswordResetAction = api.passwordResetActions.requestReset;
@@ -31,12 +35,15 @@ function EyeToggle({
   revealed: boolean;
   onToggle: () => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <Pressable
       onPress={onToggle}
       hitSlop={12}
       accessibilityRole="button"
-      accessibilityLabel={revealed ? "Hide password" : "Show password"}
+      accessibilityLabel={
+        revealed ? t("auth.owner.changePassword.hidePassword") : t("auth.owner.changePassword.showPassword")
+      }
       style={styles.eyeHit}
     >
       <Text style={styles.eyeIcon}>{revealed ? "🙈" : "👁"}</Text>
@@ -45,6 +52,7 @@ function EyeToggle({
 }
 
 export default function ChangePasswordScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const user = useQuery(api.users.getCurrentUser);
   const changePassword = useAction(changePasswordAction);
@@ -95,7 +103,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
 
   const canSubmit =
     current.length > 0 &&
-    next.length >= MIN_LEN &&
+    isStrongPassword(next) &&
     match &&
     !loading &&
     hasPasswordLogin;
@@ -105,65 +113,67 @@ export default function ChangePasswordScreen(): React.JSX.Element {
 
   const onSubmit = useCallback(async () => {
     if (!canSubmit) return;
+    const pwdError = getStrongPasswordError(next);
+    if (pwdError) {
+      setNextError(pwdError);
+      return;
+    }
     setCurError(null);
     setNextError(null);
     setLoading(true);
     try {
       await changePassword({ currentPassword: current, newPassword: next });
-      showToast("Password updated successfully.", "success", 2200);
+      showToast(t("auth.owner.changePassword.passwordUpdated"), "success", 2200);
       setTimeout(() => {
         router.replace("/(tabs)/settings");
       }, 800);
     } catch (e) {
       const msg = (e as Error).message;
       if (msg.includes("Google Sign-In")) {
-        showToast(
-          "This account has no password set. Use Google Sign-In or reset via email.",
-          "info",
-        );
+        showToast(t("auth.owner.changePassword.noPasswordSet"), "info");
       } else if (msg.includes("Current password is incorrect")) {
-        setCurError("Incorrect password. Please try again.");
+        setCurError(t("auth.owner.changePassword.incorrectPassword"));
         setCurrent("");
         setTimeout(() => currentRef.current?.focus(), 100);
       } else if (
         msg.includes("New password must be different") ||
         msg.includes("New password must be different from your current password")
       ) {
-        setNextError("New password must be different from your current password.");
+        setNextError(t("auth.owner.changePassword.mustBeDifferent"));
       } else {
         showToast(parseConvexError(e as Error).message, "error");
       }
     } finally {
       setLoading(false);
     }
-  }, [canSubmit, changePassword, current, next, router, showToast]);
+  }, [canSubmit, changePassword, current, next, router, showToast, t]);
 
   const onForgotConfirm = useCallback(async () => {
     if (!hasEmail) return;
     try {
       await requestPasswordReset({ email });
-      setForgotSuccess(`Reset link sent to ${email}. Check your inbox.`);
+      setForgotSuccess(t("auth.owner.changePassword.resetLinkSent", { email }));
     } catch (err) {
       const raw = (err as Error).message;
       if (raw.includes("RATE_001")) {
-        showToast("Too many requests. Please wait before trying again.", "error");
+        showToast(t("auth.owner.changePassword.tooManyRequests"), "error");
       } else {
         showToast(parseConvexError(err as Error).message, "error");
       }
     }
-  }, [hasEmail, email, requestPasswordReset, showToast]);
+  }, [hasEmail, email, requestPasswordReset, showToast, t]);
 
   const onForgotPress = useCallback(() => {
     if (!hasEmail) return;
     Alert.alert(
-      "Send Reset Link?",
-      `A password reset link will be sent to ${email}. The link expires in 1 hour.`,
+      t("auth.owner.changePassword.resetAlertTitle"),
+      t("auth.owner.changePassword.resetAlertBody", { email }),
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Send Link", onPress: () => void onForgotConfirm() },
+        { text: t("auth.owner.changePassword.cancel"), style: "cancel" },
+        { text: t("auth.owner.changePassword.sendLink"), onPress: () => void onForgotConfirm() },
       ],
     );
-  }, [hasEmail, email, onForgotConfirm]);
+  }, [hasEmail, email, onForgotConfirm, t]);
 
   if (user === undefined) {
     return (
@@ -179,7 +189,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.center}>
-          <Text style={styles.muted}>Sign in to change your password.</Text>
+          <Text style={styles.muted}>{t("auth.owner.changePassword.signInRequired")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -202,16 +212,16 @@ export default function ChangePasswordScreen(): React.JSX.Element {
               }
               hitSlop={12}
               accessibilityRole="button"
-              accessibilityLabel="Back to settings"
+              accessibilityLabel={t("auth.owner.changePassword.back")}
             >
               <Text style={styles.backChevron}>‹</Text>
-              <Text style={styles.backLabel}>Back</Text>
+              <Text style={styles.backLabel}>{t("auth.owner.changePassword.back")}</Text>
             </Pressable>
-            <Text style={styles.headerTitle}>Change Password</Text>
+            <Text style={styles.headerTitle}>{t("auth.owner.changePassword.title")}</Text>
             <View style={styles.headerSpacer} />
           </View>
 
-          <Text style={styles.label}>Current Password</Text>
+          <Text style={styles.label}>{t("auth.owner.changePassword.currentPassword")}</Text>
           <View style={styles.inputRow}>
             <TextInput
               ref={currentRef}
@@ -222,7 +232,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
                 setCurrent(t);
                 setCurError(null);
               }}
-              placeholder="••••••••"
+              placeholder={t("common.passwordMask")}
               placeholderTextColor={colors.text.tertiary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -231,7 +241,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
           </View>
           {curError ? <Text style={styles.err}>{curError}</Text> : null}
 
-          <Text style={[styles.label, styles.labelSpaced]}>New Password</Text>
+          <Text style={[styles.label, styles.labelSpaced]}>{t("auth.owner.changePassword.newPassword")}</Text>
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
@@ -241,17 +251,18 @@ export default function ChangePasswordScreen(): React.JSX.Element {
                 setNext(t);
                 setNextError(null);
               }}
-              placeholder="••••••••"
+              placeholder={t("common.passwordMask")}
               placeholderTextColor={colors.text.tertiary}
               autoCapitalize="none"
               autoCorrect={false}
             />
             <EyeToggle revealed={showNext} onToggle={() => setShowNext((s) => !s)} />
           </View>
-          <Text style={styles.hint}>Minimum 8 characters</Text>
+          <PasswordStrengthBar strength={getPasswordStrength(next)} />
+          <Text style={styles.hint}>{t("auth.owner.changePassword.minLengthHint")}</Text>
           {nextError ? <Text style={styles.err}>{nextError}</Text> : null}
 
-          <Text style={[styles.label, styles.labelSpaced]}>Confirm New Password</Text>
+          <Text style={[styles.label, styles.labelSpaced]}>{t("auth.owner.changePassword.confirmPassword")}</Text>
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
@@ -262,7 +273,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
                 setConfirm(t);
               }}
               onBlur={() => setConfirmTouched(true)}
-              placeholder="••••••••"
+              placeholder={t("common.passwordMask")}
               placeholderTextColor={colors.text.tertiary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -270,7 +281,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
             <EyeToggle revealed={showConf} onToggle={() => setShowConf((s) => !s)} />
           </View>
           {confirmMismatch ? (
-            <Text style={styles.err}>Passwords do not match</Text>
+            <Text style={styles.err}>{t("auth.owner.changePassword.passwordsMismatch")}</Text>
           ) : null}
 
           <Pressable
@@ -281,7 +292,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryText}>Update Password</Text>
+              <Text style={styles.primaryText}>{t("auth.owner.changePassword.updatePassword")}</Text>
             )}
           </Pressable>
 
@@ -289,15 +300,15 @@ export default function ChangePasswordScreen(): React.JSX.Element {
             <Text style={styles.forgotSuccess}>{forgotSuccess}</Text>
           ) : hasEmail ? (
             <Pressable style={styles.linkWrap} onPress={onForgotPress}>
-              <Text style={styles.link}>Forgot password?</Text>
+              <Text style={styles.link}>{t("auth.owner.changePassword.forgotPassword")}</Text>
             </Pressable>
           ) : (
             <View
               style={styles.linkWrap}
-              accessibilityHint="No email on file"
+              accessibilityHint={t("auth.owner.changePassword.noEmailHint")}
               accessibilityRole="text"
             >
-              <Text style={styles.linkDisabledText}>Forgot password?</Text>
+              <Text style={styles.linkDisabledText}>{t("auth.owner.changePassword.forgotPassword")}</Text>
             </View>
           )}
 

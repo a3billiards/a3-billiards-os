@@ -11,7 +11,7 @@ import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 import { dispatchWhatsAppOtp } from "./model/otp";
-import { parseIndiaE164OrThrow, throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
+import { parseGenericE164OrThrow, throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
 const OTP_RATE_LIMIT_WINDOW_MS = Number(
@@ -61,7 +61,7 @@ export const ownerSendDeskCustomerRegistrationOtp = action({
     if (!E164_REGEX.test(phone)) {
       throw new Error("OTP_005: Invalid E.164 phone number format");
     }
-    const normalized = parseIndiaE164OrThrow(phone);
+    const normalized = parseGenericE164OrThrow(phone);
 
     const existing = await ctx.runQuery(internal.otp.findUserByPhone, {
       phone: normalized,
@@ -130,7 +130,7 @@ export const ownerCompleteDeskCustomerRegistration = action({
       );
     }
 
-    const normalized = parseIndiaE164OrThrow(args.phone);
+    const normalized = parseGenericE164OrThrow(args.phone);
     const normalizedCode = args.code.replace(/\s/g, "");
     if (!/^\d{6}$/.test(normalizedCode)) {
       throw new Error(

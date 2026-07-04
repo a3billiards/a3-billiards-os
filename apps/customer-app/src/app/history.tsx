@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   Animated,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -14,6 +15,7 @@ import { useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { GlassPageBackground } from "@a3/ui/components";
+import { usePullToRefresh } from "@a3/ui/hooks";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import {
   computeBillBreakdown,
@@ -21,6 +23,7 @@ import {
   formatDuration,
 } from "@a3/utils/billing";
 import { computeFreeVisitBill } from "@a3/utils/loyaltyBilling";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
 type SessionLogRow = {
   _id: string;
@@ -77,14 +80,17 @@ function isSameLocalDay(a: Date, b: Date): boolean {
   );
 }
 
-function formatSessionDate(startTime: number): string {
+function formatSessionDate(
+  startTime: number,
+  t: (key: string) => string,
+): string {
   const d = new Date(startTime);
   const now = new Date();
   const y = new Date(now);
   y.setDate(y.getDate() - 1);
-  if (isSameLocalDay(d, now)) return "Today";
-  if (isSameLocalDay(d, y)) return "Yesterday";
-  return new Intl.DateTimeFormat("en-GB", {
+  if (isSameLocalDay(d, now)) return t("customerApp.history.today");
+  if (isSameLocalDay(d, y)) return t("customerApp.history.yesterday");
+  return new Intl.DateTimeFormat(getCurrentLanguage(), {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -93,9 +99,21 @@ function formatSessionDate(startTime: number): string {
 
 function methodLabel(
   m: "cash" | "upi" | "card" | "credit" | null | undefined,
+  t: (key: string) => string,
 ): string {
   if (!m) return "";
-  return m.charAt(0).toUpperCase() + m.slice(1);
+  switch (m) {
+    case "cash":
+      return t("customerApp.history.cash");
+    case "upi":
+      return t("customerApp.history.upi");
+    case "card":
+      return t("customerApp.history.card");
+    case "credit":
+      return t("customerApp.history.credit");
+    default:
+      return "";
+  }
 }
 
 function StatusBar({ color }: { color: string }): React.JSX.Element {
@@ -138,6 +156,7 @@ function SessionCard({
   detail: SessionDetail | null | undefined;
   detailLoading: boolean;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const now = Date.now();
   const isActive = row.status === "active";
   const isCancelled = row.status === "cancelled";
@@ -169,25 +188,25 @@ function SessionCard({
   let statusPill = "";
   let pillStyle: object = styles.pillNeutral;
   if (isActive) {
-    statusPill = "In Progress";
+    statusPill = t("customerApp.history.inProgress");
     pillStyle = styles.pillActive;
   } else if (row.isFreeVisit && isCompleted) {
-    statusPill = "Free visit";
+    statusPill = t("customerApp.history.freeVisit");
     pillStyle = styles.pillFreeVisit;
   } else if (isCancelled) {
-    statusPill = "Cancelled";
+    statusPill = t("customerApp.history.cancelled");
     pillStyle = styles.pillMuted;
   } else if (row.paymentStatus === "paid" && row.creditResolvedAt != null) {
-    statusPill = "Credit resolved";
+    statusPill = t("customerApp.history.creditResolved");
     pillStyle = styles.pillMuted;
   } else if (row.paymentStatus === "paid") {
-    statusPill = "Paid";
+    statusPill = t("customerApp.history.paid");
     pillStyle = styles.pillPaid;
   } else if (row.paymentStatus === "credit") {
-    statusPill = "Credit owed";
+    statusPill = t("customerApp.history.creditOwed");
     pillStyle = styles.pillCredit;
   } else {
-    statusPill = "Pending";
+    statusPill = t("customerApp.history.pending");
     pillStyle = styles.pillNeutral;
   }
 
@@ -280,16 +299,18 @@ function SessionCard({
   const payMethodBadge =
     isCompleted && row.paymentMethod
       ? row.paymentMethod === "cash"
-        ? { label: "Cash", style: styles.payCash }
+        ? { label: t("customerApp.history.cash"), style: styles.payCash }
         : row.paymentMethod === "upi"
-          ? { label: "UPI", style: styles.payUpi }
+          ? { label: t("customerApp.history.upi"), style: styles.payUpi }
           : row.paymentMethod === "card"
-            ? { label: "Card", style: styles.payCard }
+            ? { label: t("customerApp.history.card"), style: styles.payCard }
             : row.paymentMethod === "credit"
               ? row.creditResolvedAt == null
-                ? { label: "Credit", style: styles.payCredit }
+                ? { label: t("customerApp.history.credit"), style: styles.payCredit }
                 : {
-                    label: `Resolved via ${methodLabel(row.creditResolvedMethod)}`,
+                    label: t("customerApp.history.resolvedVia", {
+                      method: methodLabel(row.creditResolvedMethod, t),
+                    }),
                     style: styles.payResolved,
                   }
               : null
@@ -314,7 +335,7 @@ function SessionCard({
           <View style={styles.midRow}>
             <Text style={styles.meta}>🎱 {row.tableLabel}</Text>
             <Text style={styles.meta}> · </Text>
-            <Text style={styles.meta}>{formatSessionDate(row.startTime)}</Text>
+            <Text style={styles.meta}>{formatSessionDate(row.startTime, t)}</Text>
           </View>
           <View style={styles.botRow}>
             <Text style={styles.meta}>{durationLabel}</Text>
@@ -324,7 +345,7 @@ function SessionCard({
             isCompleted &&
             row.creditResolvedAt == null &&
             row.billTotal != null ? (
-              <Text style={styles.creditTag}> Credit owed</Text>
+              <Text style={styles.creditTag}> {t("customerApp.history.creditOwed")}</Text>
             ) : null}
             <View style={{ flex: 1 }} />
             {payMethodBadge ? (
@@ -344,34 +365,36 @@ function SessionCard({
             <ActivityIndicator color={glass.ctaBg} style={{ marginVertical: spacing[3] }} />
           ) : detail === null ? (
             <Text style={styles.noteMuted}>
-              Detailed breakdown unavailable.
+              {t("customerApp.history.breakdownUnavailable")}
               {row.billTotal != null ? (
                 <>
                   {" "}
-                  Total recorded: {formatCurrency(row.billTotal, row.currency)}
+                  {t("customerApp.history.totalRecorded", {
+                    amount: formatCurrency(row.billTotal, row.currency),
+                  })}
                 </>
               ) : null}
             </Text>
           ) : detail.status === "cancelled" ? (
             <>
-              <Text style={styles.noteMuted}>No bill — session was cancelled.</Text>
+              <Text style={styles.noteMuted}>{t("customerApp.history.noBillCancelled")}</Text>
               {detail.cancellationReason === "admin_force_end" ? (
                 <Text style={[styles.noteMuted, { marginTop: spacing[2], fontStyle: "italic" }]}>
-                  Session ended by platform support.
+                  {t("customerApp.history.endedBySupport")}
                 </Text>
               ) : null}
             </>
           ) : detail.status === "active" && breakdown ? (
             <>
-              <Text style={styles.breakdownHeader}>Bill Breakdown</Text>
-              <Text style={styles.estimateNote}>
-                Estimated bill (in progress). Final bill calculated at checkout.
-              </Text>
-              <Text style={styles.sectionTitle}>Table time (estimate)</Text>
+              <Text style={styles.breakdownHeader}>{t("customerApp.history.billBreakdown")}</Text>
+              <Text style={styles.estimateNote}>{t("customerApp.history.estimatedBillNote")}</Text>
+              <Text style={styles.sectionTitle}>{t("customerApp.history.tableTimeEstimate")}</Text>
               <View style={styles.rowBetween}>
                 <Text style={styles.lineDetail}>
-                  {breakdown.billableMinutes} min @{" "}
-                  {formatCurrency(detail.ratePerMin, detail.currency)}/min
+                  {t("customerApp.history.minAtRate", {
+                    minutes: breakdown.billableMinutes,
+                    rate: formatCurrency(detail.ratePerMin, detail.currency),
+                  })}
                 </Text>
                 <Text style={styles.lineAmount}>
                   {formatCurrency(breakdown.tableSubtotal, detail.currency)}
@@ -379,38 +402,41 @@ function SessionCard({
               </View>
               {showDiscount ? (
                 <Row
-                  label={`Discount (${detail.discount}%)`}
+                  label={t("customerApp.history.discount", { percent: detail.discount })}
                   value={`− ${formatCurrency(breakdown.discountAmount, detail.currency)}`}
                   valueColor={colors.accent.green}
                 />
               ) : null}
               {showDiscount ? (
                 <Row
-                  label="Table subtotal"
+                  label={t("customerApp.history.tableSubtotal")}
                   value={formatCurrency(breakdown.discountedTable, detail.currency)}
                 />
               ) : null}
               <View style={styles.dividerThin} />
               <Row
-                label="Total (estimate)"
+                label={t("customerApp.history.totalEstimate")}
                 value={formatCurrency(breakdown.finalBill, detail.currency)}
                 bold
               />
             </>
           ) : breakdown ? (
             <>
-              <Text style={styles.breakdownHeader}>Bill Breakdown</Text>
+              <Text style={styles.breakdownHeader}>{t("customerApp.history.billBreakdown")}</Text>
               {"isFreeVisit" in breakdown && breakdown.isFreeVisit ? (
                 <Text style={styles.freeVisitNote}>
-                  Loyalty free visit — table time up to {breakdown.freeVisitMaxMinutes} min
-                  covered. Snacks billed normally.
+                  {t("customerApp.history.loyaltyFreeVisitNote", {
+                    minutes: breakdown.freeVisitMaxMinutes,
+                  })}
                 </Text>
               ) : null}
-              <Text style={styles.sectionTitle}>Table time</Text>
+              <Text style={styles.sectionTitle}>{t("customerApp.history.tableTime")}</Text>
               <View style={styles.rowBetween}>
                 <Text style={styles.lineDetail}>
-                  {breakdown.billableMinutes} min @{" "}
-                  {formatCurrency(detail.ratePerMin, detail.currency)}/min
+                  {t("customerApp.history.minAtRate", {
+                    minutes: breakdown.billableMinutes,
+                    rate: formatCurrency(detail.ratePerMin, detail.currency),
+                  })}
                 </Text>
                 <Text style={styles.lineAmount}>
                   {formatCurrency(breakdown.tableSubtotal, detail.currency)}
@@ -418,34 +444,42 @@ function SessionCard({
               </View>
               {"isFreeVisit" in breakdown && breakdown.isFreeVisit ? (
                 <Text style={styles.noteItalic}>
-                  {breakdown.coveredMinutes} min covered by loyalty credit
+                  {t("customerApp.history.coveredByLoyalty", {
+                    minutes: breakdown.coveredMinutes,
+                  })}
                   {breakdown.overageMinutes > 0
-                    ? ` · ${breakdown.overageMinutes} min charged at normal rate`
+                    ? t("customerApp.history.overageCharged", {
+                        minutes: breakdown.overageMinutes,
+                      })
                     : ""}
                 </Text>
               ) : null}
               {breakdown.billableMinutes > breakdown.actualMinutes ? (
                 <Text style={styles.noteItalic}>
-                  Minimum {detail.minBillMinutes} min charge applied (actual: {breakdown.actualMinutes}{" "}
-                  min)
+                  {t("customerApp.history.minimumCharge", {
+                    min: detail.minBillMinutes,
+                    actual: breakdown.actualMinutes,
+                  })}
                 </Text>
               ) : null}
               {showDiscount ? (
                 <Row
-                  label={`Discount (${detail.discount}%)`}
+                  label={t("customerApp.history.discount", { percent: detail.discount })}
                   value={`− ${formatCurrency(breakdown.discountAmount, detail.currency)}`}
                   valueColor={colors.accent.green}
                 />
               ) : null}
               {showDiscount ? (
                 <Row
-                  label="Table subtotal"
+                  label={t("customerApp.history.tableSubtotal")}
                   value={formatCurrency(breakdown.discountedTable, detail.currency)}
                 />
               ) : null}
               {detail.snackOrders.length > 0 ? (
                 <>
-                  <Text style={[styles.sectionTitle, { marginTop: spacing[2] }]}>Snacks</Text>
+                  <Text style={[styles.sectionTitle, { marginTop: spacing[2] }]}>
+                    {t("customerApp.history.snacks")}
+                  </Text>
                   {detail.snackOrders.map((s, i) => (
                     <View key={`${s.snackId}-${i}`} style={styles.snackRow}>
                       <Text style={styles.snackName} numberOfLines={1}>
@@ -456,12 +490,15 @@ function SessionCard({
                       </Text>
                     </View>
                   ))}
-                  <Row label="Snack total" value={formatCurrency(breakdown.snackTotal, detail.currency)} />
+                  <Row
+                    label={t("customerApp.history.snackTotal")}
+                    value={formatCurrency(breakdown.snackTotal, detail.currency)}
+                  />
                 </>
               ) : null}
               <View style={styles.dividerThin} />
               <Row
-                label="Total"
+                label={t("customerApp.history.total")}
                 value={formatCurrency(
                   row.billTotal ?? breakdown.finalBill,
                   row.currency ?? detail.currency,
@@ -469,21 +506,27 @@ function SessionCard({
                 bold
               />
               {detail.paymentStatus === "paid" && detail.paymentMethod ? (
-                <Text style={styles.noteMuted}>Paid by {methodLabel(detail.paymentMethod)}</Text>
+                <Text style={styles.noteMuted}>
+                  {t("customerApp.history.paidBy", {
+                    method: methodLabel(detail.paymentMethod, t),
+                  })}
+                </Text>
               ) : null}
               {detail.paymentStatus === "credit" && detail.creditResolvedAt == null ? (
-                <Text style={styles.creditNote}>Credit owed — not yet paid</Text>
+                <Text style={styles.creditNote}>{t("customerApp.history.creditOwedNote")}</Text>
               ) : null}
               {detail.paymentStatus === "credit" &&
               detail.creditResolvedAt != null &&
               detail.creditResolvedMethod ? (
                 <Text style={styles.noteMuted}>
-                  Resolved via {methodLabel(detail.creditResolvedMethod)}
+                  {t("customerApp.history.resolvedVia", {
+                    method: methodLabel(detail.creditResolvedMethod, t),
+                  })}
                 </Text>
               ) : null}
             </>
           ) : (
-            <Text style={styles.noteMuted}>Unable to compute breakdown.</Text>
+            <Text style={styles.noteMuted}>{t("customerApp.history.unableCompute")}</Text>
           )}
         </View>
       ) : null}
@@ -509,6 +552,8 @@ function SkeletonList(): React.JSX.Element {
 }
 
 export default function SessionHistoryScreen(): React.JSX.Element {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const params = useLocalSearchParams<{ clubId?: string | string[] }>();
   const clubIdParam = normalizeClubId(params.clubId);
@@ -568,11 +613,13 @@ export default function SessionHistoryScreen(): React.JSX.Element {
     <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Session History</Text>
+        <Text style={styles.title}>{t("customerApp.history.title")}</Text>
         {clubIdParam ? (
           <View style={styles.filterChip}>
             <Text style={styles.filterChipText}>
-              At {filterClubName ?? "this club"}
+              {t("customerApp.history.filterAtClub", {
+                clubName: filterClubName ?? t("customerApp.history.filterThisClub"),
+              })}
             </Text>
             <Pressable onPress={clearClubFilter} hitSlop={12}>
               <Text style={styles.filterClear}>✕</Text>
@@ -587,16 +634,21 @@ export default function SessionHistoryScreen(): React.JSX.Element {
         </ScrollView>
       ) : user === null ? (
         <View style={styles.center}>
-          <Text style={styles.muted}>Sign in to see your session history.</Text>
+          <Text style={styles.muted}>{t("customerApp.history.signInRequired")}</Text>
         </View>
       ) : sessions.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>🎱</Text>
-          <Text style={styles.emptyTitle}>No sessions yet</Text>
-          <Text style={styles.emptySub}>Visit a club to start your first game!</Text>
+          <Text style={styles.emptyTitle}>{t("customerApp.history.emptyTitle")}</Text>
+          <Text style={styles.emptySub}>{t("customerApp.history.emptySub")}</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.pad}>
+        <ScrollView
+          contentContainerStyle={styles.pad}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
           {sessions.map((row) => {
             const sid = row.sessionId;
             const expanded = expandedId === sid;
@@ -702,14 +754,14 @@ const styles = StyleSheet.create({
   },
   billText: { ...typography.caption, color: colors.text.primary, fontWeight: "600" },
   creditTag: { ...typography.caption, color: colors.accent.amber, fontWeight: "600" },
-  payPill: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm, marginLeft: spacing[2] },
+  payPill: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.sm, marginStart: spacing[2] },
   payPillText: { ...typography.caption, fontWeight: "600" },
   payCash: { backgroundColor: glass.inputBg },
   payUpi: { backgroundColor: "rgba(33, 150, 243, 0.2)" },
   payCard: { backgroundColor: "rgba(255, 193, 7, 0.15)" },
   payCredit: { backgroundColor: "rgba(245, 127, 23, 0.2)" },
   payResolved: { backgroundColor: glass.inputBg },
-  chevron: { ...typography.caption, color: colors.text.secondary, marginLeft: spacing[1] },
+  chevron: { ...typography.caption, color: colors.text.secondary, marginStart: spacing[1] },
   breakdownPanel: {
     backgroundColor: "rgba(15, 23, 42, 0.35)",
     paddingHorizontal: spacing[3],
@@ -719,7 +771,7 @@ const styles = StyleSheet.create({
   dividerThin: { height: 1, backgroundColor: colors.border.subtle, marginVertical: spacing[2] },
   breakdownHeader: { ...typography.caption, color: colors.text.secondary, marginBottom: spacing[2] },
   sectionTitle: { ...typography.label, color: colors.text.primary, marginTop: spacing[1] },
-  lineDetail: { ...typography.caption, color: colors.text.secondary, flex: 1, marginRight: spacing[2] },
+  lineDetail: { ...typography.caption, color: colors.text.secondary, flex: 1, marginEnd: spacing[2] },
   lineAmount: { ...typography.caption, color: colors.text.primary, fontWeight: "600" },
   noteMuted: { ...typography.caption, color: colors.text.secondary, marginTop: spacing[2] },
   noteItalic: {
@@ -749,8 +801,8 @@ const styles = StyleSheet.create({
   rowLabel: { ...typography.caption, color: colors.text.secondary, flex: 1 },
   rowValue: { ...typography.caption, color: colors.text.primary },
   rowBold: { fontWeight: "700", fontSize: 16 },
-  snackRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 4, paddingLeft: spacing[2] },
-  snackName: { ...typography.caption, color: colors.text.secondary, flex: 1, marginRight: spacing[2] },
+  snackRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 4, paddingStart: spacing[2] },
+  snackName: { ...typography.caption, color: colors.text.secondary, flex: 1, marginEnd: spacing[2] },
   snackAmt: { ...typography.caption, color: colors.text.primary },
   skeletonCard: {
     flexDirection: "row",

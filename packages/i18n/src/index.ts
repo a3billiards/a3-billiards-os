@@ -11,11 +11,13 @@ export {
 } from "./config";
 export { ensureI18nInitialized, i18n } from "./i18n";
 export { I18nProvider, useAppLocale, useAppLocaleOptional } from "./I18nProvider";
+export type { I18nProviderProps } from "./I18nProvider";
 export { LanguagePicker } from "./LanguagePicker";
 export type { LanguagePickerProps } from "./LanguagePicker";
+export { LoginLanguagePicker } from "./LoginLanguagePicker";
 export {
   translateConvexErrorMessage,
   translateErrorCode,
 } from "./translateError";
-export type { ErrorMessageKey } from "./errors";
+export type { ErrorMessageKey } from "./locales/errors";
 export { useTranslation } from "react-i18next";

@@ -80,4 +80,15 @@ export const fr: TranslationBundle = {
       "Votre abonnement expire bientôt. Renouvelez maintenant pour éviter une interruption.",
     graceRenew: "Renouveler",
   },
+  inbox: {
+    title: "Notifications",
+    subtitle: "Messages from A3 Billiards",
+    empty: "No notifications yet.",
+    markAllRead: "Mark all read",
+    alertView: "View",
+    alertLater: "Later",
+    fromAdmin: "A3 Billiards",
+    bellAccessibility: "Notifications",
+    loadMore: "Load more",
+  },
 };

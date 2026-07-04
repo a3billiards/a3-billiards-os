@@ -80,4 +80,15 @@ export const de: TranslationBundle = {
       "Ihr Abonnement läuft bald ab. Erneuern Sie jetzt, um Unterbrechungen zu vermeiden.",
     graceRenew: "Erneuern",
   },
+  inbox: {
+    title: "Notifications",
+    subtitle: "Messages from A3 Billiards",
+    empty: "No notifications yet.",
+    markAllRead: "Mark all read",
+    alertView: "View",
+    alertLater: "Later",
+    fromAdmin: "A3 Billiards",
+    bellAccessibility: "Notifications",
+    loadMore: "Load more",
+  },
 };

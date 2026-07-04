@@ -8,6 +8,7 @@ import {
   FlatList,
   Platform,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -21,6 +22,8 @@ import {
   keyboardScrollDefaults,
 } from "@a3/ui/components";
 import { colors, spacing, typography, layout, glass } from "@a3/ui/theme";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 import { customerTabBarTotalInset } from "../theme/customerShell";
 import {
   getCurrentCoords,
@@ -53,6 +56,8 @@ function SkeletonList(): React.JSX.Element {
 }
 
 export default function DiscoverScreen(): React.JSX.Element {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = customerTabBarTotalInset(insets.bottom);
@@ -81,7 +86,7 @@ export default function DiscoverScreen(): React.JSX.Element {
           if (!cancelled) {
             setCoords(pos);
             setCoordsError(
-              pos ? null : "Could not read GPS. Turn on device location and try again.",
+              pos ? null : t("customerApp.discovery.gpsError"),
             );
           }
         } else {
@@ -93,7 +98,7 @@ export default function DiscoverScreen(): React.JSX.Element {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [t]),
   );
 
   const requestLocation = async () => {
@@ -106,7 +111,7 @@ export default function DiscoverScreen(): React.JSX.Element {
         setCoordsError(null);
         setNearbyOnly(true);
       } else {
-        setCoordsError("Could not read GPS. Turn on device location and try again.");
+        setCoordsError(t("customerApp.discovery.gpsError"));
         setNearbyOnly(false);
       }
     } else {
@@ -141,22 +146,22 @@ export default function DiscoverScreen(): React.JSX.Element {
     if (queryLoading) return null;
     if (list.length > 0) return null;
     if (perm === "granted" && !hasGps) {
-      return coordsError ?? "Waiting for your location…";
+      return coordsError ?? t("customerApp.discovery.waitingLocation");
     }
     if (nearbyOnly && hasGps) {
-      return "No discoverable clubs within 50 km. Try “Show all clubs”, or ask the club owner to set their map pin in Owner app → Settings → Club Profile.";
+      return t("customerApp.discovery.noClubsNearby");
     }
     if (isSearching) {
-      return `No discoverable clubs match "${debounced}". Check the spelling or ask the club owner to enable discovery in the owner app.`;
+      return t("customerApp.discovery.noSearchResults", { query: debounced });
     }
-    return "No clubs are discoverable yet. Club owners must turn on “Discoverable” in Owner app → Settings.";
+    return t("customerApp.discovery.noClubsDiscoverable");
   })();
 
   const sectionTitle = (() => {
     if (isSearching || queryLoading || list.length === 0) return null;
-    if (nearbyOnly && hasGps) return "Clubs near you (within 50 km)";
-    if (hasGps) return "Discoverable clubs (nearest first)";
-    return "Clubs on A3 Billiards OS";
+    if (nearbyOnly && hasGps) return t("customerApp.discovery.sectionNearYou");
+    if (hasGps) return t("customerApp.discovery.sectionNearestFirst");
+    return t("customerApp.discovery.sectionAllClubs");
   })();
 
   if (user === undefined) {
@@ -176,7 +181,7 @@ export default function DiscoverScreen(): React.JSX.Element {
       <GlassPageBackground>
         <SafeAreaView style={styles.safe} edges={["top"]}>
           <View style={styles.center}>
-            <Text style={styles.muted}>Sign in as a customer to discover clubs.</Text>
+            <Text style={styles.muted}>{t("customerApp.discovery.signInRequired")}</Text>
           </View>
         </SafeAreaView>
       </GlassPageBackground>
@@ -186,24 +191,22 @@ export default function DiscoverScreen(): React.JSX.Element {
   return (
     <GlassPageBackground>
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <Text style={styles.title}>Discover</Text>
+        <Text style={styles.title}>{t("customerApp.discovery.title")}</Text>
 
         {/* Fixed header — TextInput must stay mounted (not inside FlatList header). */}
         <View style={styles.fixedHeader}>
           {perm !== "granted" ? (
             <View style={styles.locBanner}>
-              <Text style={styles.locBannerText}>
-                Turn on location to find billiards clubs near you (within 50 km)
-              </Text>
+              <Text style={styles.locBannerText}>{t("customerApp.discovery.locationBanner")}</Text>
               <Pressable style={styles.locBannerBtn} onPress={requestLocation}>
-                <Text style={styles.locBannerBtnText}>Turn On</Text>
+                <Text style={styles.locBannerBtnText}>{t("customerApp.discovery.turnOn")}</Text>
               </Pressable>
             </View>
           ) : coordsError ? (
             <View style={styles.locBanner}>
               <Text style={styles.locBannerText}>{coordsError}</Text>
               <Pressable style={styles.locBannerBtn} onPress={requestLocation}>
-                <Text style={styles.locBannerBtnText}>Retry</Text>
+                <Text style={styles.locBannerBtnText}>{t("customerApp.discovery.retry")}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -216,7 +219,9 @@ export default function DiscoverScreen(): React.JSX.Element {
               <Text
                 style={[styles.nearbyChipText, nearbyOnly && styles.nearbyChipTextOn]}
               >
-                {nearbyOnly ? "Near me only (50 km)" : "Show all clubs"}
+                {nearbyOnly
+                  ? t("customerApp.discovery.nearMeOnly")
+                  : t("customerApp.discovery.showAllClubs")}
               </Text>
             </Pressable>
           ) : null}
@@ -225,7 +230,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             <TextInput
               value={draft}
               onChangeText={setDraft}
-              placeholder="Search for a billiards club..."
+              placeholder={t("customerApp.discovery.searchPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               style={styles.input}
               autoCorrect={false}
@@ -256,6 +261,9 @@ export default function DiscoverScreen(): React.JSX.Element {
             { paddingBottom: bottomPad },
             (queryLoading || list.length === 0) && styles.listContentGrow,
           ]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
           {...keyboardScrollDefaults}
           renderItem={({ item }) => (
             <ClubCard

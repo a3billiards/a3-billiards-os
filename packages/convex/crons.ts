@@ -99,4 +99,13 @@ crons.interval(
   internal.livestream.closeStaleLiveStreams,
 );
 
+// ─── 9. Live stream viewer count refresh ─────────────────────────────────────
+// Runs every 30 seconds while streams are live.
+// Updates currentViewerCount (and peak) so owner, customer, and admin UIs stay current.
+crons.interval(
+  "refreshLiveViewerCounts",
+  { seconds: 30 },
+  internal.livestreamActions.refreshAllLiveViewerCounts,
+);
+
 export default crons;

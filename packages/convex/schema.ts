@@ -120,7 +120,10 @@ const adminAuditAction = v.union(
   v.literal("passcode_reset"),
   v.literal("role_change"),
   v.literal("complaint_dismiss"),
-  v.literal("session_force_end")
+  v.literal("session_force_end"),
+  v.literal("data_export"),
+  v.literal("deletion_cancelled"),
+  v.literal("subscription_ended"),
 );
 
 // Per-recipient delivery status for admin broadcasts
@@ -137,7 +140,23 @@ const snackOrder = v.object({
   priceAtOrder: v.number(),
 });
 
-/** Counter = served at cash desk (bill only). Kitchen = sent to kitchen display. */
+/** Side assignment for versus play on a shared table session. */
+const sessionParticipantSide = v.union(
+  v.literal("sideA"),
+  v.literal("sideB"),
+);
+
+/** Registered player on a table session (primary + teammates). */
+const sessionParticipant = v.object({
+  key: v.string(),
+  customerId: v.optional(v.id("users")),
+  displayName: v.string(),
+  isGuest: v.boolean(),
+  side: v.optional(sessionParticipantSide),
+});
+
+const sessionPlayMode = v.union(v.literal("casual"), v.literal("versus"));
+
 const snackFulfillmentType = v.union(
   v.literal("counter"),
   v.literal("kitchen"),
@@ -190,6 +209,11 @@ const specialRate = v.object({
   endTime: v.string(),               // HH:MM — midnight-crossing supported (endTime < startTime)
   daysOfWeek: v.array(v.number()),   // 0=Sun, 6=Sat
   label: v.string(),
+});
+
+const typeBaseRate = v.object({
+  tableType: v.string(),             // Normalised lowercase at write time
+  baseRatePerMin: v.number(),
 });
 
 const locationObj = v.object({
@@ -346,6 +370,20 @@ export default defineSchema({
   })
     .index("by_createdAt", ["createdAt"])
     .index("by_sentByAdmin_createdAt", ["sentByAdminId", "createdAt"]),
+
+  // ── userInboxNotifications ─────────────────────────────────────────────────
+  // Per-user in-app inbox (admin broadcasts + future notification kinds).
+  userInboxNotifications: defineTable({
+    userId: v.id("users"),
+    adminNotificationId: v.optional(v.id("adminNotifications")),
+    kind: v.union(v.literal("admin_broadcast")),
+    title: v.string(),
+    body: v.string(),
+    isRead: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_user_createdAt", ["userId", "createdAt"])
+    .index("by_user_isRead_createdAt", ["userId", "isRead", "createdAt"]),
 
   // ── passwordResetTokens ────────────────────────────────────────────────────
   // SHA-256 hashed tokens for password and passcode resets.
@@ -585,6 +623,7 @@ export default defineSchema({
     specialRates: v.array(specialRate),           // Time-based rate overrides. Backend rejects overlapping rules.
                                                   // Midnight-crossing supported (endTime < startTime → split into two windows).
                                                   // Each has UUID id for targeted edits/deletes.
+    typeBaseRates: v.optional(v.array(typeBaseRate)), // Per table-type base rate overrides. Falls back to baseRatePerMin.
     isDiscoverable: v.boolean(),                  // Controls customer search visibility. Default: false.
                                                   // Club appears in results when true, regardless of bookingSettings.enabled.
                                                   // Only clubs with subscriptionStatus 'active' or 'grace' shown.
@@ -688,6 +727,14 @@ export default defineSchema({
     isFreeVisit: v.optional(v.boolean()),         // Loyalty free-visit redemption (table charge waived up to cap).
     freeVisitCreditId: v.optional(v.id("loyaltyCredits")),
     freeVisitMaxMinutes: v.optional(v.number()),  // Cap copied at redemption time.
+    /** casual = group play; versus = competitive sides (sideA vs sideB). */
+    playMode: v.optional(sessionPlayMode),
+    /** When true with versus mode, checkout records which side lost and pays. */
+    losersPay: v.optional(v.boolean()),
+    /** All registered players on this table (includes primary when set). */
+    participants: v.optional(v.array(sessionParticipant)),
+    /** Set at checkout when losersPay is enabled. */
+    loserSide: v.optional(sessionParticipantSide),
     createdAt: v.number(),                        // Unix ms when session was created (timer started).
     updatedAt: v.number(),                        // Unix ms of last change (snack added, completed, credit resolved).
   })
@@ -934,9 +981,10 @@ export default defineSchema({
   }).index("by_clubId_userId", ["clubId", "userId"]),
 
   // ── liveStreams ─────────────────────────────────────────────────────────────
-  // Club DB. One active row per club at a time (enforced in startStream).
+  // Club DB. Multiple concurrent streams per club allowed (one per table).
   liveStreams: defineTable({
     clubId: v.id("clubs"),
+    tableId: v.optional(v.id("tables")),
     title: v.optional(v.string()),
     tableLabel: v.optional(v.string()),
     status: liveStreamStatus,
@@ -945,9 +993,16 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
     endedReason: v.optional(liveStreamEndedReason),
     peakViewerCount: v.optional(v.number()),
+    currentViewerCount: v.optional(v.number()),
+    ivsChannelArn: v.optional(v.string()),
+    ivsIngestEndpoint: v.optional(v.string()),
+    ivsStreamKeyArn: v.optional(v.string()),
+    ivsPlaybackUrl: v.optional(v.string()),
   })
     .index("by_clubId_status", ["clubId", "status"])
-    .index("by_status_startedAt", ["status", "startedAt"]),
+    .index("by_status_startedAt", ["status", "startedAt"])
+    .index("by_tableId_status", ["tableId", "status"])
+    .index("by_ivsChannelArn", ["ivsChannelArn"]),
 
   // ── staffRoles ─────────────────────────────────────────────────────────────
   // Named roles for staff operating the owner's shared device.

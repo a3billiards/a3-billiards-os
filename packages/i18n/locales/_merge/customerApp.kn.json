@@ -1,0 +1,7 @@
+{
+  "googleAuth": {
+    "expoGo": "GOOGLE_AUTH_001: Expo Go ನಲ್ಲಿ Google ಸೈನ್-ಇನ್ ಲಭ್ಯವಿಲ್ಲ. ಇಮೇಲ್ ಲಾಗಿನ್ ಬಳಸಿ ಅಥವಾ ಡೆವಲಪ್‌ಮೆಂಟ್ ಬಿಲ್ಡ್ ಚಲಾಯಿಸಿ.",
+    "missingToken": "GOOGLE_AUTH_001: Google ID ಟೋಕನ್ ಕಾಣೆಯಾಗಿದೆ — ಮುಂದುವರೆಯಲು Google ಸೈನ್-ಇನ್ ಪೂರ್ಣಗೊಳಿಸಿ"
+  },
+  "checkInPayload": "a3customer:{{userId}}"
+}

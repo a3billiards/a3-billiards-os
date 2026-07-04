@@ -11,6 +11,7 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { colors, typography, spacing, radius } from "@a3/ui/theme";
+import { useTranslation } from "@a3/i18n";
 import { toClubDate } from "@a3/utils/timezone";
 import {
   countDaysInclusive,
@@ -29,6 +30,13 @@ type Props = {
   tzAbbr?: string;
 };
 
+const RANGE_CHIPS: { k: DateRangeChip; key: string }[] = [
+  { k: "7", key: "sharedUi.financialDateRange.last7Days" },
+  { k: "30", key: "sharedUi.financialDateRange.last30Days" },
+  { k: "this", key: "sharedUi.financialDateRange.thisMonth" },
+  { k: "last", key: "sharedUi.financialDateRange.lastMonth" },
+];
+
 export function FinancialDateRangeBar({
   clubTimezone,
   todayYmd,
@@ -38,6 +46,7 @@ export function FinancialDateRangeBar({
   onDateToChange,
   tzAbbr,
 }: Props): React.JSX.Element {
+  const { t } = useTranslation();
   const [picker, setPicker] = useState<"from" | "to" | null>(null);
 
   const rangeInvalid =
@@ -79,17 +88,19 @@ export function FinancialDateRangeBar({
   return (
     <View>
       {tzAbbr ? (
-        <Text style={styles.tzNote}>Dates in {tzAbbr}</Text>
+        <Text style={styles.tzNote}>
+          {t("sharedUi.financialDateRange.datesInTz", { tzAbbr })}
+        </Text>
       ) : null}
 
       <View style={styles.dateRow}>
         <Pressable style={styles.dateBtn} onPress={() => setPicker("from")}>
-          <Text style={styles.dateLbl}>From</Text>
-          <Text style={styles.dateVal}>{dateFrom || "—"}</Text>
+          <Text style={styles.dateLbl}>{t("sharedUi.financialDateRange.from")}</Text>
+          <Text style={styles.dateVal}>{dateFrom || t("common.emDash")}</Text>
         </Pressable>
         <Pressable style={styles.dateBtn} onPress={() => setPicker("to")}>
-          <Text style={styles.dateLbl}>To</Text>
-          <Text style={styles.dateVal}>{dateTo || "—"}</Text>
+          <Text style={styles.dateLbl}>{t("sharedUi.financialDateRange.to")}</Text>
+          <Text style={styles.dateVal}>{dateTo || t("common.emDash")}</Text>
         </Pressable>
       </View>
 
@@ -108,10 +119,14 @@ export function FinancialDateRangeBar({
             <View style={styles.iosPickerSheet}>
               <View style={styles.iosPickerHeader}>
                 <Text style={styles.iosPickerTitle}>
-                  {picker === "from" ? "From date" : "To date"}
+                  {picker === "from"
+                    ? t("sharedUi.financialDateRange.fromDate")
+                    : t("sharedUi.financialDateRange.toDate")}
                 </Text>
                 <Pressable onPress={() => setPicker(null)} hitSlop={8}>
-                  <Text style={styles.iosPickDoneText}>Done</Text>
+                  <Text style={styles.iosPickDoneText}>
+                    {t("sharedUi.financialDateRange.done")}
+                  </Text>
                 </Pressable>
               </View>
               <DateTimePicker
@@ -127,34 +142,19 @@ export function FinancialDateRangeBar({
       ) : null}
 
       <View style={styles.chips}>
-        {(
-          [
-            { k: "7" as const, label: "Last 7 days" },
-            { k: "30" as const, label: "Last 30 days" },
-            { k: "this" as const, label: "This month" },
-            { k: "last" as const, label: "Last month" },
-          ] as const
-        ).map((c) => (
-          <Pressable
-            key={c.k}
-            onPress={() => onPickChip(c.k)}
-            style={styles.chip}
-          >
-            <Text style={styles.chipText}>{c.label}</Text>
+        {RANGE_CHIPS.map((c) => (
+          <Pressable key={c.k} onPress={() => onPickChip(c.k)} style={styles.chip}>
+            <Text style={styles.chipText}>{t(c.key)}</Text>
           </Pressable>
         ))}
       </View>
 
       {rangeInvalid ? (
-        <Text style={styles.errText}>
-          End date cannot be before start date.
-        </Text>
+        <Text style={styles.errText}>{t("sharedUi.financialDateRange.endBeforeStart")}</Text>
       ) : null}
 
       {largeRange ? (
-        <Text style={styles.warnLarge}>
-          Large date ranges may take a moment to load.
-        </Text>
+        <Text style={styles.warnLarge}>{t("sharedUi.financialDateRange.largeRangeWarning")}</Text>
       ) : null}
     </View>
   );
@@ -197,8 +197,8 @@ const styles = StyleSheet.create({
   },
   iosPickerSheet: {
     backgroundColor: colors.bg.secondary,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
+    borderTopStartRadius: radius.lg,
+    borderTopEndRadius: radius.lg,
     paddingBottom: spacing[6],
   },
   iosPickerHeader: {

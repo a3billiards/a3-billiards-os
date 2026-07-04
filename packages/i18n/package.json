@@ -2,16 +2,19 @@
   "name": "@a3/i18n",
   "version": "1.0.0",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:locales": "tsx scripts/build-json-locales.ts"
   },
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./index.ts",
     "./provider": "./src/I18nProvider.tsx",
     "./picker": "./src/LanguagePicker.tsx"
   },
   "dependencies": {
     "@a3/ui": "workspace:*",
     "@expo/vector-icons": "^15.0.3",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "expo-localization": "~55.0.8",
     "i18next": "^25.5.2",
     "react-i18next": "^15.7.3"
   },
@@ -19,14 +22,13 @@
     "expo-localization": "*",
     "expo-secure-store": "*",
     "react": "*",
-    "react-native": "*",
-    "convex": "*",
-    "@a3/convex": "workspace:*"
+    "react-native": "*"
   },
   "devDependencies": {
     "@types/react": "~19.2.10",
     "react": "19.2.0",
     "react-native": "0.83.4",
+    "tsx": "^4.20.5",
     "typescript": "^5.4.0"
   }
 }

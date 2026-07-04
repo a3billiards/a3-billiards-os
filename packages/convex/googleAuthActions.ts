@@ -23,7 +23,7 @@ function expandGoogleClientIds(raw: string | undefined): string[] {
 function googleAudiences(): string[] {
   const ids = [
     ...expandGoogleClientIds(process.env.GOOGLE_IOS_CLIENT_ID),
-    process.env.GOOGLE_ANDROID_CLIENT_ID,
+    ...expandGoogleClientIds(process.env.GOOGLE_ANDROID_CLIENT_ID),
     process.env.GOOGLE_WEB_CLIENT_ID,
   ].filter((x): x is string => typeof x === "string" && x.length > 0);
   return ids;
@@ -49,7 +49,13 @@ async function verifyIdTokenClaims(idToken: string): Promise<{
   let ticket;
   try {
     ticket = await client.verifyIdToken({ idToken, audience });
-  } catch {
+  } catch (err) {
+    console.error(
+      "[Google Auth] Token verification failed. Configured audiences:",
+      audience.map((a) => `${a.slice(0, 8)}...`).join(", "),
+      "Error:",
+      err instanceof Error ? err.message : String(err),
+    );
     throwGoogleAuth();
   }
 

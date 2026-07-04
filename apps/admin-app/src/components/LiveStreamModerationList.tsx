@@ -14,6 +14,7 @@ import {
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 import { MaterialIcons } from "@expo/vector-icons";
 
 export type AdminLiveStreamRow = {
@@ -32,11 +33,13 @@ export type AdminLiveStreamRow = {
 type Props = {
   streams: AdminLiveStreamRow[] | undefined;
   onForceEnd: (args: { liveStreamId: Id<"liveStreams">; reason: string }) => Promise<void>;
+  onWatch: (stream: AdminLiveStreamRow) => void;
   bottomInset: number;
+  refreshControl?: React.ReactElement;
 };
 
 function formatStartedAt(ms: number): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(getCurrentLanguage(), {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -47,8 +50,11 @@ function formatStartedAt(ms: number): string {
 export function LiveStreamModerationList({
   streams,
   onForceEnd,
+  onWatch,
   bottomInset,
+  refreshControl,
 }: Props): React.JSX.Element {
+  const { t } = useTranslation();
   const [target, setTarget] = useState<AdminLiveStreamRow | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,7 +63,10 @@ export function LiveStreamModerationList({
     if (!target) return;
     const trimmed = reason.trim();
     if (!trimmed) {
-      Alert.alert("Reason required", "Enter a short reason before force-ending.");
+      Alert.alert(
+        t("adminApp.moderation.reasonRequiredAlert"),
+        t("adminApp.moderation.reasonRequiredBody"),
+      );
       return;
     }
     setBusy(true);
@@ -66,7 +75,7 @@ export function LiveStreamModerationList({
       setTarget(null);
       setReason("");
     } catch (e) {
-      Alert.alert("Force-end failed", parseConvexError(e as Error).message);
+      Alert.alert(t("adminApp.moderation.forceEndFailed"), parseConvexError(e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -84,8 +93,8 @@ export function LiveStreamModerationList({
     return (
       <View style={[styles.empty, { paddingBottom: bottomInset }]}>
         <MaterialIcons name="videocam-off" size={48} color={colors.text.tertiary} />
-        <Text style={styles.emptyTitle}>No active streams</Text>
-        <Text style={styles.emptyMeta}>All clubs are offline right now.</Text>
+        <Text style={styles.emptyTitle}>{t("adminApp.moderation.noActiveStreams")}</Text>
+        <Text style={styles.emptyMeta}>{t("adminApp.moderation.allClubsOffline")}</Text>
       </View>
     );
   }
@@ -96,6 +105,7 @@ export function LiveStreamModerationList({
         data={streams}
         keyExtractor={(item) => item.liveStreamId}
         contentContainerStyle={[styles.list, { paddingBottom: bottomInset }]}
+        refreshControl={refreshControl}
         renderItem={({ item }) => {
           const meta = [item.title, item.tableLabel].filter(Boolean).join(" · ");
           return (
@@ -113,7 +123,7 @@ export function LiveStreamModerationList({
                     {item.clubName}
                   </Text>
                   <View style={styles.livePill}>
-                    <Text style={styles.livePillText}>LIVE</Text>
+                    <Text style={styles.livePillText}>{t("adminApp.moderation.live")}</Text>
                   </View>
                 </View>
                 {meta ? (
@@ -122,21 +132,34 @@ export function LiveStreamModerationList({
                   </Text>
                 ) : null}
                 <Text style={styles.meta}>
-                  Started by {item.startedByName} · {formatStartedAt(item.startedAt)}
+                  {t("adminApp.moderation.startedBy", {
+                    name: item.startedByName,
+                    time: formatStartedAt(item.startedAt),
+                  })}
                 </Text>
                 <Text style={styles.meta}>
-                  Viewers (best effort): {item.viewerCount}
+                  {t("adminApp.moderation.viewers", { count: item.viewerCount })}
                 </Text>
-                <Pressable
-                  style={styles.forceBtn}
-                  onPress={() => {
-                    setTarget(item);
-                    setReason("");
-                  }}
-                >
-                  <MaterialIcons name="block" size={16} color="#fff" />
-                  <Text style={styles.forceBtnText}>Force end</Text>
-                </Pressable>
+                <View style={styles.actionRow}>
+                  <Pressable
+                    style={styles.watchBtn}
+                    onPress={() => onWatch(item)}
+                    accessibilityLabel={t("adminApp.moderation.watchLiveAccessibility")}
+                  >
+                    <MaterialIcons name="play-circle-outline" size={16} color="#fff" />
+                    <Text style={styles.watchBtnText}>{t("adminApp.moderation.watchLive")}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.forceBtn}
+                    onPress={() => {
+                      setTarget(item);
+                      setReason("");
+                    }}
+                  >
+                    <MaterialIcons name="block" size={16} color="#fff" />
+                    <Text style={styles.forceBtnText}>{t("adminApp.moderation.forceEnd")}</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
           );
@@ -146,14 +169,12 @@ export function LiveStreamModerationList({
       <Modal visible={target !== null} transparent animationType="fade">
         <View style={styles.modalScrim}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Force-end stream?</Text>
-            <Text style={styles.modalMeta}>
-              This immediately stops the broadcast at AWS IVS and notifies the club owner.
-            </Text>
-            <Text style={styles.label}>Reason (required)</Text>
+            <Text style={styles.modalTitle}>{t("adminApp.moderation.forceEndTitle")}</Text>
+            <Text style={styles.modalMeta}>{t("adminApp.moderation.forceEndBody")}</Text>
+            <Text style={styles.label}>{t("adminApp.moderation.reasonRequired")}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Policy violation, inappropriate content…"
+              placeholder={t("adminApp.moderation.reasonPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               value={reason}
               onChangeText={setReason}
@@ -170,14 +191,16 @@ export function LiveStreamModerationList({
                   setReason("");
                 }}
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>{t("adminApp.moderation.cancel")}</Text>
               </Pressable>
               <Pressable
                 style={[styles.confirmBtn, busy && styles.btnDisabled]}
                 disabled={busy}
                 onPress={() => void submitForceEnd()}
               >
-                <Text style={styles.confirmBtnText}>{busy ? "Ending…" : "Force end"}</Text>
+                <Text style={styles.confirmBtnText}>
+                  {busy ? t("adminApp.moderation.ending") : t("adminApp.moderation.forceEnd")}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -226,12 +249,27 @@ const styles = StyleSheet.create({
   },
   livePillText: { fontSize: 10, fontWeight: "700", color: "#fff" },
   meta: { ...typography.bodySmall, color: colors.text.secondary },
-  forceBtn: {
+  actionRow: {
     marginTop: spacing[2],
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[2],
+  },
+  watchBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[1],
-    alignSelf: "flex-start",
+    backgroundColor: colors.status.info,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    minHeight: layout.touchTarget - 8,
+  },
+  watchBtnText: { ...typography.button, color: "#fff", fontSize: 13 },
+  forceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
     backgroundColor: colors.status.error,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],

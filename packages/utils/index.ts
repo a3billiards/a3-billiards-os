@@ -5,3 +5,6 @@ export * from './availability';
 export * from './timezone';
 export * from './analytics';
 export * from './bookingRate';
+export * from './phone';
+export * from './passwordPolicy';
+export * from './clubDisplay';

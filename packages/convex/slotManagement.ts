@@ -48,7 +48,7 @@ export const getSlotDashboard = query({
     const clubId = owner.clubId;
     const club = await ctx.db.get(clubId);
     if (!club) {
-      throw new Error("DATA_003: Club not found");
+      return null;
     }
 
     const now = Date.now();
@@ -103,6 +103,9 @@ export const getSlotDashboard = query({
       startTime: number;
       isGuest: boolean;
       customerName: string;
+      playerCount: number;
+      playMode: "casual" | "versus";
+      losersPay: boolean;
     };
 
     const activeSessionByTableId: Record<string, ActiveSessionMeta> = {};
@@ -110,8 +113,20 @@ export const getSlotDashboard = query({
       if (t.currentSessionId === undefined) continue;
       const s = await ctx.db.get(t.currentSessionId);
       if (!s || s.status !== "active") continue;
+      const participantList = s.participants ?? [];
+      const playerCount =
+        participantList.length > 0
+          ? participantList.length
+          : s.isGuest
+            ? 1
+            : 1;
       let customerName: string;
-      if (s.isGuest) {
+      if (participantList.length > 1) {
+        const primary =
+          participantList.find((p) => p.customerId === s.customerId) ??
+          participantList[0];
+        customerName = `${primary?.displayName ?? "Group"} +${participantList.length - 1}`;
+      } else if (s.isGuest) {
         customerName = (s.guestName ?? "").trim() || "Walk-in";
       } else if (s.customerId) {
         const u = await ctx.db.get(s.customerId);
@@ -124,6 +139,9 @@ export const getSlotDashboard = query({
         startTime: s.startTime,
         isGuest: s.isGuest,
         customerName,
+        playerCount,
+        playMode: s.playMode ?? "casual",
+        losersPay: s.losersPay === true,
       };
     }
 

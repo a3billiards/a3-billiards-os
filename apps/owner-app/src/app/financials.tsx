@@ -9,6 +9,7 @@ import {
   Modal,
   Dimensions,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -18,6 +19,8 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius } from "@a3/ui/theme";
 import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 import {
   addCalendarDaysYmd,
   timeZoneAbbreviation,
@@ -32,6 +35,8 @@ import { FinancialDateRangeBar } from "../components/FinancialDateRangeBar";
 import { countDaysInclusive } from "../lib/financialDateRange";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ownerTabBarTotalInset } from "../theme/ownerShell";
+
+const WEEK_DAY_SHORT_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 type SortKey = "date" | "amount";
 
@@ -67,33 +72,37 @@ function formatBarAxisLabel(
   dayIndex: number,
   totalDays: number,
 ): string {
+  const locale = getCurrentLanguage();
   const d = new Date(ymd + "T12:00:00Z");
   if (totalDays <= 14) {
-    return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+    return d.toLocaleDateString(locale, { month: "short", day: "numeric" });
   }
   if (totalDays <= 30) {
     if (dayIndex % 3 !== 0) return "";
-    return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+    return d.toLocaleDateString(locale, { month: "short", day: "numeric" });
   }
   if (dayIndex % 7 !== 0) return "";
-  return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+  return d.toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
 
 function formatEndDateLabel(endTime: number, tz: string): string {
+  const locale = getCurrentLanguage();
   const timeZone = normalizeIanaTimeZone(tz);
   try {
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(locale, {
       timeZone,
       day: "numeric",
       month: "short",
       year: "numeric",
     }).format(new Date(endTime));
   } catch {
-    return new Date(endTime).toLocaleDateString("en-GB");
+    return new Date(endTime).toLocaleDateString(locale);
   }
 }
 
 function FinancialsContent(): React.JSX.Element {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
@@ -193,13 +202,19 @@ function FinancialsContent(): React.JSX.Element {
 
   const onResolve = useCallback(
     async (row: CreditRow, method: "cash" | "upi" | "card") => {
+      const methodLabel =
+        method === "cash"
+          ? t("ownerApp.financials.cash")
+          : method === "upi"
+            ? t("ownerApp.financials.upi")
+            : t("ownerApp.financials.card");
       Alert.alert(
-        "Confirm",
-        `Mark ${row.customerName}'s ${formatMoney(row.billTotal, row.currency)} credit as paid by ${method}?`,
+        t("ownerApp.financials.confirm"),
+        `${t("ownerApp.financials.confirmPayment", { name: row.customerName })} ${formatMoney(row.billTotal, row.currency)} (${methodLabel})`,
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Confirm",
+            text: t("ownerApp.financials.confirm"),
             onPress: async () => {
               try {
                 await resolveCredit({
@@ -208,19 +223,13 @@ function FinancialsContent(): React.JSX.Element {
                   roleId: queryRoleId,
                 });
                 setPaySheet(null);
-                Alert.alert(
-                  "Done",
-                  `Credit resolved. ${row.customerName}'s balance cleared.`,
-                );
+                Alert.alert(t("common.done"), row.customerName);
               } catch (e) {
                 const msg = parseConvexError(e as Error).message;
                 if (msg.toLowerCase().includes("permission")) {
-                  Alert.alert(
-                    "Permission",
-                    "Your current role cannot resolve credits.",
-                  );
+                  Alert.alert(t("ownerApp.financials.error"), t("ownerApp.financials.permissionDenied"));
                 } else {
-                  Alert.alert("Error", msg);
+                  Alert.alert(t("ownerApp.financials.error"), msg);
                 }
               }
             },
@@ -228,7 +237,7 @@ function FinancialsContent(): React.JSX.Element {
         ],
       );
     },
-    [resolveCredit, queryRoleId],
+    [resolveCredit, queryRoleId, t],
   );
 
   if (dashboard === undefined) {
@@ -248,7 +257,7 @@ function FinancialsContent(): React.JSX.Element {
   }
 
   if (roleId !== undefined && !canAccessTab("financials")) {
-    return <TabAccessDenied tabLabel="Financials" />;
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.financials")} />;
   }
 
   if (access === undefined) {
@@ -267,13 +276,11 @@ function FinancialsContent(): React.JSX.Element {
           style={styles.backRow}
         >
           <MaterialIcons name="arrow-back" size={22} color={colors.text.primary} />
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.backText}>{t("ownerApp.financials.back")}</Text>
         </Pressable>
         <View style={styles.deniedBox}>
           <MaterialIcons name="lock" size={48} color={colors.text.secondary} />
-          <Text style={styles.deniedTitle}>
-            {"You don't have permission to view financial data."}
-          </Text>
+          <Text style={styles.deniedTitle}>{t("ownerApp.financials.noPermission")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -284,13 +291,16 @@ function FinancialsContent(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Financials</Text>
-        <Text style={styles.sub}>Revenue and outstanding credits</Text>
+        <Text style={styles.title}>{t("ownerApp.financials.title")}</Text>
+        <Text style={styles.sub}>{t("ownerApp.financials.subtitle")}</Text>
       </View>
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <FinancialDateRangeBar
           clubTimezone={clubTimezone}
@@ -306,21 +316,19 @@ function FinancialsContent(): React.JSX.Element {
           style={styles.gstLink}
           onPress={() => router.push("/(tabs)/gst-report")}
           accessibilityRole="button"
-          accessibilityLabel="Open GST Report"
+          accessibilityLabel={t("ownerApp.financials.gstReport")}
         >
           <View style={styles.gstLinkIcon}>
             <MaterialIcons name="receipt-long" size={22} color={colors.accent.green} />
           </View>
           <View style={styles.gstLinkText}>
-            <Text style={styles.gstLinkTitle}>GST Report</Text>
-            <Text style={styles.gstLinkSub}>
-              Estimated GST breakdown for your records
-            </Text>
+            <Text style={styles.gstLinkTitle}>{t("ownerApp.financials.gstReport")}</Text>
+            <Text style={styles.gstLinkSub}>{t("ownerApp.financials.gstReportSub")}</Text>
           </View>
           <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
         </Pressable>
 
-        <Text style={styles.sectionTitle}>Revenue</Text>
+        <Text style={styles.sectionTitle}>{t("ownerApp.financials.revenue")}</Text>
         {revenue === undefined ? (
           <View style={styles.skelChart}>
             {[40, 70, 35, 55, 80, 45, 60].map((h, i) => (
@@ -337,7 +345,7 @@ function FinancialsContent(): React.JSX.Element {
                 />
               ) : null}
               <SafeBarChart
-                emptyMessage="No revenue recorded for this period."
+                emptyMessage={t("ownerApp.financials.noRevenue")}
                 parentWidth={chartWidth}
                 data={barData}
                 maxValue={maxBar}
@@ -369,7 +377,7 @@ function FinancialsContent(): React.JSX.Element {
                     <View style={styles.tooltip}>
                       <Text style={styles.tooltipTxt}>
                         {src.date}: {formatMoney(src.revenue, revenue.currency)} •{" "}
-                        {src.sessionCount} sessions
+                        {t("ownerApp.financials.sessions", { count: src.sessionCount })}
                       </Text>
                     </View>
                   );
@@ -383,15 +391,19 @@ function FinancialsContent(): React.JSX.Element {
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.totalMain}>
-                Total: {formatMoney(revenue.totalRevenue, revenue.currency)}
+                {t("ownerApp.financials.total", {
+                  amount: formatMoney(revenue.totalRevenue, revenue.currency),
+                })}
               </Text>
-              <Text style={styles.totalSub}>{revenue.totalSessions} sessions</Text>
+              <Text style={styles.totalSub}>
+                {t("ownerApp.financials.sessions", { count: revenue.totalSessions })}
+              </Text>
             </View>
           </>
         )}
 
         <Text style={[styles.sectionTitle, { marginTop: spacing[8] }]}>
-          Payment methods
+          {t("ownerApp.financials.paymentMethods")}
         </Text>
         {breakdown === undefined ? (
           <View style={styles.grid4}>
@@ -413,39 +425,36 @@ function FinancialsContent(): React.JSX.Element {
                         : { icon: "sync" as const, color: colors.status.disabled };
                 const label =
                   b.method === "cash"
-                    ? "Cash"
+                    ? t("ownerApp.financials.cash")
                     : b.method === "upi"
-                      ? "UPI"
+                      ? t("ownerApp.financials.upi")
                       : b.method === "card"
-                        ? "Card"
-                        : "Credit (resolved)";
+                        ? t("ownerApp.financials.card")
+                        : t("ownerApp.financials.creditResolved");
                 return (
                   <View key={b.method} style={styles.methodCard}>
                     <MaterialIcons name={cfg.icon} size={22} color={cfg.color} />
                     <Text style={styles.methodLbl}>{label}</Text>
                     <Text style={styles.methodAmt}>
                       {b.method === "credit"
-                        ? `${b.sessionCount} session${b.sessionCount === 1 ? "" : "s"}`
+                        ? t("ownerApp.financials.session_one", { count: b.sessionCount })
                         : formatMoney(b.totalAmount, displayCurrency)}
                     </Text>
                     <Text style={styles.methodSub}>
                       {b.method === "credit"
-                        ? "Allocated above"
-                        : `${b.sessionCount} session${b.sessionCount === 1 ? "" : "s"}`}
+                        ? t("ownerApp.financials.allocatedAbove")
+                        : t("ownerApp.financials.sessions", { count: b.sessionCount })}
                     </Text>
                   </View>
                 );
               })}
             </View>
-            <Text style={styles.breakdownNote}>
-              Credit totals show resolved payments only. Unresolved credits appear
-              below.
-            </Text>
+            <Text style={styles.breakdownNote}>{t("ownerApp.financials.creditNote")}</Text>
           </>
         )}
 
         <Text style={[styles.sectionTitle, { marginTop: spacing[8] }]}>
-          Best-performing tables
+          {t("ownerApp.financials.bestTables")}
         </Text>
         {bestTables === undefined ? (
           <View style={{ gap: spacing[2] }}>
@@ -460,9 +469,7 @@ function FinancialsContent(): React.JSX.Element {
               size={32}
               color={colors.text.secondary}
             />
-            <Text style={styles.emptyAnalyticsTxt}>
-              No completed sessions in this range yet.
-            </Text>
+            <Text style={styles.emptyAnalyticsTxt}>{t("ownerApp.financials.noData")}</Text>
           </View>
         ) : (
           <View style={{ gap: spacing[2], marginBottom: spacing[6] }}>
@@ -492,8 +499,7 @@ function FinancialsContent(): React.JSX.Element {
                     />
                   </View>
                   <Text style={styles.tableSub}>
-                    {row.sessionCount} session
-                    {row.sessionCount === 1 ? "" : "s"}
+                    {t("ownerApp.financials.sessions", { count: row.sessionCount })}
                   </Text>
                 </View>
               );
@@ -501,7 +507,7 @@ function FinancialsContent(): React.JSX.Element {
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Snack sales</Text>
+        <Text style={styles.sectionTitle}>{t("ownerApp.financials.snackRevenue")}</Text>
         {snackSales === undefined ? (
           <View style={{ gap: spacing[2] }}>
             {[0, 1, 2].map((i) => (
@@ -515,16 +521,15 @@ function FinancialsContent(): React.JSX.Element {
               size={32}
               color={colors.text.secondary}
             />
-            <Text style={styles.emptyAnalyticsTxt}>
-              No snacks sold in this range.
-            </Text>
+            <Text style={styles.emptyAnalyticsTxt}>{t("ownerApp.financials.noData")}</Text>
           </View>
         ) : (
           <View style={{ marginBottom: spacing[6] }}>
             <Text style={styles.snackTotalLine}>
-              Total: {formatMoney(snackSales.totalRevenue, snackSales.currency)}{" "}
-              · {snackSales.totalUnits} item
-              {snackSales.totalUnits === 1 ? "" : "s"} sold
+              {t("ownerApp.financials.total", {
+                amount: formatMoney(snackSales.totalRevenue, snackSales.currency),
+              })}{" "}
+              · {t("ownerApp.financials.sessions", { count: snackSales.totalUnits })}
             </Text>
             <View style={{ gap: spacing[2], marginTop: spacing[2] }}>
               {snackSales.snacks.map((row) => {
@@ -562,7 +567,7 @@ function FinancialsContent(): React.JSX.Element {
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Peak hours</Text>
+        <Text style={styles.sectionTitle}>{t("ownerApp.financials.peakHours")}</Text>
         {heatmap === undefined ? (
           <View style={[styles.heatmapSkel]} />
         ) : heatmap.totalSessions === 0 ? (
@@ -572,9 +577,7 @@ function FinancialsContent(): React.JSX.Element {
               size={32}
               color={colors.text.secondary}
             />
-            <Text style={styles.emptyAnalyticsTxt}>
-              No completed sessions to chart.
-            </Text>
+            <Text style={styles.emptyAnalyticsTxt}>{t("ownerApp.financials.noData")}</Text>
           </View>
         ) : (
           <View style={{ marginBottom: spacing[6] }}>
@@ -596,8 +599,8 @@ function FinancialsContent(): React.JSX.Element {
                 </Text>
               ))}
             </View>
-            {(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const).map(
-              (label, dow) => {
+            {WEEK_DAY_SHORT_KEYS.map((dayKey, dow) => {
+                const label = t(`common.weekDaysShort.${dayKey}`);
                 const dayCells = heatmap.cells.filter(
                   (c) => c.dayOfWeek === dow,
                 );
@@ -627,29 +630,24 @@ function FinancialsContent(): React.JSX.Element {
                     </View>
                   </View>
                 );
-              },
-            )}
+              })}
             <Text style={styles.heatmapNote}>
               {heatmap.peak
-                ? `Busiest: ${
-                    [
-                      "Sunday",
-                      "Monday",
-                      "Tuesday",
-                      "Wednesday",
-                      "Thursday",
-                      "Friday",
-                      "Saturday",
-                    ][heatmap.peak.dayOfWeek] ?? ""
-                  } at ${String(heatmap.peak.hour).padStart(2, "0")}:00 (${heatmap.peak.sessions} session${heatmap.peak.sessions === 1 ? "" : "s"})`
-                : "No data"}
+                ? t("ownerApp.financials.busiest", {
+                    day: t(
+                      `common.weekDaysShort.${WEEK_DAY_SHORT_KEYS[heatmap.peak.dayOfWeek] ?? "sun"}`,
+                    ),
+                    hour: heatmap.peak.hour,
+                    count: heatmap.peak.sessions,
+                  })
+                : t("ownerApp.financials.noData")}
             </Text>
           </View>
         )}
 
         <View style={styles.creditHeader}>
           <View style={styles.creditTitleRow}>
-            <Text style={styles.sectionTitle}>Outstanding Credits</Text>
+            <Text style={styles.sectionTitle}>{t("ownerApp.financials.outstandingCredits")}</Text>
             {credits && credits.count > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeTxt}>{credits.count}</Text>
@@ -658,24 +656,26 @@ function FinancialsContent(): React.JSX.Element {
           </View>
           {credits ? (
             <Text style={styles.creditTotal}>
-              Total: {formatMoney(credits.totalOutstanding, displayCurrency)}
+              {t("ownerApp.financials.total", {
+                amount: formatMoney(credits.totalOutstanding, displayCurrency),
+              })}
             </Text>
           ) : null}
         </View>
 
         <View style={styles.sortRow}>
-          <Text style={styles.sortLbl}>Sort by</Text>
+          <Text style={styles.sortLbl}>{t("ownerApp.financials.sortBy")}</Text>
           <Pressable
             onPress={() => setSortBy("date")}
             style={[styles.sortChip, sortBy === "date" && styles.sortChipOn]}
           >
-            <Text style={styles.sortChipTxt}>Date</Text>
+            <Text style={styles.sortChipTxt}>{t("ownerApp.financials.sortByDate")}</Text>
           </Pressable>
           <Pressable
             onPress={() => setSortBy("amount")}
             style={[styles.sortChip, sortBy === "amount" && styles.sortChipOn]}
           >
-            <Text style={styles.sortChipTxt}>Amount</Text>
+            <Text style={styles.sortChipTxt}>{t("ownerApp.financials.sortByAmount")}</Text>
           </Pressable>
         </View>
 
@@ -688,9 +688,7 @@ function FinancialsContent(): React.JSX.Element {
         ) : credits.count === 0 ? (
           <View style={styles.emptyCredit}>
             <MaterialIcons name="check-circle" size={40} color={colors.accent.green} />
-            <Text style={styles.emptyCreditTxt}>
-              No outstanding credits. All sessions have been settled.
-            </Text>
+            <Text style={styles.emptyCreditTxt}>{t("ownerApp.financials.noCredits")}</Text>
           </View>
         ) : (
           (credits.credits as CreditRow[]).map((row) => {
@@ -711,7 +709,7 @@ function FinancialsContent(): React.JSX.Element {
                       <Text style={styles.custName}>
                         {row.customerName}
                         {row.isGuest ? (
-                          <Text style={styles.guestBadge}> (Guest)</Text>
+                          <Text style={styles.guestBadge}> ({t("ownerApp.financials.guest")})</Text>
                         ) : null}
                       </Text>
                       <Text style={styles.meta}>{row.tableLabel}</Text>
@@ -726,30 +724,34 @@ function FinancialsContent(): React.JSX.Element {
                   {open ? (
                     <View style={styles.breakdown}>
                       <Text style={styles.bdLine}>
-                        Table time: {row.billableMinutes ?? "—"} min @ {row.ratePerMin}
+                        {t("ownerApp.financials.minutes", { count: row.billableMinutes ?? 0 })} @ {row.ratePerMin}
                         /min = {tableSub.toFixed(2)}
                       </Text>
                       {row.discount != null && row.discount > 0 ? (
-                        <Text style={styles.bdLine}>Discount: −{row.discount}%</Text>
+                        <Text style={styles.bdLine}>
+                          {t("ownerApp.financials.discount")}: −{row.discount}%
+                        </Text>
                       ) : null}
                       {row.snackOrders.map((s, si) => (
                         <Text key={`${row.sessionId}-sn-${si}`} style={styles.bdLine}>
                           {s.name} × {s.qty} = {(s.priceAtOrder * s.qty).toFixed(2)}
                         </Text>
                       ))}
-                      <Text style={styles.bdTotal}>Total: {row.billTotal.toFixed(2)}</Text>
+                      <Text style={styles.bdTotal}>
+                        {t("ownerApp.financials.total", { amount: row.billTotal.toFixed(2) })}
+                      </Text>
                     </View>
                   ) : null}
                 </Pressable>
                 <View style={styles.markRow}>
                   {canResolve ? (
                     <Pressable style={styles.markBtn} onPress={() => setPaySheet(row)}>
-                      <Text style={styles.markBtnTxt}>Mark as Paid</Text>
+                      <Text style={styles.markBtnTxt}>{t("ownerApp.financials.markPaid")}</Text>
                     </Pressable>
                   ) : (
                     <View style={styles.lockRow}>
                       <MaterialIcons name="lock" size={18} color={colors.text.secondary} />
-                      <Text style={styles.lockTxt}>Owner only</Text>
+                      <Text style={styles.lockTxt}>{t("ownerApp.complaints.ownerOnly")}</Text>
                     </View>
                   )}
                 </View>
@@ -762,7 +764,7 @@ function FinancialsContent(): React.JSX.Element {
       <Modal visible={paySheet !== null} transparent animationType="slide">
         <Pressable style={styles.sheetScrim} onPress={() => setPaySheet(null)}>
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation?.()}>
-            <Text style={styles.sheetTitle}>How was this credit paid?</Text>
+            <Text style={styles.sheetTitle}>{t("ownerApp.financials.creditPaymentTitle")}</Text>
             {(["cash", "upi", "card"] as const).map((m) => (
               <Pressable
                 key={m}
@@ -777,12 +779,16 @@ function FinancialsContent(): React.JSX.Element {
                   color={colors.text.primary}
                 />
                 <Text style={styles.methodPickTxt}>
-                  {m === "cash" ? "Cash" : m === "upi" ? "UPI" : "Card"}
+                  {m === "cash"
+                    ? t("ownerApp.financials.cash")
+                    : m === "upi"
+                      ? t("ownerApp.financials.upi")
+                      : t("ownerApp.financials.card")}
                 </Text>
               </Pressable>
             ))}
             <Pressable onPress={() => setPaySheet(null)} style={styles.sheetCancel}>
-              <Text style={styles.sheetCancelTxt}>Cancel</Text>
+              <Text style={styles.sheetCancelTxt}>{t("common.cancel")}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -792,8 +798,9 @@ function FinancialsContent(): React.JSX.Element {
 }
 
 export default function FinancialsScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   return (
-    <TabErrorBoundary tabName="Financials">
+    <TabErrorBoundary tabName={t("common.tabs.owner.financials")}>
       <FinancialsContent />
     </TabErrorBoundary>
   );

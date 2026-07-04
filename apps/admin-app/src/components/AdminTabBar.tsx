@@ -17,12 +17,12 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
 };
 
 const TAB_LABEL_KEYS: Record<string, string> = {
-  index: "tabs.admin.index",
-  users: "tabs.admin.users",
-  complaints: "tabs.admin.complaints",
-  "live-moderation": "tabs.admin.live-moderation",
-  audit: "tabs.admin.audit",
-  notifications: "tabs.admin.notifications",
+  index: "common.tabs.admin.index",
+  users: "common.tabs.admin.users",
+  complaints: "common.tabs.admin.complaints",
+  "live-moderation": "common.tabs.admin.live-moderation",
+  audit: "common.tabs.admin.audit",
+  notifications: "common.tabs.admin.notifications",
 };
 
 export default function AdminTabBar({
@@ -47,11 +47,9 @@ export default function AdminTabBar({
 
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label =
-            (options.title as string | undefined) ??
-            (TAB_LABEL_KEYS[route.name]
-              ? t(TAB_LABEL_KEYS[route.name])
-              : route.name);
+          const label = TAB_LABEL_KEYS[route.name]
+            ? t(TAB_LABEL_KEYS[route.name])
+            : ((options.title as string | undefined) ?? route.name);
           const isFocused = state.index === index;
           const iconName = TAB_ICONS[route.name] ?? "circle";
 

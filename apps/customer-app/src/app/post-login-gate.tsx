@@ -1,25 +1,35 @@
 import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { GlassPageBackground } from "@a3/ui/components";
-import { glass, typography, spacing } from "@a3/ui/theme";
+import { glass } from "@a3/ui/theme";
+import { useAuthUserSettled } from "@a3/ui/hooks";
 import { usePushRegistration } from "../lib/usePushRegistration";
-
-const FROZEN_MESSAGE = "Your account is frozen.";
 
 export default function PostLoginGate() {
   const router = useRouter();
-  const { signOut } = useAuthActions();
-  const user = useQuery(api.users.getCurrentUser);
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const user = useQuery(
+    api.users.getCurrentUser,
+    isAuthenticated ? {} : "skip",
+  );
+  const nullUserExpired = useAuthUserSettled(isAuthenticated, user);
   usePushRegistration();
 
   useEffect(() => {
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      router.replace("/login");
+      return;
+    }
+
     if (user === undefined) return;
 
     if (user === null) {
+      if (!nullUserExpired) return;
       router.replace("/login");
       return;
     }
@@ -30,11 +40,17 @@ export default function PostLoginGate() {
     }
 
     if (user.isFrozen) {
-      void signOut().finally(() => {
-        router.replace({
-          pathname: "/login",
-          params: { frozen: "1" },
-        });
+      router.replace({
+        pathname: "/account-blocked",
+        params: { reason: "frozen" },
+      });
+      return;
+    }
+
+    if (user.deletionRequestedAt !== undefined) {
+      router.replace({
+        pathname: "/account-blocked",
+        params: { reason: "deletion" },
       });
       return;
     }
@@ -48,7 +64,7 @@ export default function PostLoginGate() {
     }
 
     router.replace("/(tabs)/home");
-  }, [user, router, signOut]);
+  }, [isLoading, isAuthenticated, user, nullUserExpired, router]);
 
   return (
     <GlassPageBackground>

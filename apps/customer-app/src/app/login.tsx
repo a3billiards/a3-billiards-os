@@ -13,14 +13,19 @@ import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
+import { LoginLanguagePicker, useTranslation } from "@a3/i18n";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll, PhoneInput } from "@a3/ui/components";
+import { usePostLoginNavigation } from "@a3/ui/hooks";
+import { DEFAULT_PHONE_E164, isValidE164, normalizeE164 } from "@a3/utils/phone";
+import { parseOtpAttemptsRemaining, parseOtpLockoutSeconds } from "@a3/utils/otp";
 
 type Mode = "password" | "otp";
 type PhoneStep = "enterPhone" | "enterCode";
 
-const FROZEN_MESSAGE = "Your account is frozen.";
+const FROZEN_MESSAGE_KEY = "auth.customer.login.frozen";
 
 export default function CustomerLoginScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { frozen } = useLocalSearchParams<{ frozen?: string }>();
   const { signIn } = useAuthActions();
@@ -28,7 +33,7 @@ export default function CustomerLoginScreen() {
 
   const [mode, setMode] = useState<Mode>("otp");
 
-  const [phone, setPhone] = useState("+91");
+  const [phone, setPhone] = useState(DEFAULT_PHONE_E164);
   const [password, setPassword] = useState("");
   const [phoneStep, setPhoneStep] = useState<PhoneStep>("enterPhone");
   const [code, setCode] = useState("");
@@ -39,22 +44,19 @@ export default function CustomerLoginScreen() {
 
   const codeRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
+  const { schedulePostLogin, isWaitingForAuth } = usePostLoginNavigation();
 
   useEffect(() => {
     if (frozen === "1") {
-      setError(FROZEN_MESSAGE);
+      setError(t(FROZEN_MESSAGE_KEY));
     }
-  }, [frozen]);
+  }, [frozen, t]);
 
-  const normalizedPhone = phone.replace(/\s/g, "");
-  const phoneValid = /^\+[1-9]\d{6,14}$/.test(normalizedPhone);
+  const normalizedPhone = normalizeE164(phone);
+  const phoneValid = isValidE164(normalizedPhone);
   const codeValid = /^\d{6}$/.test(code.replace(/\s/g, ""));
   const canSubmitPassword =
-    phoneValid && password.length >= 8 && !loading;
-
-  const navigatePostLogin = useCallback(() => {
-    router.replace("/post-login-gate");
-  }, [router]);
+    phoneValid && password.length >= 8 && !loading && !isWaitingForAuth;
 
   const handlePasswordLogin = useCallback(async () => {
     if (!canSubmitPassword) return;
@@ -67,25 +69,23 @@ export default function CustomerLoginScreen() {
         flow: "signIn",
       });
       if (!signingIn) {
-        setError("Sign-in failed. Check your phone and password.");
+        setError(t("auth.customer.login.signInFailed"));
         setLoading(false);
         return;
       }
-      navigatePostLogin();
+      schedulePostLogin();
     } catch (e) {
       const appErr = parseConvexError(e as Error);
       if (appErr.code === "AUTH_002") {
-        setError(FROZEN_MESSAGE);
+        setError(t(FROZEN_MESSAGE_KEY));
       } else if (appErr.code === "AUTH_006") {
-        setError("This account is pending deletion.");
+        setError(t("auth.customer.login.pendingDeletion"));
       } else {
-        setError(
-          "Invalid phone or password. Use WhatsApp OTP if you have not set a password yet.",
-        );
+        setError(t("auth.customer.login.invalidCredentials"));
       }
       setLoading(false);
     }
-  }, [canSubmitPassword, normalizedPhone, password, signIn, navigatePostLogin]);
+  }, [canSubmitPassword, normalizedPhone, password, signIn, schedulePostLogin, t]);
 
   const handleSendOtp = useCallback(async () => {
     if (!phoneValid || loading) return;
@@ -95,35 +95,33 @@ export default function CustomerLoginScreen() {
     try {
       await sendLoginOtp({ phone: normalizedPhone });
       setPhoneStep("enterCode");
-      setInfo("OTP sent via WhatsApp.");
+      setInfo(t("auth.customer.login.otpSent"));
       setTimeout(() => codeRef.current?.focus(), 50);
     } catch (e) {
       const appErr = parseConvexError(e as Error);
       switch (appErr.code) {
         case "AUTH_009":
-          setError(
-            "No account found for this phone. Please sign up first.",
-          );
+          setError(t("auth.customer.login.noAccount"));
           break;
         case "AUTH_002":
-          setError(FROZEN_MESSAGE);
+          setError(t(FROZEN_MESSAGE_KEY));
           break;
         case "AUTH_006":
-          setError("This account is pending deletion.");
+          setError(t("auth.customer.login.pendingDeletion"));
           break;
         case "OTP_003":
-          setError("Too many OTP requests. Please wait a few minutes.");
+          setError(t("auth.customer.login.tooManyOtp"));
           break;
         case "OTP_005":
-          setError("Invalid phone number. Use country code, e.g. +91...");
+          setError(t("auth.customer.login.invalidPhone"));
           break;
         default:
-          setError(appErr.message ?? "Could not send OTP.");
+          setError(appErr.message ?? t("auth.customer.login.couldNotSendOtp"));
       }
     } finally {
       setLoading(false);
     }
-  }, [phoneValid, normalizedPhone, loading, sendLoginOtp]);
+  }, [phoneValid, normalizedPhone, loading, sendLoginOtp, t]);
 
   const handleVerifyOtp = useCallback(async () => {
     if (!codeValid || loading) return;
@@ -137,37 +135,48 @@ export default function CustomerLoginScreen() {
         flow: "signIn",
       });
       if (!signingIn) {
-        setError("Sign-in failed. Please try again.");
+        setError(t("auth.customer.login.signInFailedGeneric"));
         setLoading(false);
         return;
       }
-      navigatePostLogin();
+      schedulePostLogin();
     } catch (e) {
       const appErr = parseConvexError(e as Error);
       switch (appErr.code) {
-        case "OTP_001":
+        case "OTP_001": {
+          const lockSec = parseOtpLockoutSeconds(appErr.message);
+          if (lockSec) {
+            const mins = Math.max(1, Math.ceil(lockSec / 60));
+            setError(t("auth.customer.login.lockoutWait", { minutes: mins }));
+          } else {
+            setError(t("auth.customer.login.tooManyAttempts"));
+          }
+          break;
+        }
+        case "OTP_002": {
+          const remaining = parseOtpAttemptsRemaining(appErr.message);
           setError(
-            "Too many failed attempts. Please request a new OTP in 5 minutes.",
+            remaining !== null
+              ? t("auth.customer.login.wrongOtpRemaining", { remaining })
+              : appErr.message ?? t("auth.customer.login.wrongOtp"),
           );
           break;
-        case "OTP_002":
-          setError(appErr.message ?? "Wrong or expired OTP.");
-          break;
+        }
         case "AUTH_002":
-          setError(FROZEN_MESSAGE);
+          setError(t(FROZEN_MESSAGE_KEY));
           break;
         case "AUTH_006":
-          setError("This account is pending deletion.");
+          setError(t("auth.customer.login.pendingDeletion"));
           break;
         case "AUTH_009":
-          setError("No account found for this phone. Please sign up first.");
+          setError(t("auth.customer.login.noAccount"));
           break;
         default:
-          setError("Could not verify OTP. Please try again.");
+          setError(t("auth.customer.login.couldNotVerifyOtp"));
       }
       setLoading(false);
     }
-  }, [code, codeValid, normalizedPhone, loading, signIn, navigatePostLogin]);
+  }, [code, codeValid, normalizedPhone, loading, signIn, schedulePostLogin, t]);
 
   const switchMode = useCallback(
     (next: Mode) => {
@@ -185,49 +194,50 @@ export default function CustomerLoginScreen() {
     <GlassPageBackground>
     <KeyboardFormScroll contentContainerStyle={styles.scroll}>
         <View style={styles.container}>
+          <LoginLanguagePicker />
           <View style={styles.logoTile}>
             <Text style={styles.logoText}>A3</Text>
           </View>
-          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.title}>{t("auth.customer.login.title")}</Text>
           <Text style={styles.subtitle}>
             {mode === "password"
-              ? "Sign in with your phone number and password"
-              : "Sign in with a WhatsApp OTP"}
+              ? t("auth.customer.login.subtitlePassword")
+              : t("auth.customer.login.subtitleOtp")}
           </Text>
           <LiquidGlassCard style={styles.formCard} padding={24}>
 
           {mode === "password" ? (
             <View style={styles.form}>
-              <Text style={styles.label}>Phone Number</Text>
-              <TextInput
-                style={styles.input}
+              <Text style={styles.label}>{t("auth.customer.login.phone")}</Text>
+              <PhoneInput
                 value={phone}
-                onChangeText={setPhone}
-                placeholder="+91XXXXXXXXXX"
-                placeholderTextColor={colors.text.tertiary}
-                keyboardType="phone-pad"
-                textContentType="telephoneNumber"
+                onChangeValue={setPhone}
                 editable={!loading}
-                accessibilityLabel="Phone number"
+                countryCodeLabel={t("auth.phone.countryCode")}
+                selectCountryLabel={t("auth.phone.selectCountry")}
+                accessibilityLabel={t("auth.phone.number")}
+                inputStyle={styles.input}
               />
               <Text style={styles.hint}>
-                Same number you registered with (E.164 format).
+                {mode === "password"
+                  ? t("auth.customer.login.phoneHint")
+                  : t("auth.customer.login.phoneHintOtp")}
               </Text>
 
-              <Text style={[styles.label, styles.fieldGap]}>Password</Text>
+              <Text style={[styles.label, styles.fieldGap]}>{t("auth.customer.login.password")}</Text>
               <TextInput
                 ref={passwordRef}
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Your login password"
+                placeholder={t("auth.customer.login.passwordPlaceholder")}
                 placeholderTextColor={colors.text.tertiary}
                 secureTextEntry
                 textContentType="password"
                 returnKeyType="go"
                 onSubmitEditing={handlePasswordLogin}
                 editable={!loading}
-                accessibilityLabel="Password"
+                accessibilityLabel={t("common.accessibilityPassword")}
               />
 
               <Pressable
@@ -243,46 +253,42 @@ export default function CustomerLoginScreen() {
                 {loading ? (
                   <ActivityIndicator color={glass.ctaText} />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Sign In</Text>
+                  <Text style={styles.primaryButtonText}>{t("auth.customer.login.signIn")}</Text>
                 )}
               </Pressable>
             </View>
           ) : (
             <View style={styles.form}>
-              <Text style={styles.label}>Phone Number</Text>
-              <TextInput
-                style={styles.input}
+              <Text style={styles.label}>{t("auth.customer.login.phone")}</Text>
+              <PhoneInput
                 value={phone}
-                onChangeText={(t) => {
-                  setPhone(t);
+                onChangeValue={(value) => {
+                  setPhone(value);
                   if (phoneStep === "enterCode") setPhoneStep("enterPhone");
                 }}
-                placeholder="+91XXXXXXXXXX"
-                placeholderTextColor={colors.text.tertiary}
-                keyboardType="phone-pad"
-                textContentType="telephoneNumber"
                 editable={!loading}
-                accessibilityLabel="Phone number"
+                countryCodeLabel={t("auth.phone.countryCode")}
+                selectCountryLabel={t("auth.phone.selectCountry")}
+                accessibilityLabel={t("auth.phone.number")}
+                inputStyle={styles.input}
               />
-              <Text style={styles.hint}>
-                E.164 format. We&apos;ll send a 6-digit OTP via WhatsApp.
-              </Text>
+              <Text style={styles.hint}>{t("auth.customer.login.phoneHintOtp")}</Text>
 
               {phoneStep === "enterCode" ? (
                 <>
-                  <Text style={[styles.label, styles.fieldGap]}>OTP Code</Text>
+                  <Text style={[styles.label, styles.fieldGap]}>{t("auth.customer.login.otp")}</Text>
                   <TextInput
                     ref={codeRef}
                     style={styles.input}
                     value={code}
-                    onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="6-digit code"
+                    onChangeText={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))}
+                    placeholder={t("auth.customer.login.otpPlaceholder")}
                     placeholderTextColor={colors.text.tertiary}
                     keyboardType="number-pad"
                     returnKeyType="go"
                     onSubmitEditing={handleVerifyOtp}
                     editable={!loading}
-                    accessibilityLabel="OTP code"
+                    accessibilityLabel={t("common.accessibilityOtpCode")}
                   />
                   <Pressable
                     onPress={handleSendOtp}
@@ -296,7 +302,7 @@ export default function CustomerLoginScreen() {
                         (loading || !phoneValid) && styles.disabledText,
                       ]}
                     >
-                      Resend OTP
+                      {t("auth.customer.login.resendOtp")}
                     </Text>
                   </Pressable>
                 </>
@@ -325,7 +331,9 @@ export default function CustomerLoginScreen() {
                   <ActivityIndicator color={glass.ctaText} />
                 ) : (
                   <Text style={styles.primaryButtonText}>
-                    {phoneStep === "enterPhone" ? "Send OTP" : "Verify & Sign In"}
+                    {phoneStep === "enterPhone"
+                      ? t("auth.customer.login.sendOtp")
+                      : t("auth.customer.login.verifySignIn")}
                   </Text>
                 )}
               </Pressable>
@@ -340,8 +348,8 @@ export default function CustomerLoginScreen() {
           >
             <Text style={styles.toggleText}>
               {mode === "password"
-                ? "Sign in with WhatsApp OTP instead"
-                : "Sign in with phone & password instead"}
+                ? t("auth.customer.login.useOtpInstead")
+                : t("auth.customer.login.usePasswordInstead")}
             </Text>
           </Pressable>
 
@@ -357,7 +365,7 @@ export default function CustomerLoginScreen() {
               accessibilityRole="alert"
               accessibilityLiveRegion="polite"
             >
-              <Text style={styles.errorLabel}>Error</Text>
+              <Text style={styles.errorLabel}>{t("common.error")}</Text>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
@@ -365,14 +373,14 @@ export default function CustomerLoginScreen() {
           </LiquidGlassCard>
 
           <View style={styles.registerRow}>
-            <Text style={styles.registerText}>Don{"'"}t have an account? </Text>
+            <Text style={styles.registerText}>{t("auth.customer.login.noAccountSignup")} </Text>
             <Pressable
               onPress={() => router.push("/register")}
               disabled={loading}
               hitSlop={8}
               accessibilityRole="link"
             >
-              <Text style={styles.registerLink}>Sign Up</Text>
+              <Text style={styles.registerLink}>{t("auth.customer.login.signUp")}</Text>
             </Pressable>
           </View>
         </View>

@@ -6,6 +6,7 @@ import {
   FlatList,
   ActivityIndicator,
   Pressable,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -15,6 +16,8 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, glass } from "@a3/ui/theme";
 import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
 type BookingRow = {
   bookingId: Id<"bookings">;
@@ -35,7 +38,7 @@ type BookingRow = {
 
 function formatMoney(amount: number, currency: string): string {
   try {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat(getCurrentLanguage(), {
       style: "currency",
       currency,
       maximumFractionDigits: 0,
@@ -46,7 +49,7 @@ function formatMoney(amount: number, currency: string): string {
 }
 
 function formatSubmitted(ts: number): string {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(getCurrentLanguage(), {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -55,6 +58,7 @@ function formatSubmitted(ts: number): string {
 }
 
 export default function PendingBookingsScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useQuery(api.users.getCurrentUser, {});
@@ -91,11 +95,13 @@ export default function PendingBookingsScreen(): React.JSX.Element {
     setLoadingMore(false);
   }, [page, cursor]);
 
-  const onRefresh = useCallback(() => {
+  const resetList = useCallback(() => {
     setCursor(undefined);
     setRows([]);
     setNextCursor(null);
   }, []);
+
+  const { refreshing, onRefresh } = usePullToRefresh(resetList);
 
   const onEndReached = useCallback(() => {
     if (!nextCursor || loadingMore || !canQuery) return;
@@ -113,18 +119,18 @@ export default function PendingBookingsScreen(): React.JSX.Element {
             <MaterialIcons name="arrow-back" size={24} color={colors.text.primary} />
           </Pressable>
           <View style={styles.headerText}>
-            <Text style={styles.title}>Pending Bookings</Text>
+            <Text style={styles.title}>{t("adminApp.bookings.title")}</Text>
             <Text style={styles.subtitle}>
               {canQuery && page !== undefined
-                ? `${totalCount} booking${totalCount === 1 ? "" : "s"} awaiting club approval`
-                : "Awaiting owner approval across all clubs"}
+                ? t("adminApp.bookings.subtitleCount", { count: totalCount })
+                : t("adminApp.bookings.subtitleLoading")}
             </Text>
           </View>
           <Pressable
             onPress={onRefresh}
             hitSlop={12}
             style={({ pressed }) => [styles.refreshBtn, pressed && { opacity: 0.7 }]}
-            accessibilityLabel="Refresh pending bookings"
+            accessibilityLabel={t("adminApp.bookings.refreshAccessibility")}
           >
             <MaterialIcons name="refresh" size={20} color={glass.accentBlue} />
           </Pressable>
@@ -137,16 +143,17 @@ export default function PendingBookingsScreen(): React.JSX.Element {
         ) : rows.length === 0 ? (
           <View style={styles.center}>
             <MaterialIcons name="event-available" size={40} color={glass.textMuted} />
-            <Text style={styles.emptyTitle}>No pending bookings</Text>
-            <Text style={styles.emptyBody}>
-              Customer booking requests waiting for club approval will appear here.
-            </Text>
+            <Text style={styles.emptyTitle}>{t("adminApp.bookings.emptyTitle")}</Text>
+            <Text style={styles.emptyBody}>{t("adminApp.bookings.emptyBody")}</Text>
           </View>
         ) : (
           <FlatList
             data={rows}
             keyExtractor={(item) => item.bookingId}
             contentContainerStyle={{ paddingBottom: bottomPad, paddingHorizontal: spacing[4] }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
             onEndReached={onEndReached}
             onEndReachedThreshold={0.4}
             ListFooterComponent={
@@ -161,9 +168,11 @@ export default function PendingBookingsScreen(): React.JSX.Element {
               <LiquidGlassCard style={styles.card} padding={16}>
                 <View style={styles.badgeRow}>
                   <View style={styles.pendingBadge}>
-                    <Text style={styles.pendingBadgeText}>Pending approval</Text>
+                    <Text style={styles.pendingBadgeText}>{t("adminApp.bookings.pendingApproval")}</Text>
                   </View>
-                  <Text style={styles.submitted}>Submitted {formatSubmitted(item.createdAt)}</Text>
+                  <Text style={styles.submitted}>
+                    {t("adminApp.bookings.submitted", { time: formatSubmitted(item.createdAt) })}
+                  </Text>
                 </View>
                 <Text style={styles.clubName}>{item.clubName}</Text>
                 <Text style={styles.slot}>
@@ -172,7 +181,7 @@ export default function PendingBookingsScreen(): React.JSX.Element {
                 <Text style={styles.meta}>
                   {item.tableType}
                   {item.estimatedCost != null
-                    ? ` · Est. ${formatMoney(item.estimatedCost, item.currency)}`
+                    ? ` · ${t("adminApp.bookings.estimatedCost", { amount: formatMoney(item.estimatedCost, item.currency) })}`
                     : ""}
                 </Text>
                 {item.notes ? <Text style={styles.notes}>“{item.notes}”</Text> : null}

@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet, Linking } from "react-native";
+import { useTranslation } from "@a3/i18n";
 import { GlassPageBackground } from "@a3/ui/components";
 import { colors, typography, spacing, layout, glass } from "@a3/ui/theme";
 
@@ -8,24 +9,22 @@ const ONBOARDING_URL = "https://register.a3billiards.com";
  * Shown when `getSlotDashboard` is `null` (owner signed in but no `clubs` row yet).
  */
 export function OwnerNoClubPlaceholder() {
+  const { t } = useTranslation();
   return (
     <GlassPageBackground>
       <View style={styles.root}>
         <View style={styles.card}>
-          <Text style={styles.title}>Complete venue setup</Text>
-          <Text style={styles.body}>
-            Your owner account is active, but no club is linked yet. Create your venue on
-            the onboarding site, then return to this app.
-          </Text>
+          <Text style={styles.title}>{t("ownerApp.shell.noClub.title")}</Text>
+          <Text style={styles.body}>{t("ownerApp.shell.noClub.body")}</Text>
           <Pressable
             style={({ pressed }) => [styles.button, pressed && styles.pressed]}
             onPress={() => {
               void Linking.openURL(ONBOARDING_URL);
             }}
             accessibilityRole="link"
-            accessibilityLabel="Open owner onboarding in browser"
+            accessibilityLabel={t("ownerApp.shell.noClub.openOnboarding")}
           >
-            <Text style={styles.buttonText}>Open onboarding</Text>
+            <Text style={styles.buttonText}>{t("ownerApp.shell.noClub.openOnboarding")}</Text>
           </Pressable>
         </View>
       </View>

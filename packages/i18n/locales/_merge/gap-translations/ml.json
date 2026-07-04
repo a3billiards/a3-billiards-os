@@ -1,0 +1,478 @@
+{
+  "adminApp": {
+    "bookings": {
+      "estimatedCost": "ഏകദേശം {{amount}}"
+    },
+    "complaints": {
+      "dateFormatHint": "YYYY-MM-DD",
+      "statusActive": "സജീവം"
+    },
+    "moderation": {
+      "live": "LIVE"
+    },
+    "notifications": {
+      "messageLabel": "സന്ദേശം",
+      "required": " *"
+    },
+    "roles": {
+      "admin": "അഡ്മിൻ"
+    },
+    "userProfile": {
+      "actionsSection": "പ്രവർത്തനങ്ങൾ",
+      "club": "ക്ലബ്: {{name}}",
+      "confirmPlaceholder": "CONFIRM",
+      "namePlaceholder": "പേര്",
+      "phonePlaceholder": "+919876543210"
+    },
+    "users": {
+      "filterAdmins": "അഡ്മിനുകൾ"
+    }
+  },
+  "auth": {
+    "admin": {
+      "login": {
+        "emailPlaceholder": "admin@example.com"
+      }
+    },
+    "customer": {
+      "register": {
+        "agePlaceholder": "18",
+        "emailOptional": "(ഓപ്ഷണൽ)",
+        "emailPlaceholder": "you@example.com",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      }
+    },
+    "owner": {
+      "changePasscode": {
+        "ok": "ശരി"
+      },
+      "login": {
+        "emailPlaceholder": "owner@example.com",
+        "logo": "A3"
+      },
+      "passcode": {
+        "ok": "ശരി"
+      },
+      "register": {
+        "agePlaceholder": "18",
+        "emailPlaceholder": "you@example.com",
+        "logo": "A3",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      },
+      "verifyPhone": {
+        "logo": "A3"
+      }
+    },
+    "phone": {
+      "countryCode": "രാജ്യ കോഡ്",
+      "number": "ഫോൺ നമ്പർ",
+      "selectCountry": "രാജ്യം തിരഞ്ഞെടുക്കുക"
+    }
+  },
+  "common": {
+    "amenityPresets": {
+      "ac": "AC",
+      "lounge": "ലൗഞ്ച്",
+      "parking": "പാർക്കിംഗ്",
+      "wifi": "WiFi"
+    },
+    "arrowSeparator": " → ",
+    "chartMonths": {
+      "dec": "Dec",
+      "feb": "Feb",
+      "jan": "Jan",
+      "mar": "Mar",
+      "nov": "Nov",
+      "oct": "Oct"
+    },
+    "confirmKeyword": "CONFIRM",
+    "deleteKeyword": "DELETE",
+    "detailsLabel": "വിശദാംശങ്ങൾ",
+    "emDash": "—",
+    "inbox": {
+      "alertLater": "പിന്നീട്",
+      "alertView": "കാണുക",
+      "bellAccessibility": "അറിയിപ്പുകൾ",
+      "empty": "ഇതുവരെ അറിയിപ്പുകളൊന്നുമില്ല.",
+      "fromAdmin": "A3 Billiards",
+      "loadMore": "കൂടുതൽ ലോഡ് ചെയ്യുക",
+      "markAllRead": "എല്ലാം വായിച്ചതായി അടയാളപ്പെടുത്തുക",
+      "subtitle": "A3 Billiards-ൽ നിന്നുള്ള സന്ദേശങ്ങൾ",
+      "title": "അറിയിപ്പുകൾ"
+    },
+    "loadingEllipsis": "…",
+    "logoA3": "A3",
+    "mapsClubFallback": "ക്ലബ്",
+    "minSuffix": " മിനിറ്റ്",
+    "ok": "ശരി",
+    "passcodeMask": "••••••",
+    "passwordMask": "••••••••",
+    "placeholderOtp": "000000",
+    "placeholderZero": "0",
+    "pushChannelName": "A3 Billiards",
+    "questionMark": "?",
+    "slotDurationChips": {
+      "min30": "30 മിനിറ്റ്"
+    },
+    "tableTypes": {
+      "americanPool": "American Pool",
+      "eightBall": "8-Ball",
+      "frenchBilliards": "French Billiards",
+      "nineBall": "9-Ball",
+      "snooker": "Snooker"
+    },
+    "tabs": {
+      "admin": {
+        "audit": "ഓഡിറ്റ്",
+        "live-moderation": "ലൈവ്"
+      },
+      "customer": {
+        "live": "ലൈവ്"
+      },
+      "owner": {
+        "documents": "ഡോക്യുമെന്റുകൾ",
+        "financials": "ധനകാര്യം",
+        "livestream": "ലൈവ്",
+        "snacks": "സ്നാക്സ്"
+      }
+    },
+    "timesSeparator": " × ",
+    "typeLabel": "തരം"
+  },
+  "customerApp": {
+    "booking": {
+      "durations": {
+        "chipFallback": "{{count}}മി",
+        "d120": {
+          "chip": "2മ"
+        },
+        "d180": {
+          "chip": "3മ"
+        },
+        "d30": {
+          "chip": "30മി",
+          "summary": "30 മിനിറ്റ്"
+        },
+        "d60": {
+          "chip": "1മ"
+        },
+        "summaryFallback": "{{count}} മിനിറ്റ്"
+      },
+      "emDash": "—",
+      "noDatesAvailable": "ബുക്ക് ചെയ്യാവുന്ന തീയതികളൊന്നുമില്ല. ക്ലബ് അവരുടെ ഷെഡ്യൂൾ അപ്ഡേറ്റ് ചെയ്യേണ്ടതുണ്ട്.",
+      "noTablesEmpty": "ഈ തരത്തിന് സജീവ ടേബിളുകളില്ല. സെറ്റിംഗ്സിൽ ടേബിൾ സെറ്റപ്പ് പരിശോധിക്കാൻ ക്ലബിനോട് പറയുക.",
+      "notesCounter": "{{count}}/200",
+      "pickDate": "നിങ്ങൾ എപ്പോൾ കളിക്കാൻ ആഗ്രഹിക്കുന്നു?",
+      "steps": {
+        "date": "തീയതി",
+        "table": "ടേബിൾ",
+        "type": "തരം"
+      },
+      "summaryDate": "തീയതി",
+      "summaryTable": "ടേബിൾ",
+      "today": "ഇന്ന്",
+      "whichTable": "ഏത് ടേബിൾ?"
+    },
+    "bookingDetail": {
+      "date": "തീയതി",
+      "durationMin": "{{count}} മിനിറ്റ്",
+      "estimatedCostValue": "ഏകദേശം {{symbol}}{{amount}}"
+    },
+    "checkInPayload": "a3customer:{{userId}}",
+    "clubProfile": {
+      "perMin": "/മിനിറ്റ്",
+      "tablePlural": "ടേബിളുകൾ",
+      "tableSingular": "ടേബിൾ",
+      "tables": "ടേബിളുകൾ"
+    },
+    "discovery": {
+      "title": "കണ്ടെത്തുക"
+    },
+    "history": {
+      "minAtRate": "{{minutes}} മിനിറ്റ് @ {{rate}}/മിനിറ്റ്",
+      "snacks": "സ്നാക്സ്",
+      "total": "ആകെ",
+      "upi": "UPI"
+    },
+    "home": {
+      "discover": "കണ്ടെത്തുക"
+    },
+    "live": {
+      "title": "ലൈവ്"
+    },
+    "loyalty": {
+      "profile": {
+        "checkInCode": "ക്ലബ് ചെക്ക്-ഇൻ കോഡ്",
+        "checkInCodeHint": "വേഗത്തിലുള്ള സ്ലോട്ട് അലോട്ട്മെന്റിനായി കൗണ്ടറിൽ ഇത് കാണിക്കുക. കോഡ്: a3customer:{{id}}",
+        "deletePlaceholder": "DELETE",
+        "name": "പേര്"
+      }
+    },
+    "profile": {
+      "checkInCode": "ക്ലബ് ചെക്ക്-ഇൻ കോഡ്",
+      "checkInCodeHint": "വേഗത്തിലുള്ള സ്ലോട്ട് അലോട്ട്മെന്റിനായി കൗണ്ടറിൽ ഇത് കാണിക്കുക. കോഡ്: a3customer:{{id}}",
+      "deletePlaceholder": "DELETE",
+      "name": "പേര്"
+    },
+    "screens": {
+      "discover": "കണ്ടെത്തുക",
+      "live": "ലൈവ്"
+    },
+    "streaming": {
+      "mute": "മ്യൂട്ട്",
+      "otherLive": "മറ്റ് ലൈവ് സ്ട്രീമുകൾ",
+      "unmute": "അൺമ്യൂട്ട്"
+    }
+  },
+  "notifications": {
+    "fallback": "അറിയിപ്പ്"
+  },
+  "ownerApp": {
+    "documents": {
+      "pdf": "PDF",
+      "title": "ഡോക്യുമെന്റുകൾ"
+    },
+    "financials": {
+      "cgst": "CGST",
+      "gstin": "GSTIN",
+      "igst": "IGST",
+      "minutes": "{{count}} മിനിറ്റ്",
+      "session_one": "{{count}} സെഷൻ",
+      "sessions": "{{count}} സെഷനുകൾ",
+      "sgst": "SGST",
+      "snackLine": "{{name}} × {{qty}} = {{amount}}",
+      "snacks": "സ്നാക്സ്",
+      "sortByDate": "തീയതി",
+      "tableLine": "{{minutes}} @ {{rate}}/min = {{subtotal}}",
+      "upi": "UPI"
+    },
+    "gstReport": {
+      "financialsGst": {
+        "cgst": "CGST",
+        "gstin": "GSTIN",
+        "igst": "IGST",
+        "sgst": "SGST"
+      }
+    },
+    "home": {
+      "tileDocuments": "ഡോക്യുമെന്റുകൾ",
+      "tileSlots": "സ്ലോട്ടുകൾ",
+      "tileSnacks": "സ്നാക്സ്"
+    },
+    "kitchen": {
+      "table": "ടേബിൾ {{label}}"
+    },
+    "livestream": {
+      "flipCamera": "ക്യാമറ തിരിക്കുക",
+      "liveBadge": "LIVE",
+      "micMute": "മൈക്രോഫോൺ മ്യൂട്ട് ചെയ്യുക",
+      "micUnmute": "മൈക്രോഫോൺ അൺമ്യൂട്ട് ചെയ്യുക",
+      "otherClubStreams": "നിങ്ങളുടെ ക്ലബിലെ മറ്റ് ലൈവ് ടേബിളുകൾ",
+      "placeholderTable": "ടേബിൾ 4",
+      "selectTable": "സ്ട്രീം ചെയ്യാനുള്ള ടേബിൾ"
+    },
+    "loyalty": {
+      "awardLine": "{{date}} — +{{count}} ക്രെഡിറ്റ്(കൾ) ({{tier}})",
+      "creditsCount": "{{count}} ക്രെഡിറ്റുകൾ",
+      "programmeNamePlaceholder": "A3 Regulars",
+      "statusLine": "സ്ഥിതി: {{status}}"
+    },
+    "settings": {
+      "chefRoleName": "ചെഫ്",
+      "content": {
+        "acceptOnlineBookings": "ഓൺലൈൻ ബുക്കിംഗുകൾ സ്വീകരിക്കുക",
+        "addAmenity": "ചേർക്കുക",
+        "addChefRole": "+ ചെഫ് റോൾ ചേർക്കുക",
+        "addEmailFirst": "ആദ്യം ഇമെയിൽ ചേർക്കുക",
+        "addPhoto": "+ ഫോട്ടോ ചേർക്കുക",
+        "addRole": "റോൾ ചേർക്കുക",
+        "addTable": "+ ടേബിൾ ചേർക്കുക",
+        "allTables": "എല്ലാ ടേബിളുകളും",
+        "amenities": "സൗകര്യങ്ങൾ",
+        "approvalDeadline": "അംഗീകാര ഡെഡ്ലൈൻ (മിനിറ്റ്)",
+        "approvalDeadlineNote": "ബുക്കിംഗ് കാലഹരണപ്പെടുന്നതിന് മുമ്പ് അംഗീകരിക്കാനുള്ള മിനിറ്റുകൾ",
+        "bookableHours": "ബുക്ക് ചെയ്യാവുന്ന സമയം",
+        "bookableHoursMustBeWithin": "ബുക്ക് ചെയ്യാവുന്ന സമയം പ്രവർത്തന സമയത്തിനുള്ളിൽ ആയിരിക്കണം. ആദ്യം ബുക്ക് ചെയ്യാവുന്ന സമയം അപ്ഡേറ്റ് ചെയ്യുക.",
+        "bookableHoursNote": "ബുക്ക് ചെയ്യാവുന്ന സമയം നിങ്ങളുടെ പ്രവർത്തന സമയത്തിനുള്ളിൽ ആയിരിക്കണം.",
+        "bookableTableTypes": "ബുക്ക് ചെയ്യാവുന്ന ടേബിൾ തരങ്ങൾ",
+        "bookableTableTypesMismatch": "ചില ബുക്ക് ചെയ്യാവുന്ന ടേബിൾ തരങ്ങൾക്ക് സജീവ ടേബിളുകളില്ല.",
+        "bookableTableTypesNote": "തിരഞ്ഞെടുത്ത തരങ്ങൾ മാത്രമേ കസ്റ്റമർ ബുക്കിംഗ് ഫ്ലോയിൽ കാണുകയുള്ളൂ.",
+        "bookingCouponCode": "ബുക്കിംഗ് കൂപ്പൺ കോഡ്",
+        "bookingsDisabledDesc": "കസ്റ്റമർമാർക്ക് നിങ്ങളുടെ ക്ലബ് ഓൺലൈനിൽ കണ്ടെത്താനോ ബുക്ക് ചെയ്യാനോ കഴിയില്ല",
+        "bookingsEnabledDesc": "നിങ്ങളുടെ ക്ലബ് ഓൺലൈൻ ബുക്കിംഗുകൾ സ്വീകരിക്കുന്നു",
+        "canApplyDiscount": "കിഴിവ് പ്രയോഗിക്കാം",
+        "canApplyDiscountMax": "കിഴിവ് പ്രയോഗിക്കാം (പരമാവധി {{pct}}%)",
+        "canFileComplaints": "പരാതികൾ നൽകാം",
+        "cancellationWindow": "റദ്ദാക്കൽ വിൻഡോ (മിനിറ്റ്)",
+        "cancellationWindowNote": "വൈകി റദ്ദാക്കലിനായി ആരംഭ സമയത്തിന് മുമ്പുള്ള മിനിറ്റുകൾ",
+        "changeAccountPassword": "അക്കൗണ്ട് പാസ്‌വേഡ് മാറ്റുക",
+        "changeSettingsPasscode": "സെറ്റിംഗ്സ് പാസ്‌കോഡ് മാറ്റുക",
+        "chefRoleCreated": "ചെഫ് റോൾ സൃഷ്ടിച്ചു",
+        "chefRoleCreatedBody": "കിച്ചൻ ടാബ് മാത്രം. കിച്ചൻ സ്റ്റാഫിന് ഉപകരണം കൈമാറുമ്പോൾ ഇത് നിയോഗിക്കുക.",
+        "chefRoleExists": "ചെഫ് റോൾ ഇതിനകം നിലവിലുണ്ട്",
+        "chefRoleExistsBody": "ആവശ്യമെങ്കിൽ സ്റ്റാഫ് റോളുകൾക്ക് കീഴിൽ എഡിറ്റ് ചെയ്യുക.",
+        "closes": "അടയ്ക്കുന്നു",
+        "couponDescription": "ബുക്കിംഗ് ചെയ്യുമ്പോൾ കാർഡ് പേയ്‌മെന്റിന് പകരം കസ്റ്റമർമാർ കൂപ്പൺ നൽകുന്നു",
+        "customAmenities": "കസ്റ്റം സൗകര്യങ്ങൾ",
+        "customAmenityPlaceholder": "കസ്റ്റം സൗകര്യം",
+        "deleteRoleBody": "ഈ റോൾ ഉപകരണത്തിൽ സജീവമാണെങ്കിൽ, അത് ഓണർ മോഡിലേക്ക് മടങ്ങും.",
+        "deleteRoleConfirm": "ഇല്ലാതാക്കുക",
+        "deleteRoleTitle": "റോൾ ഇല്ലാതാക്കണോ?",
+        "descriptionMax": "വിവരണം (പരമാവധി 500)",
+        "discoverable": "കണ്ടെത്താവുന്ന",
+        "downloadMyData": "എന്റെ ഡാറ്റ ഡൗൺലോഡ് ചെയ്യുക",
+        "editRole": "റോൾ എഡിറ്റ് ചെയ്യുക",
+        "exportClubMembers": "ക്ലബ് അംഗങ്ങളുടെ ഡാറ്റ ഡൗൺലോഡ് ചെയ്യുക",
+        "exportDownload": "ഡൗൺലോഡ്",
+        "exportMembersBody": "നിങ്ങളുടെ ക്ലബിൽ ബുക്ക് ചെയ്ത, കളിച്ച അല്ലെങ്കിൽ ലോയൽറ്റിയിൽ ചേർന്ന കസ്റ്റമർമാരുള്ള Excel അല്ലെങ്കിൽ Google Sheets-നായുള്ള സ്പ്രെഡ്‌ഷീറ്റ് (CSV) ഡൗൺലോഡ് ചെയ്യുക. ക്ലബ്-സ്കോപ്പ് ഫീൽഡുകൾ മാത്രം ഉൾപ്പെടുന്നു.",
+        "exportMembersTitle": "ക്ലബ് അംഗങ്ങളെ എക്സ്പോർട്ട് ചെയ്യണോ?",
+        "exportingMembers": "എക്സ്പോർട്ട് ചെയ്യുന്നു…",
+        "gstItcError": "മാസിക ITC നെഗറ്റീവ് അല്ലാത്ത സംഖ്യയായിരിക്കണം.",
+        "gstNote": "ഏകദേശ GST റിപ്പോർട്ടിനുള്ള ഇൻപുട്ടുകൾ. CA കൺസൾട്ടേഷനിന് ശേഷം പൂർണ്ണ ഇൻകം ടാക്സ് റിപ്പോർട്ടിംഗ് ചേർക്കും.",
+        "gstRegistered": "GST രജിസ്റ്റർ ചെയ്തത്",
+        "gstRegisteredNote": "ഓഫ് ആയിരിക്കുമ്പോൾ, GST റിപ്പോർട്ട് പൂജ്യം ഔട്ട്പുട്ട് ടാക്സ് കാണിക്കുന്നു",
+        "gstSnacks": "സ്നാക്സിൽ GST %",
+        "gstSnacksError": "സ്നാക്സ് GST % 0-ും 100-ും ഇടയിൽ ആയിരിക്കണം.",
+        "gstTableError": "ടേബിൾ GST % 0-ും 100-ും ഇടയിൽ ആയിരിക്കണം.",
+        "gstTableTime": "ടേബിൾ സമയത്തിൽ GST %",
+        "gstin": "GSTIN (ഓപ്ഷണൽ)",
+        "hidden": "മറച്ചത്",
+        "locationPin": "ലൊക്കേഷൻ പിൻ",
+        "locationSaved": "ലൊക്കേഷൻ സേവ് ചെയ്തു",
+        "manageTables": "ബിലിയാർഡ്സ് ടേബിളുകൾ നിയന്ത്രിക്കുക",
+        "maxAdvanceDays": "പരമാവധി മുൻകൂർ ദിവസങ്ങൾ",
+        "maxAdvanceDaysNote": "കസ്റ്റമർമാർ എത്ര ദിവസം മുമ്പ് ബുക്ക് ചെയ്യാം",
+        "minAdvanceMinutes": "കുറഞ്ഞത് മുൻകൂർ മിനിറ്റ്",
+        "minAdvanceMinutesNote": "ബുക്കിംഗ് ആരംഭിക്കുന്നതിന് മുമ്പുള്ള കുറഞ്ഞ ലീഡ് ടൈം",
+        "monthlyItc": "മാസിക ഇൻപുട്ട് ടാക്സ് ക്രെഡിറ്റ് എസ്റ്റിമേറ്റ് (ഓപ്ഷണൽ)",
+        "opens": "തുറക്കുന്നു",
+        "operatingHours": "പ്രവർത്തന സമയം",
+        "operatingHoursPrefix": "പ്രവർത്തന സമയം:",
+        "ownerModeLabel": "ഓണർ മോഡ് (അനിയന്ത്രിതം)",
+        "photos": "ഫോട്ടോകൾ",
+        "requestDataExportBody": "നിങ്ങളുടെ ഡാറ്റ എക്സ്പോർട്ട് (പേര്, ഫോൺ, ഇമെയിൽ, ക്ലബ് പേര്, സബ്സ്ക്രിപ്ഷൻ ചരിത്രം) 72 മണിക്കൂറിനുള്ളിൽ {{email}}-ലേക്ക് അയയ്ക്കും.",
+        "requestDataExportTitle": "ഡാറ്റ എക്സ്പോർട്ട് അഭ്യർത്ഥിക്കണോ?",
+        "requestSubmitted": "അഭ്യർത്ഥന സമർപ്പിച്ചു",
+        "requireBookingCoupon": "ബുക്കിംഗ് കൂപ്പൺ ആവശ്യമാണ്",
+        "saveAmenities": "സൗകര്യങ്ങൾ സേവ് ചെയ്യുക",
+        "saveBookableHours": "ബുക്ക് ചെയ്യാവുന്ന സമയം സേവ് ചെയ്യുക",
+        "saveBookableTypes": "ബുക്ക് ചെയ്യാവുന്ന തരങ്ങൾ സേവ് ചെയ്യുക",
+        "saveBookingRules": "ബുക്കിംഗ് നിയമങ്ങൾ സേവ് ചെയ്യുക",
+        "saveCouponSettings": "കൂപ്പൺ സെറ്റിംഗ്സ് സേവ് ചെയ്യുക",
+        "saveDescription": "വിവരണം സേവ് ചെയ്യുക",
+        "saveGst": "GST സെറ്റിംഗ്സ് സേവ് ചെയ്യുക",
+        "saveLocation": "ലൊക്കേഷൻ സേവ് ചെയ്യുക",
+        "saveOperatingHours": "പ്രവർത്തന സമയം സേവ് ചെയ്യുക",
+        "saveSlotDurations": "സ്ലോട്ട് ദൈർഘ്യങ്ങൾ സേവ് ചെയ്യുക",
+        "selectAtLeastOneTab": "കുറഞ്ഞത് ഒരു ടാബ് തിരഞ്ഞെടുക്കുക.",
+        "selectAtLeastOneTable": "നിർദ്ദിഷ്ട ടേബിളുകൾ ഉപയോഗിക്കുമ്പോൾ കുറഞ്ഞത് ഒരു ടേബിൾ തിരഞ്ഞെടുക്കുക.",
+        "selectSlotDuration": "കുറഞ്ഞത് ഒരു സ്ലോട്ട് ദൈർഘ്യം തിരഞ്ഞെടുക്കുക.",
+        "setOperatingHoursFirst": "ആദ്യം ക്ലബ് പ്രൊഫൈലിന് കീഴിൽ പ്രവർത്തന സമയം സജ്ജമാക്കുക, പിന്നെ ഇവിടെ ബുക്ക് ചെയ്യാവുന്ന സമയം സേവ് ചെയ്യുക.",
+        "showClubInSearch": "കസ്റ്റമർ തിരയലിൽ ക്ലബ് കാണിക്കുക",
+        "slotDurationOptions": "സ്ലോട്ട് ദൈർഘ്യ ഓപ്ഷനുകൾ",
+        "specificTables": "{{count}} നിർദ്ദിഷ്ട ടേബിളുകൾ",
+        "supplyInterstate": "ഇന്റർസ്റ്റേറ്റ് (IGST)",
+        "supplyIntrastate": "ഇൻട്രാസ്റ്റേറ്റ് (CGST + SGST)",
+        "supplyType": "സപ്ലൈ തരം",
+        "tableActive": "സജീവം",
+        "tableDisabled": "നിഷ്ക്രിയം",
+        "timeTo": "മുതൽ",
+        "uploading": "അപ്‌ലോഡ് ചെയ്യുന്നു…"
+      },
+      "hhmmStart": "HH:MM start",
+      "labelField": "ലേബൽ",
+      "labelPlaceholder": "ലേബൽ *",
+      "passcode": {
+        "ok": "ശരി"
+      },
+      "sections": {
+        "tables": "ടേബിളുകൾ"
+      },
+      "timezonePlaceholder": "Asia/Kolkata"
+    },
+    "slots": {
+      "addTeammate": "കളിക്കാരനെ ചേർക്കുക",
+      "addTeammatePhone": "കളിക്കാരന്റെ ഫോൺ",
+      "age18Plus": "18+",
+      "assignBothSides": "ഓരോ വശത്തും കുറഞ്ഞത് ഒരു കളിക്കാരനെ നിയോഗിക്കുക.",
+      "billBreakdown": "ബിൽ വിശദാംശം",
+      "checkInCode": "ചെക്ക്-ഇൻ കോഡ്",
+      "checkoutCounterSnacks": "കൗണ്ടർ സ്നാക്സ്",
+      "checkoutDiscount": "കിഴിവ് ({{percent}}%)",
+      "checkoutItemLine": "{{name}} × {{qty}}",
+      "checkoutKitchenItems": "കിച്ചൻ ഇനങ്ങൾ",
+      "checkoutSectionSubtotal": "ഉപമൊത്തം",
+      "checkoutTableRate": "{{minutes}} മിനിറ്റ് @ {{rate}}/മിനിറ്റ്",
+      "checkoutTableTime": "ടേബിൾ സമയം",
+      "checkoutTableTotal": "ടേബിൾ ആകെ",
+      "continueToGroup": "തുടരുക",
+      "customerNamePlaceholder": "കസ്റ്റമർ പേര് ടൈപ്പ് ചെയ്യുക…",
+      "customerNameSearch": "അല്ലെങ്കിൽ പേരിൽ തിരയുക",
+      "groupSetupHint": "ഈ ടേബിളിൽ കളിക്കുന്ന കളിക്കാരെ ചേർക്കുക. ഓരോ പുതിയ കളിക്കാരനും WhatsApp വഴി ഫോൺ പരിശോധിക്കണം.",
+      "groupSetupTitle": "ഈ ടേബിളിലെ കളിക്കാർ",
+      "losersPay": "തോറ്റവർ പണം നൽകും",
+      "losersPayBadge": "തോറ്റവർ പണം നൽകും",
+      "losersPayCheckoutNote": "തോറ്റവർ പണം നൽകും — ബിൽ തോറ്റ വശത്തേക്ക് രേഖപ്പെടുത്തി.",
+      "losersPayHint": "ചെക്ക്‌ഔട്ടിൽ ഏത് വശം തോറ്റു, ടേബിൾ ബിൽ ആരാണ് നൽകുന്നതെന്ന് രേഖപ്പെടുത്തുക.",
+      "mobileWhatsApp": "മൊബൈൽ (WhatsApp)",
+      "needTwoForVersus": "വെർസസ് കളിക്കാൻ കുറഞ്ഞത് ഒരു കളിക്കാരനെ ചേർക്കുക.",
+      "openQrScanner": "QR കോഡ് സ്കാൻ ചെയ്യുക",
+      "paymentUpi": "UPI",
+      "playVersus": "വെർസസ് കളി",
+      "playVersusHint": "മത്സര മത്സരത്തിനായി കളിക്കാരെ Side A, Side B എന്നിവയായി വിഭജിക്കുക.",
+      "playersCount": "{{count}} കളിക്കാർ",
+      "primaryPlayer": "പ്രാഥമിക കളിക്കാരൻ",
+      "qrAllowCamera": "ക്യാമറ അനുവദിക്കുക",
+      "qrCameraPermission": "കസ്റ്റമർ ചെക്ക്-ഇൻ കോഡുകൾ സ്കാൻ ചെയ്യാൻ ക്യാമറ ആക്സസ് ആവശ്യമാണ്.",
+      "qrPlaceholder": "QR പേലോഡ് ഒട്ടിക്കുക അല്ലെങ്കിൽ കൗണ്ടറിൽ സ്കാൻ ചെയ്യുക",
+      "qrScannerHint": "കസ്റ്റമറുടെ പ്രൊഫൈലിലെ ചെക്ക്-ഇൻ QR-ലേക്ക് ചൂണ്ടിക്കാണിക്കുക",
+      "qrScannerTitle": "കസ്റ്റമർ QR സ്കാൻ ചെയ്യുക",
+      "registerTeammateWhatsApp": "കളിക്കാരൻ രജിസ്റ്റർ — WhatsApp OTP",
+      "removePlayer": "നീക്കം ചെയ്യുക",
+      "scanQrCode": "സ്കാൻ / ചെക്ക്-ഇൻ കോഡ് ഒട്ടിക്കുക",
+      "selectLosingSide": "ഏത് വശം തോറ്റു?",
+      "sideA": "Side A",
+      "sideB": "Side B",
+      "snacksCharge": "സ്നാക്സ്",
+      "tableCharge": "ടേബിൾ",
+      "teammateAlreadyAdded": "ഈ കളിക്കാരൻ ഇതിനകം ടേബിളിലുണ്ട്.",
+      "teammates": "കളിക്കാർ",
+      "versusBadge": "വെർസസ്"
+    },
+    "snacks": {
+      "name": "പേര്"
+    }
+  },
+  "sharedUi": {
+    "bookingCard": {
+      "duration30": "30 മിനിറ്റ്",
+      "durationMinutes": "{{min}} മിനിറ്റ്",
+      "estimated": "ഏകദേശം {{amount}}"
+    },
+    "clubCard": {
+      "kmAway": "{{km}} കി.മീ"
+    },
+    "liveStreamCard": {
+      "liveBadge": "LIVE"
+    },
+    "placeholders": {
+      "billModal": "BillModal",
+      "networkGuard": "NetworkGuard",
+      "offlineScreen": "OfflineScreen",
+      "passcodeSetupModal": "PasscodeSetupModal",
+      "sessionTimer": "SessionTimer",
+      "userSelector": "UserSelector"
+    },
+    "safeLocationPicker": {
+      "latitude": "അക്ഷാംശം",
+      "longitude": "രേഖാംശം"
+    },
+    "tableGrid": {
+      "a11yTable": "{{label}}, {{status}}{{tag}}",
+      "tableFallback": "ടേബിൾ"
+    },
+    "tableTypePicker": {
+      "ratePerMin": "{{rate}}/മിനിറ്റ്"
+    }
+  }
+}

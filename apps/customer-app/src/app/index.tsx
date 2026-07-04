@@ -5,6 +5,7 @@ import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { GlassPageBackground } from "@a3/ui/components";
 import { glass } from "@a3/ui/theme";
+import { useAuthUserSettled } from "@a3/ui/hooks";
 
 export default function AuthGate() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export default function AuthGate() {
     api.users.getCurrentUser,
     isAuthenticated ? {} : "skip",
   );
+  const nullUserExpired = useAuthUserSettled(isAuthenticated, user);
 
   useEffect(() => {
     if (isLoading) return;
@@ -24,8 +26,30 @@ export default function AuthGate() {
 
     if (user === undefined) return;
 
-    if (user === null || user.role !== "customer") {
+    if (user === null) {
+      if (!nullUserExpired) return;
       router.replace("/login");
+      return;
+    }
+
+    if (user.role !== "customer") {
+      router.replace("/login");
+      return;
+    }
+
+    if (user.isFrozen) {
+      router.replace({
+        pathname: "/account-blocked",
+        params: { reason: "frozen" },
+      });
+      return;
+    }
+
+    if (user.deletionRequestedAt !== undefined) {
+      router.replace({
+        pathname: "/account-blocked",
+        params: { reason: "deletion" },
+      });
       return;
     }
 
@@ -38,7 +62,7 @@ export default function AuthGate() {
     }
 
     router.replace("/(tabs)/home");
-  }, [isLoading, isAuthenticated, user, router]);
+  }, [isLoading, isAuthenticated, user, nullUserExpired, router]);
 
   return (
     <GlassPageBackground>

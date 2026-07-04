@@ -6,6 +6,7 @@ import {
   FlatList,
   ActivityIndicator,
   Pressable,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -15,6 +16,8 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, glass } from "@a3/ui/theme";
 import { GlassPageBackground, LiquidGlassCard } from "@a3/ui/components";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
 type SessionRow = {
   sessionId: Id<"sessions">;
@@ -29,16 +32,19 @@ type SessionRow = {
   currency: string;
 };
 
-function elapsedLabel(startMs: number): string {
+function elapsedLabel(
+  startMs: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
   const m = Math.floor((Date.now() - startMs) / 60000);
-  if (m < 1) return "Just started";
-  if (m < 60) return `${m} min running`;
+  if (m < 1) return t("adminApp.sessions.justStarted");
+  if (m < 60) return t("adminApp.sessions.minRunning", { minutes: m });
   const h = Math.floor(m / 60);
-  return `${h} h ${m % 60} min running`;
+  return t("adminApp.sessions.hoursRunning", { hours: h, minutes: m % 60 });
 }
 
 function formatStarted(startMs: number): string {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(getCurrentLanguage(), {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -47,6 +53,7 @@ function formatStarted(startMs: number): string {
 }
 
 export default function ActiveSessionsScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useQuery(api.users.getCurrentUser, {});
@@ -83,11 +90,13 @@ export default function ActiveSessionsScreen(): React.JSX.Element {
     setLoadingMore(false);
   }, [page, cursor]);
 
-  const onRefresh = useCallback(() => {
+  const resetList = useCallback(() => {
     setCursor(undefined);
     setRows([]);
     setNextCursor(null);
   }, []);
+
+  const { refreshing, onRefresh } = usePullToRefresh(resetList);
 
   const onEndReached = useCallback(() => {
     if (!nextCursor || loadingMore || !canQuery) return;
@@ -105,18 +114,18 @@ export default function ActiveSessionsScreen(): React.JSX.Element {
             <MaterialIcons name="arrow-back" size={24} color={colors.text.primary} />
           </Pressable>
           <View style={styles.headerText}>
-            <Text style={styles.title}>Active Sessions</Text>
+            <Text style={styles.title}>{t("adminApp.sessions.title")}</Text>
             <Text style={styles.subtitle}>
               {canQuery && page !== undefined
-                ? `${totalCount} session${totalCount === 1 ? "" : "s"} running platform-wide`
-                : "Live sessions across all clubs"}
+                ? t("adminApp.sessions.subtitleCount", { count: totalCount })
+                : t("adminApp.sessions.subtitleLoading")}
             </Text>
           </View>
           <Pressable
             onPress={onRefresh}
             hitSlop={12}
             style={({ pressed }) => [styles.refreshBtn, pressed && { opacity: 0.7 }]}
-            accessibilityLabel="Refresh active sessions"
+            accessibilityLabel={t("adminApp.sessions.refreshAccessibility")}
           >
             <MaterialIcons name="refresh" size={20} color={glass.accentBlue} />
           </Pressable>
@@ -129,16 +138,17 @@ export default function ActiveSessionsScreen(): React.JSX.Element {
         ) : rows.length === 0 ? (
           <View style={styles.center}>
             <MaterialIcons name="play-circle-outline" size={40} color={glass.textMuted} />
-            <Text style={styles.emptyTitle}>No active sessions</Text>
-            <Text style={styles.emptyBody}>
-              When customers are playing at any club, their sessions will appear here.
-            </Text>
+            <Text style={styles.emptyTitle}>{t("adminApp.sessions.emptyTitle")}</Text>
+            <Text style={styles.emptyBody}>{t("adminApp.sessions.emptyBody")}</Text>
           </View>
         ) : (
           <FlatList
             data={rows}
             keyExtractor={(item) => item.sessionId}
             contentContainerStyle={{ paddingBottom: bottomPad, paddingHorizontal: spacing[4] }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
             onEndReached={onEndReached}
             onEndReachedThreshold={0.4}
             ListFooterComponent={
@@ -153,18 +163,19 @@ export default function ActiveSessionsScreen(): React.JSX.Element {
               <LiquidGlassCard style={styles.card} padding={16}>
                 <View style={styles.cardTop}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.elapsed}>{elapsedLabel(item.startTime)}</Text>
+                  <Text style={styles.elapsed}>{elapsedLabel(item.startTime, t)}</Text>
                 </View>
                 <Text style={styles.clubName}>{item.clubName}</Text>
                 <Text style={styles.meta}>
-                  {item.tableLabel} · Started {formatStarted(item.startTime)}
+                  {item.tableLabel} ·{" "}
+                  {t("adminApp.sessions.started", { time: formatStarted(item.startTime) })}
                 </Text>
                 {item.isGuest || item.customerId === null ? (
                   <View style={styles.customerRow}>
                     <MaterialIcons name="person-outline" size={18} color={glass.textMuted} />
                     <View style={styles.customerText}>
                       <Text style={styles.customerName}>{item.customerName}</Text>
-                      <Text style={styles.customerPhone}>Guest session</Text>
+                      <Text style={styles.customerPhone}>{t("adminApp.sessions.guestSession")}</Text>
                     </View>
                   </View>
                 ) : (

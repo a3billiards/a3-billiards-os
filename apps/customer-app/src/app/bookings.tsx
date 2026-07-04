@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "convex/react";
@@ -15,6 +16,8 @@ import { api } from "@a3/convex/_generated/api";
 import { BookingCard, GlassPageBackground } from "@a3/ui/components";
 import { colors, spacing, typography, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 
 type Segment = "upcoming" | "history";
 type CustomerBookingLog = {
@@ -49,6 +52,8 @@ function bookingMs(dateYmd: string, hhmm: string): number {
 }
 
 export default function MyBookingsScreen() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const [segment, setSegment] = useState<Segment>("upcoming");
   const user = useQuery(api.users.getCurrentUser);
@@ -80,34 +85,46 @@ export default function MyBookingsScreen() {
   }, [logs]);
 
   const handleCancel = async (log: CustomerBookingLog) => {
-    const title = "Cancel Booking?";
+    const title = t("customerApp.myBookings.cancelTitle");
     const body =
       log.status === "pending_approval"
-        ? `Your booking request at ${log.clubName} will be withdrawn.`
+        ? t("customerApp.myBookings.cancelPendingBody", { clubName: log.clubName })
         : log.isLateCancellationNow
-          ? `This is a late cancellation. Cancelling within ${log.cancellationWindowMin ?? 30} minutes of your booking time may affect your booking record.`
-          : `Your confirmed booking at ${log.clubName} on ${log.requestedDate} at ${log.requestedStartTime} will be cancelled.`;
+          ? t("customerApp.myBookings.cancelLateBody", {
+              minutes: log.cancellationWindowMin ?? 30,
+            })
+          : t("customerApp.myBookings.cancelConfirmedBody", {
+              clubName: log.clubName,
+              date: log.requestedDate,
+              time: log.requestedStartTime,
+            });
     Alert.alert(title, body, [
-      { text: "Keep Booking", style: "cancel" },
+      { text: t("customerApp.myBookings.keepBooking"), style: "cancel" },
       {
-        text: "Cancel Booking",
+        text: t("customerApp.myBookings.cancelBooking"),
         style: "destructive",
         onPress: async () => {
           try {
             setBusyId(log.bookingId);
             await cancelBooking({ bookingId: log.bookingId, clubId: log.clubId });
-            Alert.alert("Booking cancelled");
+            Alert.alert(t("customerApp.myBookings.cancelledSuccess"));
           } catch (e) {
             const raw = (e as Error).message ?? "";
             if (raw.includes("BOOKING_005")) {
               Alert.alert(
-                "Cancellation limit reached",
-                "You have reached the maximum of 3 cancellations at this club today. Please try again tomorrow.",
+                t("customerApp.myBookings.cancelLimitTitle"),
+                t("customerApp.myBookings.cancelLimitBody"),
               );
             } else if (raw.includes("BOOKING_007")) {
-              Alert.alert("Already cancelled", "This booking has already been cancelled.");
+              Alert.alert(
+                t("customerApp.myBookings.alreadyCancelled"),
+                t("customerApp.myBookings.alreadyCancelledBody"),
+              );
             } else {
-              Alert.alert("Could not cancel", parseConvexError(e as Error).message);
+              Alert.alert(
+                t("customerApp.myBookings.couldNotCancel"),
+                parseConvexError(e as Error).message,
+              );
             }
           } finally {
             setBusyId(null);
@@ -123,7 +140,7 @@ export default function MyBookingsScreen() {
     <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Bookings</Text>
+        <Text style={styles.title}>{t("customerApp.myBookings.title")}</Text>
       </View>
       <View style={styles.segmented}>
         <Pressable
@@ -131,7 +148,7 @@ export default function MyBookingsScreen() {
           onPress={() => setSegment("upcoming")}
         >
           <Text style={[styles.segText, segment === "upcoming" && styles.segTextActive]}>
-            Upcoming
+            {t("customerApp.myBookings.upcoming")}
           </Text>
         </Pressable>
         <Pressable
@@ -139,7 +156,7 @@ export default function MyBookingsScreen() {
           onPress={() => setSegment("history")}
         >
           <Text style={[styles.segText, segment === "history" && styles.segTextActive]}>
-            History
+            {t("customerApp.myBookings.history")}
           </Text>
         </Pressable>
       </View>
@@ -152,20 +169,25 @@ export default function MyBookingsScreen() {
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyText}>
             {segment === "upcoming"
-              ? "No upcoming bookings. Discover clubs to book a table."
-              : "No past bookings yet."}
+              ? t("customerApp.myBookings.emptyUpcoming")
+              : t("customerApp.myBookings.emptyHistory")}
           </Text>
           {segment === "upcoming" ? (
             <Pressable
               style={styles.discoverBtn}
               onPress={() => router.push("/(tabs)/discover")}
             >
-              <Text style={styles.discoverBtnText}>Discover Clubs</Text>
+              <Text style={styles.discoverBtnText}>{t("customerApp.myBookings.discoverClubs")}</Text>
             </Pressable>
           ) : null}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
           {list.map((log: CustomerBookingLog) => (
             <BookingCard
               key={log.bookingId}

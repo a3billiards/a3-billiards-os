@@ -1,15 +1,53 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../convexApi";
 import { parseConvexError } from "../lib/parseConvexError";
 import { captureEvent } from "../instrumentation";
 import { ClubLocationPinPicker } from "../components/ClubLocationPinPicker";
+import {
+  getStrongPasswordError,
+  getPasswordStrength,
+  STRONG_PASSWORD_HINT,
+} from "../lib/passwordPolicy";
+
+const STRENGTH_LABEL: Record<string, string> = {
+  weak: "Weak",
+  good: "Good",
+  strong: "Strong",
+};
+const STRENGTH_COLOR: Record<string, string> = {
+  weak: "#e53935",
+  good: "#fb8c00",
+  strong: "#43a047",
+};
+function PasswordStrengthBar({ password }: { password: string }) {
+  const s = getPasswordStrength(password);
+  if (s === "none") return null;
+  const segs = s === "weak" ? 1 : s === "good" ? 2 : 3;
+  const color = STRENGTH_COLOR[s] ?? "#ccc";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0 8px" }}>
+      <div style={{ flex: 1, display: "flex", gap: 4 }}>
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i < segs ? color : "#333" }}
+          />
+        ))}
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 600, color, minWidth: 40, textAlign: "right" }}>
+        {STRENGTH_LABEL[s]}
+      </span>
+    </div>
+  );
+}
 
 const PRIVACY = "/privacy";
 const TERMS = "/terms";
 const DPDP = "/dpdp";
+const RESEND_COOLDOWN_SEC = 60;
 
 function loadRazorpayScript(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
@@ -41,9 +79,11 @@ const PHONE_COUNTRY_CODE = "+91";
 
 export default function Register() {
   const [searchParams] = useSearchParams();
+  const nav = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const { signIn } = useAuthActions();
   const registerOwner = useAction(api.onboardingWebActions.registerOwnerAccount);
+  const geocodeClubAddress = useAction(api.onboardingWebActions.geocodeClubAddress);
   const sendVerificationCode = useAction(
     api.ownerEmailVerificationActions.sendOwnerEmailVerificationCode,
   );
@@ -83,6 +123,10 @@ export default function Register() {
   const [paymentPending, setPaymentPending] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [postSignInPending, setPostSignInPending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [mapFocusLat, setMapFocusLat] = useState<number | null>(null);
+  const [mapFocusLng, setMapFocusLng] = useState<number | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
   const canUseProtectedOnboarding =
     !authLoading &&
     isAuthenticated &&
@@ -116,6 +160,38 @@ export default function Register() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((value) => (value <= 1 ? 0 : value - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    if (step !== 4 || !status?.hasClub) return;
+    const timer = setTimeout(() => {
+      nav("/dashboard", { replace: true });
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [step, status?.hasClub, nav]);
+
+  const goToEarlierStep = useCallback(
+    (target: Step) => {
+      if (target >= step) return;
+      setError(null);
+      if (target === 1) {
+        setStep(1);
+        if (status?.emailVerified) {
+          setRegistrationPhase("account");
+        }
+        return;
+      }
+      setStep(target);
+    },
+    [step, status?.emailVerified],
+  );
+
   const handleStep1 = useCallback(async () => {
     setError(null);
     if (!consent) {
@@ -123,8 +199,13 @@ export default function Register() {
       return;
     }
     const ageN = Number(age);
-    if (!email.trim() || password.length < 8 || !confirmPassword || !name.trim()) {
-      setError("Email, password (8+ characters), and name are required.");
+    if (!email.trim() || !confirmPassword || !name.trim()) {
+      setError("Email, password, and name are required.");
+      return;
+    }
+    const pwdError = getStrongPasswordError(password);
+    if (pwdError) {
+      setError(pwdError);
       return;
     }
     if (password !== confirmPassword) {
@@ -151,6 +232,7 @@ export default function Register() {
       captureEvent("onboarding_owner_registered");
       setRegistrationPhase("verify-email");
       setVerificationCode("");
+      setResendCooldown(RESEND_COOLDOWN_SEC);
     } catch (e) {
       setError(parseConvexError(e as Error).message);
     } finally {
@@ -200,22 +282,44 @@ export default function Register() {
   }, [verificationCode, email, password, verifyEmailCode, signIn]);
 
   const handleResendVerification = useCallback(async () => {
+    if (resendCooldown > 0) return;
     setError(null);
     setBusy(true);
     try {
       await sendVerificationCode({ email: email.trim().toLowerCase() });
       captureEvent("onboarding_owner_verification_resent");
+      setResendCooldown(RESEND_COOLDOWN_SEC);
     } catch (e) {
       setError(parseConvexError(e as Error).message);
     } finally {
       setBusy(false);
     }
-  }, [email, sendVerificationCode]);
+  }, [email, resendCooldown, sendVerificationCode]);
 
   const handlePinChange = useCallback((newLat: number, newLng: number) => {
     setLat(newLat);
     setLng(newLng);
   }, []);
+
+  const handleFindOnMap = useCallback(async () => {
+    if (!address.trim()) {
+      setError("Enter your street address first.");
+      return;
+    }
+    setError(null);
+    setGeocoding(true);
+    try {
+      const result = await geocodeClubAddress({ address: address.trim() });
+      setLat(result.lat);
+      setLng(result.lng);
+      setMapFocusLat(result.lat);
+      setMapFocusLng(result.lng);
+    } catch (e) {
+      setError(parseConvexError(e as Error).message);
+    } finally {
+      setGeocoding(false);
+    }
+  }, [address, geocodeClubAddress]);
 
   const handleStep2 = useCallback(async () => {
     setError(null);
@@ -355,11 +459,30 @@ export default function Register() {
         Create your owner account, add your club, then complete subscription payment.
       </p>
 
-      <div className="steps" aria-hidden>
-        <span className={`step-pill ${step >= 1 ? "active" : ""}`}>1 · Account</span>
-        <span className={`step-pill ${step >= 2 ? "active" : ""}`}>2 · Club</span>
-        <span className={`step-pill ${step >= 3 ? "active" : ""}`}>3 · Pay</span>
-        <span className={`step-pill ${step >= 4 ? "active" : ""}`}>4 · Done</span>
+      <div className="steps" aria-label="Onboarding progress">
+        {(
+          [
+            { n: 1 as Step, label: "1 · Account" },
+            { n: 2 as Step, label: "2 · Club" },
+            { n: 3 as Step, label: "3 · Pay" },
+            { n: 4 as Step, label: "4 · Done" },
+          ] as const
+        ).map(({ n, label }) => {
+          const completed = step > n;
+          const active = step >= n;
+          return (
+            <button
+              key={n}
+              type="button"
+              className={`step-pill step-pill-button ${active ? "active" : ""}`}
+              disabled={!completed}
+              onClick={() => goToEarlierStep(n)}
+              aria-current={step === n ? "step" : undefined}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
@@ -375,7 +498,10 @@ export default function Register() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <label htmlFor="password">Password (min 8 characters)</label>
+          <label htmlFor="password">Password</label>
+          <p className="muted" style={{ margin: "0 0 8px", fontSize: "0.85rem" }}>
+            {STRONG_PASSWORD_HINT}
+          </p>
           <input
             id="password"
             type="password"
@@ -383,6 +509,7 @@ export default function Register() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          <PasswordStrengthBar password={password} />
           <label htmlFor="confirmPassword">Confirm password</label>
           <input
             id="confirmPassword"
@@ -444,6 +571,11 @@ export default function Register() {
           <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void handleStep1()}>
             {busy ? "Please wait…" : "Continue"}
           </button>
+          <p className="muted" style={{ marginTop: 12 }}>
+            Already registered? <Link to="/login">Sign in</Link>
+            {" · "}
+            <Link to="/forgot-password">Forgot password?</Link>
+          </p>
         </>
       )}
 
@@ -474,11 +606,23 @@ export default function Register() {
           <button
             type="button"
             className="btn btn-secondary"
-            disabled={busy}
+            disabled={busy || resendCooldown > 0}
             onClick={() => void handleResendVerification()}
             style={{ marginLeft: 10 }}
           >
-            Resend code
+            {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy || postSignInPending}
+            onClick={() => {
+              setError(null);
+              setRegistrationPhase("account");
+            }}
+            style={{ marginTop: 10 }}
+          >
+            Back to account details
           </button>
           {postSignInPending ? (
             <p className="muted" style={{ marginTop: 10 }}>
@@ -506,11 +650,22 @@ export default function Register() {
             placeholder="Building, street, area, city, state, PIN"
           />
           <label>Club location on map</label>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy || geocoding || !address.trim()}
+            onClick={() => void handleFindOnMap()}
+            style={{ marginBottom: 8 }}
+          >
+            {geocoding ? "Finding address on map…" : "Find address on map"}
+          </button>
           <ClubLocationPinPicker
             lat={lat}
             lng={lng}
             onChange={handlePinChange}
-            disabled={busy}
+            disabled={busy || geocoding}
+            focusLat={mapFocusLat}
+            focusLng={mapFocusLng}
           />
           <div className="row">
             <div>
@@ -658,8 +813,19 @@ export default function Register() {
       {step === 4 && (
         <>
           <div className="success-banner">
-            Your club is live. Sign in to the Owner App with the same email and password.
+            Your club is live. Redirecting you to your dashboard…
           </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 16 }}
+            onClick={() => nav("/dashboard", { replace: true })}
+          >
+            Go to dashboard now
+          </button>
+          <p className="muted" style={{ marginTop: 12 }}>
+            Sign in to the Owner App with the same email and password.
+          </p>
         </>
       )}
     </div>

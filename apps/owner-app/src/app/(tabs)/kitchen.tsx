@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +14,9 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation, getCurrentLanguage } from "@a3/i18n";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { TabAccessDenied } from "../../components/TabAccessDenied";
@@ -33,21 +36,24 @@ type KitchenOrderRow = {
   servedAt: number | null;
 };
 
-const ADVANCE_LABEL: Record<Exclude<KitchenStatus, "served">, string> = {
-  pending: "Start preparing",
-  preparing: "Mark ready",
-  ready: "Mark served",
+const ADVANCE_KEY: Record<Exclude<KitchenStatus, "served">, string> = {
+  pending: "ownerApp.kitchen.startPreparing",
+  preparing: "ownerApp.kitchen.markReady",
+  ready: "ownerApp.kitchen.markServed",
 };
 
-function formatTime(ms: number): string {
-  return new Intl.DateTimeFormat("en-GB", {
+function formatTime(ms: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
   }).format(new Date(ms));
 }
 
-export default function KitchenScreen() {
+function KitchenScreenContent() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
+  const locale = getCurrentLanguage();
   const { roleId, canAccessTab } = useStaffRole();
   const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
@@ -96,7 +102,7 @@ export default function KitchenScreen() {
   }
 
   if (roleId !== undefined && !canAccessTab("kitchen")) {
-    return <TabAccessDenied tabLabel="Kitchen" />;
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.kitchen")} />;
   }
 
   if (board === undefined) {
@@ -113,7 +119,7 @@ export default function KitchenScreen() {
     try {
       await advanceKitchenOrder({ orderId, roleId: queryRoleId });
     } catch (e) {
-      Alert.alert("Could not update order", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.kitchen.couldNotUpdate"), parseConvexError(e as Error).message);
     } finally {
       setBusyId(null);
     }
@@ -131,13 +137,13 @@ export default function KitchenScreen() {
         <Text style={styles.sectionCount}>{orders.length}</Text>
       </View>
       {orders.length === 0 ? (
-        <Text style={styles.emptySection}>No orders</Text>
+        <Text style={styles.emptySection}>{t("ownerApp.kitchen.noActiveOrders")}</Text>
       ) : (
         orders.map((order) => (
           <View key={order.orderId} style={styles.card}>
             <View style={styles.cardTop}>
               <Text style={styles.tableLabel}>{order.tableLabel}</Text>
-              <Text style={styles.timeLabel}>{formatTime(order.createdAt)}</Text>
+              <Text style={styles.timeLabel}>{formatTime(order.createdAt, locale)}</Text>
             </View>
             {order.items.map((item, idx) => (
               <Text key={`${order.orderId}-${idx}`} style={styles.itemLine}>
@@ -156,13 +162,17 @@ export default function KitchenScreen() {
               >
                 <Text style={styles.advanceBtnText}>
                   {busyId === order.orderId
-                    ? "Updating…"
-                    : ADVANCE_LABEL[order.status]}
+                    ? t("ownerApp.kitchen.updating")
+                    : t(ADVANCE_KEY[order.status])}
                 </Text>
               </Pressable>
             ) : (
               <Text style={styles.servedNote}>
-                Served {order.servedAt ? formatTime(order.servedAt) : "—"}
+                {t("ownerApp.kitchen.servedAt", {
+                  time: order.servedAt
+                    ? formatTime(order.servedAt, locale)
+                    : t("common.emDash"),
+                })}
               </Text>
             )}
           </View>
@@ -177,28 +187,31 @@ export default function KitchenScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Kitchen</Text>
+        <Text style={styles.title}>{t("ownerApp.kitchen.title")}</Text>
         <Text style={styles.sub}>
           {activeTotal === 0
-            ? "No active orders"
-            : `${activeTotal} active order${activeTotal === 1 ? "" : "s"}`}
+            ? t("ownerApp.kitchen.noActiveOrders")
+            : t("ownerApp.kitchen.subtitle")}
         </Text>
       </View>
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
-        {renderSection("Pending", grouped.pending, colors.accent.amber)}
-        {renderSection("Preparing", grouped.preparing, colors.status.info)}
-        {renderSection("Ready", grouped.ready, colors.accent.green)}
+        {renderSection(t("ownerApp.kitchen.pending"), grouped.pending, colors.accent.amber)}
+        {renderSection(t("ownerApp.kitchen.preparing"), grouped.preparing, colors.status.info)}
+        {renderSection(t("ownerApp.kitchen.ready"), grouped.ready, colors.accent.green)}
 
         <Pressable
           style={styles.servedToggle}
           onPress={() => setServedOpen((v) => !v)}
         >
           <Text style={styles.servedToggleText}>
-            Served today ({grouped.served.length})
+            {t("ownerApp.kitchen.servedToday")} ({grouped.served.length})
           </Text>
           <MaterialIcons
             name={servedOpen ? "expand-less" : "expand-more"}
@@ -207,7 +220,7 @@ export default function KitchenScreen() {
           />
         </Pressable>
         {servedOpen
-          ? renderSection("Served today", grouped.served, colors.text.tertiary)
+          ? renderSection(t("ownerApp.kitchen.servedToday"), grouped.served, colors.text.tertiary)
           : null}
       </ScrollView>
     </View>
@@ -293,3 +306,12 @@ const styles = StyleSheet.create({
   servedToggleText: { ...typography.label, color: colors.text.secondary },
   pressed: { opacity: 0.88 },
 });
+
+export default function KitchenScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.owner.kitchen")}>
+      <KitchenScreenContent />
+    </TabErrorBoundary>
+  );
+}
