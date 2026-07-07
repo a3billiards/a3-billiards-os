@@ -25,14 +25,23 @@ export function useInboxNotificationAlert(): void {
 
   useEffect(() => {
     if (Platform.OS === "web") return;
+    let cancelled = false;
     let remove: (() => void) | undefined;
     void import("expo-notifications").then((Notifications) => {
+      if (cancelled) return;
       const sub = Notifications.addNotificationResponseReceivedListener(() => {
         router.push("/inbox-notifications");
       });
       remove = () => sub.remove();
+      if (cancelled) {
+        sub.remove();
+        remove = undefined;
+      }
     });
-    return () => remove?.();
+    return () => {
+      cancelled = true;
+      remove?.();
+    };
   }, [router]);
 
   useEffect(() => {

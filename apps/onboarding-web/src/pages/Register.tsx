@@ -209,6 +209,7 @@ export default function Register() {
   );
 
   const handleStep1 = useCallback(async () => {
+    if (busy) return;
     setError(null);
     if (!consent) {
       setError("Please accept the Privacy Policy and Terms of Service.");
@@ -267,6 +268,7 @@ export default function Register() {
   ]);
 
   const handleVerifyEmail = useCallback(async () => {
+    if (busy || postSignInPending) return;
     setError(null);
     const normalizedCode = verificationCode.replace(/\s/g, "");
     if (!/^\d{6}$/.test(normalizedCode)) {
@@ -298,7 +300,7 @@ export default function Register() {
   }, [verificationCode, email, password, verifyEmailCode, signIn]);
 
   const handleResendVerification = useCallback(async () => {
-    if (resendCooldown > 0) return;
+    if (resendCooldown > 0 || busy) return;
     setError(null);
     setBusy(true);
     try {
@@ -318,6 +320,7 @@ export default function Register() {
   }, []);
 
   const handleFindOnMap = useCallback(async () => {
+    if (geocoding || busy) return;
     if (!address.trim()) {
       setError("Enter your street address first.");
       return;
@@ -338,6 +341,7 @@ export default function Register() {
   }, [address, geocodeClubAddress]);
 
   const handleStep2 = useCallback(async () => {
+    if (busy) return;
     setError(null);
     if (!canUseProtectedOnboarding) {
       return;
@@ -392,6 +396,7 @@ export default function Register() {
   ]);
 
   const handlePay = useCallback(async () => {
+    if (busy || paymentPending) return;
     setError(null);
     if (!canUseProtectedOnboarding) {
       return;
@@ -730,6 +735,10 @@ export default function Register() {
             Back to account
           </button>
         </>
+      )}
+
+      {step === 3 && plans === undefined && (
+        <p className="muted">Loading plans…</p>
       )}
 
       {step === 3 && plans && (

@@ -56,6 +56,7 @@ export default function Login() {
   ]);
 
   const handleLogin = useCallback(async () => {
+    if (busy || postSignInPending) return;
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail || !password) {
       setError("Email and password are required.");
@@ -99,7 +100,7 @@ export default function Login() {
     } finally {
       setBusy(false);
     }
-  }, [email, password, nav, signIn]);
+  }, [busy, postSignInPending, email, password, nav, signIn]);
 
   const waitingForSession = postSignInPending;
 

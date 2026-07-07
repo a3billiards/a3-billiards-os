@@ -23,6 +23,7 @@ export default function VerifyEmail() {
   const autoSent = useRef(false);
 
   const handleSendCode = useCallback(async () => {
+    if (busy) return;
     const normalized = email.trim().toLowerCase();
     if (!normalized) {
       setError("Enter your email address.");
@@ -51,6 +52,7 @@ export default function VerifyEmail() {
   }, [initialEmail, handleSendCode]);
 
   const handleVerify = useCallback(async () => {
+    if (busy) return;
     setError(null);
     setInfo(null);
     setBusy(true);
@@ -64,7 +66,6 @@ export default function VerifyEmail() {
       });
     } catch (e) {
       setError(parseConvexError(e as Error).message);
-    } finally {
       setBusy(false);
     }
   }, [email, code, verifyEmailCode, nav]);

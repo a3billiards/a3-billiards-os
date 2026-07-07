@@ -77,6 +77,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
   const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const toastClear = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const successNavTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback(
     (text: string, variant: "info" | "error" | "success", ms = 4000) => {
@@ -93,6 +94,7 @@ export default function ChangePasswordScreen(): React.JSX.Element {
   useEffect(() => {
     return () => {
       if (toastClear.current) clearTimeout(toastClear.current);
+      if (successNavTimer.current) clearTimeout(successNavTimer.current);
     };
   }, []);
 
@@ -134,7 +136,9 @@ export default function ChangePasswordScreen(): React.JSX.Element {
     try {
       await changePassword({ currentPassword: current, newPassword: next });
       showToast(t("auth.customer.changePassword.passwordUpdated"), "success", 2200);
-      setTimeout(() => {
+      if (successNavTimer.current) clearTimeout(successNavTimer.current);
+      successNavTimer.current = setTimeout(() => {
+        successNavTimer.current = null;
         router.replace("/profile");
       }, 800);
     } catch (e) {

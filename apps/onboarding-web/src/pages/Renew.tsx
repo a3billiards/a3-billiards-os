@@ -62,6 +62,7 @@ export default function Renew() {
   const [renewSuccess, setRenewSuccess] = useState(false);
 
   const handleLogin = useCallback(async () => {
+    if (loginBusy) return;
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail || !password) {
       setError("Email and password are required.");
@@ -97,6 +98,7 @@ export default function Renew() {
   }, [email, password, signIn]);
 
   const handlePay = useCallback(async () => {
+    if (payBusy || paymentPending) return;
     setError(null);
     setRenewSuccess(false);
     setPayBusy(true);
@@ -130,6 +132,8 @@ export default function Renew() {
         modal: {
           ondismiss: () => {
             setPayBusy(false);
+            setPaymentPending(false);
+            setExpiryBeforePay(null);
           },
         },
       });
@@ -238,7 +242,9 @@ export default function Renew() {
         </div>
       ) : null}
       {error ? <div className="error-banner">{error}</div> : null}
-      {plans && (
+      {plans === undefined ? (
+        <p className="muted">Loading plans…</p>
+      ) : plans ? (
         <>
           <h2>Select period</h2>
           <div className="plan-grid">
@@ -293,6 +299,8 @@ export default function Renew() {
             </p>
           ) : null}
         </>
+      ) : (
+        <p className="muted">Plans are unavailable right now. Please refresh the page.</p>
       )}
     </div>
   );
