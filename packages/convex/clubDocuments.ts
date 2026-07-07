@@ -10,6 +10,7 @@ import {
 } from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
 import { assertStaffTabAllowed } from "./model/staffTabAccess";
+import { assertValidClubDocumentStorage } from "./model/storageUploadValidation";
 
 const MAX_LABEL_LEN = 80;
 const MAX_NOTES_LEN = 500;
@@ -137,7 +138,11 @@ export const createClubDocument = mutation({
       throw new Error(`DATA_002: Notes must be ${MAX_NOTES_LEN} characters or less`);
     }
 
-    const contentType = normalizeContentType(args.contentType);
+    const verifiedContentType = await assertValidClubDocumentStorage(
+      ctx,
+      args.imageFileId,
+    );
+    const contentType = normalizeContentType(verifiedContentType);
 
     const documentId = await ctx.db.insert("clubDocuments", {
       clubId,

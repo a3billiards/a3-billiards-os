@@ -61,6 +61,10 @@ export function A3Password(config: PasswordConfig = {}) {
           throw new Error("Missing `password` param for `signIn` flow");
         }
 
+        await ctx.runQuery(internal.authAttemptLimit.assertPasswordLoginNotLocked, {
+          email,
+        });
+
         let retrieved;
         try {
           retrieved = await retrieveAccount(ctx, {
@@ -84,18 +88,30 @@ export function A3Password(config: PasswordConfig = {}) {
                 "DATA_002: Password login for this email is linked to a different user",
               );
             }
+            await ctx.runMutation(internal.authAttemptLimit.recordPasswordLoginFailed, {
+              email,
+            });
             throw new Error("AUTH_001: Invalid credentials");
           }
           if (msg.includes("InvalidSecret")) {
+            await ctx.runMutation(internal.authAttemptLimit.recordPasswordLoginFailed, {
+              email,
+            });
             throw new Error("AUTH_001: Invalid credentials");
           }
           throw e;
         }
 
         if (retrieved === null) {
+          await ctx.runMutation(internal.authAttemptLimit.recordPasswordLoginFailed, {
+            email,
+          });
           throw new Error("AUTH_001: Invalid credentials");
         }
         ({ account, user } = retrieved);
+        await ctx.runMutation(internal.authAttemptLimit.clearPasswordLoginAttempts, {
+          email,
+        });
         if (user.isFrozen) {
           throw new Error("AUTH_002: Account is frozen");
         }
@@ -201,9 +217,13 @@ function defaultProfile(params: Record<string, unknown>) {
   // populated in the same atomic createAccount call — no separate createUser
   // mutation needed, which avoids the "not authenticated" race condition.
   const now = Date.now();
+  const rawName = typeof params.name === "string" ? params.name.trim() : "";
+  if (rawName.length > 100) {
+    throw new Error("DATA_002: Name must be 100 characters or less");
+  }
   return {
     email: params.email as string,
-    name: typeof params.name === "string" ? params.name.trim() : "",
+    name: rawName,
     age: typeof params.age === "number" ? params.age : 0,
     phone: typeof params.phone === "string" ? params.phone : undefined,
     phoneVerified: false,

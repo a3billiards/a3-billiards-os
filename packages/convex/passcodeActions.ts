@@ -61,10 +61,20 @@ export const verifyPasscode = action({
     }
 
     const digits = assertSixDigitPin(passcode);
+    const attemptKey = `passcode:${ctxRow.userId}`;
+    await ctx.runQuery(internal.authAttemptLimit.assertNotLocked, {
+      key: attemptKey,
+    });
+
     const ok = await bcrypt.compare(digits, ctxRow.settingsPasscodeHash);
     if (!ok) {
+      await ctx.runMutation(internal.authAttemptLimit.recordFailed, {
+        key: attemptKey,
+      });
       throw new Error("PASSCODE_001: Invalid passcode");
     }
+
+    await ctx.runMutation(internal.authAttemptLimit.clear, { key: attemptKey });
 
     if (staffRoleId === undefined) {
       return {
@@ -117,10 +127,20 @@ export const changePasscode = action({
       throw new Error("DATA_001: New passcode must be different");
     }
 
+    const attemptKey = `passcode:${userId}`;
+    await ctx.runQuery(internal.authAttemptLimit.assertNotLocked, {
+      key: attemptKey,
+    });
+
     const ok = await bcrypt.compare(currentDigits, ctxRow.settingsPasscodeHash);
     if (!ok) {
+      await ctx.runMutation(internal.authAttemptLimit.recordFailed, {
+        key: attemptKey,
+      });
       throw new Error("PASSCODE_001: Invalid passcode");
     }
+
+    await ctx.runMutation(internal.authAttemptLimit.clear, { key: attemptKey });
 
     const passcodeHash = await bcrypt.hash(newDigits, BCRYPT_ROUNDS);
     await ctx.runMutation(internal.passcode.applyChangePasscode, {

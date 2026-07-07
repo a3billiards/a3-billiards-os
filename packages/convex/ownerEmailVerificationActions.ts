@@ -78,6 +78,11 @@ export const verifyOwnerEmailCode = action({
       return { verified: true as const };
     }
 
+    const attemptKey = `owner_email:${profile.ownerId}`;
+    await ctx.runQuery(internal.authAttemptLimit.assertNotLocked, {
+      key: attemptKey,
+    });
+
     const candidates = await ctx.runQuery(
       internal.ownerEmailVerification.listActiveOwnerEmailVerificationCandidates,
       { ownerId: profile.ownerId },
@@ -86,6 +91,7 @@ export const verifyOwnerEmailCode = action({
     for (const row of candidates) {
       const match = await bcrypt.compare(normalizedCode, row.codeHash);
       if (match) {
+        await ctx.runMutation(internal.authAttemptLimit.clear, { key: attemptKey });
         await ctx.runMutation(internal.ownerEmailVerification.markOwnerEmailVerified, {
           ownerId: profile.ownerId,
           recordId: row._id,
@@ -96,6 +102,9 @@ export const verifyOwnerEmailCode = action({
       }
     }
 
+    await ctx.runMutation(internal.authAttemptLimit.recordFailed, {
+      key: attemptKey,
+    });
     throw new Error("AUTH_009: Verification code invalid or expired");
   },
 });

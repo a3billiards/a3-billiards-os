@@ -87,6 +87,11 @@ export const verifyMfaCode = action({
       throw new Error("AUTH_003: MFA code invalid or expired");
     }
 
+    const attemptKey = `mfa:${adminId}`;
+    await ctx.runQuery(internal.authAttemptLimit.assertNotLocked, {
+      key: attemptKey,
+    });
+
     const candidates = await ctx.runQuery(
       internal.mfa.listActiveMfaCandidates,
       { adminId },
@@ -95,6 +100,7 @@ export const verifyMfaCode = action({
     for (const row of candidates) {
       const match = await bcrypt.compare(normalized, row.codeHash);
       if (match) {
+        await ctx.runMutation(internal.authAttemptLimit.clear, { key: attemptKey });
         await ctx.runMutation(internal.mfa.consumeMfaCode, {
           recordId: row._id,
         });
@@ -102,6 +108,9 @@ export const verifyMfaCode = action({
       }
     }
 
+    await ctx.runMutation(internal.authAttemptLimit.recordFailed, {
+      key: attemptKey,
+    });
     throw new Error("AUTH_003: MFA code invalid or expired");
   },
 });

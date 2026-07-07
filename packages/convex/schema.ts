@@ -502,6 +502,16 @@ export default defineSchema({
     // FIX #4: Rate-limit check queries by phone to count dispatches in the last hour
     .index("by_phone", ["phone"]),
 
+  // ── authVerifyAttempts ─────────────────────────────────────────────────────
+  // Failed-attempt counters for password login and short-code verification.
+  // Key format: "login:<email>", "mfa:<adminId>", "owner_email:<ownerId>", "passcode:<ownerId>"
+  authVerifyAttempts: defineTable({
+    key: v.string(),
+    failedAttempts: v.number(),
+    cooldownUntil: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
   // ── sessionLogs ────────────────────────────────────────────────────────────
   // Lightweight cross-club session references. Central DB.
   // Powers customer session history across all clubs without exposing club billing data.

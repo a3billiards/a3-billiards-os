@@ -298,29 +298,43 @@ http.route({
       );
     }
 
-    const safe = (s: string) =>
-      s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/</g, "");
+    const amountNum = Number(amount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      return htmlPage(
+        "Payment",
+        `<div class="logo">A3 Billiards</div><h1>Payment unavailable</h1><p class="muted">Invalid payment amount. Return to the app and try again.</p>`,
+      );
+    }
+
+    const escapeHtml = (s: string) =>
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+    const js = (value: string) => JSON.stringify(value);
 
     const body = `
 <div class="logo">A3 Billiards</div>
 <h1>Complete payment</h1>
-<p class="muted">${safe(description)}</p>
+<p class="muted">${escapeHtml(description)}</p>
 <p class="muted" id="status">Opening Razorpay…</p>
 <div id="msg"></div>
 <script src="https://checkout.razorpay.com/v1/checkout.js"><\/script>
 <script>
 (function(){
   var opts = {
-    key: '${safe(keyId)}',
-    amount: ${Number(amount)},
-    currency: '${safe(currency)}',
+    key: ${js(keyId)},
+    amount: ${amountNum},
+    currency: ${js(currency)},
     name: 'A3 Billiards',
-    description: '${safe(description)}',
-    order_id: '${safe(orderId)}',
+    description: ${js(description)},
+    order_id: ${js(orderId)},
     prefill: {
-      name: '${safe(name)}',
-      email: '${safe(email)}',
-      contact: '${safe(contact)}'
+      name: ${js(name)},
+      email: ${js(email)},
+      contact: ${js(contact)}
     },
     theme: { color: '#4ade80' },
     handler: function(resp){
@@ -346,7 +360,12 @@ http.route({
     rzp.on('payment.failed', function(resp){
       document.getElementById('status').textContent = 'Payment failed';
       var reason = (resp && resp.error && resp.error.description) ? resp.error.description : 'Payment failed';
-      document.getElementById('msg').innerHTML = '<div class="error">' + reason + '</div>';
+      var msgEl = document.getElementById('msg');
+      msgEl.textContent = '';
+      var errDiv = document.createElement('div');
+      errDiv.className = 'error';
+      errDiv.textContent = reason;
+      msgEl.appendChild(errDiv);
       post({ type: 'failed', reason: reason });
     });
     rzp.open();

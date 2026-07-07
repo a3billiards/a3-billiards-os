@@ -8,6 +8,7 @@ import {
   requireViewer,
 } from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
+import { assertValidClubPhotoStorage } from "./model/storageUploadValidation";
 import { validateBookableWithinOperating } from "@a3/utils/availability";
 
 const operatingHoursValidator = v.object({
@@ -123,6 +124,7 @@ export const uploadClubPhoto = mutation({
         "Maximum 5 photos allowed. Remove a photo before adding a new one.",
       );
     }
+    await assertValidClubPhotoStorage(ctx, storageId);
     photos.push(storageId);
     await ctx.db.patch(clubId, { photos });
     return { success: true as const };

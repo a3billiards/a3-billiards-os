@@ -261,7 +261,9 @@ export const createUser = mutation({
     if (age < 18) throwErr("AUTH_007: Must be 18 or older");
 
     const trimmed = name.trim();
-    if (trimmed.length === 0) throwErr("DATA_001: Name is required");
+    if (trimmed.length < 2 || trimmed.length > 100) {
+      throwErr("Name must be between 2 and 100 characters.");
+    }
 
     const existing = await ctx.db.get(userId);
     if (!existing) {
@@ -315,7 +317,9 @@ export const updateUser = mutation({
 
     if (name !== undefined) {
       const t = name.trim();
-      if (t.length === 0) throwErr("DATA_001: Name is required");
+      if (t.length < 2 || t.length > 100) {
+        throwErr("Name must be between 2 and 100 characters.");
+      }
       patch.name = t;
     }
 

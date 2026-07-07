@@ -143,7 +143,7 @@ export async function dispatchWhatsAppOtp(
 
   if (!res.ok) {
     const detail = summarizeWhatsAppGraphError(raw);
-    console.error("WhatsApp API error:", raw);
+    console.error("WhatsApp API error:", detail);
     const hint133010 =
       /\b133010\b/.test(raw) || /\b133010\b/.test(detail)
         ? "Your WhatsApp Business number is not registered for Cloud API sending. In Meta for Developers → WhatsApp → API Setup: finish **Register** for this phone (PIN), or use the register endpoint for this Phone Number ID."
