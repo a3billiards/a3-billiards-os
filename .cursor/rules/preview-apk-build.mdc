@@ -1,0 +1,38 @@
+---
+description: Sync workspace to C:\a3billiards after mobile feature work, before preview APK builds
+alwaysApply: true
+---
+
+# Preview APK build folder sync
+
+APK builds use `C:\a3billiards` (short path). That folder is a **mirror** of this repo — not the live workspace.
+
+## After every new feature (or batch of related changes)
+
+1. Finish the feature in the workspace (`C:\Users\ibrah\Desktop\A3 Main\a3-billiards-os`).
+2. **Sync to the build folder** before considering the work done for mobile testing:
+   ```powershell
+   pnpm sync:build-folder
+   ```
+3. If `packages/` dependencies changed, also run in the build folder:
+   ```powershell
+   cd C:\a3billiards; pnpm install
+   ```
+
+## Only build APKs when all planned features are in
+
+Do **not** build preview APKs mid-sprint unless the user asks. When ready:
+
+```powershell
+pnpm build:preview-apks
+```
+
+`build:preview-apks` syncs once at the start, then builds owner, customer, and admin. Individual builds via `build-preview-apk.ps1` also sync unless `-SkipSync` is passed.
+
+## Deploy Convex when backend changes
+
+If `packages/convex/` changed, deploy to the dev deployment used by preview APKs (`ardent-albatross-880`):
+
+```powershell
+cd packages/convex; npx convex dev --once
+```

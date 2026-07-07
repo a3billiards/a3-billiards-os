@@ -80,6 +80,8 @@ export const ERROR_CODES = {
     LIVESTREAM_002: "AWS IVS API call failed",
     LIVESTREAM_003: "No stream is currently live for this club",
     LIVESTREAM_004: "This stream is not currently active",
+    SUPPORT_001: "Subject must be 3–120 characters",
+    SUPPORT_002: "Message must be 10–2000 characters",
     UNKNOWN: "An unexpected error occurred",
   } as const;
    

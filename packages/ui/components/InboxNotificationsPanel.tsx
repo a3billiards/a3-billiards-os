@@ -18,6 +18,8 @@ export type InboxNotificationRow = {
   body: string;
   isRead: boolean;
   createdAt: number;
+  /** When set, shown instead of `fromAdminLabel` in the meta line. */
+  sourceLabel?: string;
 };
 
 export type InboxNotificationsPanelProps = {
@@ -98,7 +100,7 @@ export function InboxNotificationsPanel({
                 {!row.isRead ? <View style={styles.unreadDot} /> : null}
               </View>
               <Text style={styles.cardMeta}>
-                {fromAdminLabel} · {formatWhen(row.createdAt)}
+                {row.sourceLabel ?? fromAdminLabel} · {formatWhen(row.createdAt)}
               </Text>
               <Text style={styles.cardBody}>{row.body}</Text>
             </Pressable>

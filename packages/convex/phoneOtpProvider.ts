@@ -34,8 +34,14 @@ export function A3PhoneOtp() {
         throw new Error("OTP_002: Please enter the 6-digit code sent to your phone.");
       }
 
-      // Verify the OTP atomically. Throws OTP_001/002 on bad code.
-      await ctx.runMutation(internal.otp.attemptVerify, { phone, code });
+      // Verify OTP in its own mutation (must not throw after writes — attempts would roll back).
+      const otpResult = await ctx.runMutation(internal.otp.attemptVerify, {
+        phone,
+        code,
+      });
+      if (!otpResult.ok) {
+        throw new Error(otpResult.error);
+      }
 
       const existingAccount: Doc<"authAccounts"> | null = await ctx.runQuery(
         internal.phoneOtp.findAccountByPhone,

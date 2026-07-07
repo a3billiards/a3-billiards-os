@@ -128,13 +128,6 @@ async function collectClubMemberIds(
 ): Promise<Id<"users">[]> {
   const ids = new Set<Id<"users">>();
 
-  for (const ledger of await ctx.db
-    .query("loyaltyLedgers")
-    .withIndex("by_clubId", (q) => q.eq("clubId", clubId))
-    .collect()) {
-    ids.add(ledger.userId);
-  }
-
   for (const session of await ctx.db
     .query("sessions")
     .withIndex("by_club", (q) => q.eq("clubId", clubId))
@@ -194,18 +187,12 @@ async function buildClubMemberRow(
     return null;
   }
 
-  const [sessionHistory, stats, ledger, complaints] = await Promise.all([
+  const [sessionHistory, stats, complaints] = await Promise.all([
     clubSessionSummary(ctx, clubId, userId),
     ctx.db
       .query("customerBookingStats")
       .withIndex("by_customer_club", (q) =>
         q.eq("customerId", userId).eq("clubId", clubId),
-      )
-      .unique(),
-    ctx.db
-      .query("loyaltyLedgers")
-      .withIndex("by_clubId_userId", (q) =>
-        q.eq("clubId", clubId).eq("userId", userId),
       )
       .unique(),
     ctx.db
@@ -231,13 +218,6 @@ async function buildClubMemberRow(
       noShowCount: stats?.noShowCount ?? 0,
       lateCancellationCount: stats?.lateCancellationCount ?? 0,
     },
-    loyalty: ledger
-      ? {
-          availableCredits: ledger.availableCredits,
-          lifetimeCreditsEarned: ledger.lifetimeCreditsEarned,
-          lifetimeCreditsRedeemed: ledger.lifetimeCreditsRedeemed,
-        }
-      : null,
     complaintsAtClub: activeComplaints.length,
   };
 }

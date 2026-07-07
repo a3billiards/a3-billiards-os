@@ -7,7 +7,6 @@ import {
   Pressable,
   Image,
   Dimensions,
-  FlatList,
   NativeSyntheticEvent,
   NativeScrollEvent,
   ActivityIndicator,
@@ -24,7 +23,7 @@ import { usePullToRefresh } from "@a3/ui/hooks";
 import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
 import { MaterialIcons } from "@expo/vector-icons";
 import { canNavigateToClub, openClubNavigation } from "../../lib/openClubNavigation";
-import { getCurrentLanguage, useTranslation } from "@a3/i18n";
+import { useTranslation } from "@a3/i18n";
 import {
   formatHhmm12h,
   localizedAmenityLabel,
@@ -77,8 +76,9 @@ const AMENITY_ICON: Record<string, string> = {
 };
 
 export default function PublicClubProfileScreen(): React.JSX.Element {
-  const { t } = useTranslation();
-  const locale = getCurrentLanguage();
+  const { t, i18n } = useTranslation();
+  // Use i18n.language so the screen re-renders when language changes.
+  const locale = i18n.language || "en";
   const { refreshing, onRefresh } = usePullToRefresh();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -177,32 +177,30 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <FlatList
-          data={photoData}
+        <ScrollView
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(_, i) => `p-${i}`}
           onMomentumScrollEnd={onGalleryScroll}
-          getItemLayout={(_, index) => ({
-            length: SCREEN_W,
-            offset: SCREEN_W * index,
-            index,
-          })}
-          renderItem={({ item }) =>
+        >
+          {photoData.map((item, i) =>
             item ? (
               <Image
+                key={`p-${i}`}
                 source={{ uri: item }}
                 style={{ width: SCREEN_W, height: GALLERY_H }}
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.galleryPlaceholder, { width: SCREEN_W }]}>
+              <View
+                key={`p-${i}`}
+                style={[styles.galleryPlaceholder, { width: SCREEN_W }]}
+              >
                 <Text style={styles.galleryPlaceholderIcon}>◎</Text>
               </View>
-            )
-          }
-        />
+            ),
+          )}
+        </ScrollView>
         {photoData.length > 1 ? (
           <View style={styles.dots}>
             {photoData.map((_, i) => (
@@ -235,7 +233,7 @@ export default function PublicClubProfileScreen(): React.JSX.Element {
             <Text style={styles.muted}>{t("customerApp.clubProfile.hoursNotAvailable")}</Text>
           ) : (
             DAY_ORDER.map((d) => {
-              const open = oh.daysOfWeek.includes(d);
+              const open = (oh.daysOfWeek ?? []).includes(d);
               return (
                 <View key={d} style={styles.hoursRow}>
                   <Text style={styles.dayLabel}>{dayLabel(d, t)}</Text>
@@ -452,31 +450,6 @@ const styles = StyleSheet.create({
   specialLabel: { ...typography.label, color: colors.text.primary },
   specialRate: { ...typography.body, color: colors.accent.green, marginTop: spacing[1] },
   specialMeta: { ...typography.caption, color: colors.text.secondary, marginTop: 2 },
-  loyaltyCard: {
-    marginTop: spacing[5],
-    padding: spacing[4],
-    backgroundColor: glass.cardBg,
-    borderWidth: 1,
-    borderColor: glass.cardBorder,
-    borderRadius: glass.cardRadiusSmall,
-    gap: spacing[2],
-  },
-  loyaltyScope: { ...typography.caption, color: colors.text.tertiary, marginBottom: spacing[2] },
-  loyaltyProgramme: { ...typography.label, color: colors.text.primary },
-  loyaltyCredits: { ...typography.bodyLarge, color: colors.accent.green, fontWeight: "600" },
-  loyaltyProgress: { ...typography.bodySmall, color: colors.text.secondary },
-  loyaltyMeta: { ...typography.caption, color: colors.text.tertiary },
-  progressTrack: {
-    height: 8,
-    borderRadius: radius.full,
-    backgroundColor: glass.inputBg,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: colors.accent.green,
-    borderRadius: radius.full,
-  },
   visitBox: {
     marginTop: spacing[6],
     padding: spacing[4],

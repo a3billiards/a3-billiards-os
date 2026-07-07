@@ -49,3 +49,8 @@ export {
 } from './LiveStreamCard';
 export { PasswordStrengthBar, type PasswordStrengthBarProps } from './PasswordStrengthBar';
 export { LanguageSelector } from './LanguageSelector';
+export {
+  HelpSupportPanel,
+  type HelpSupportPanelProps,
+  type HelpSupportRequestRow,
+} from './HelpSupportPanel';

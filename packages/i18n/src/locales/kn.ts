@@ -47,6 +47,8 @@ export const kn: TranslationBundle = {
       "live-moderation": "ಲೈವ್",
       audit: "ಆಡಿಟ್",
       notifications: "ಎಚ್ಚರಿಕೆಗಳು",
+      clubs: "ಕ್ಲಬ್‌ಗಳು",
+      support: "ಬೆಂಬಲ",
     },
   },
   profile: {

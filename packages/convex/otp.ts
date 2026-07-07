@@ -93,6 +93,11 @@ export const deleteOtpRecord = internalMutation({
   },
 });
 
+/**
+ * Verify OTP and persist attempt counters.
+ * Must NOT throw after writing — Convex rolls back mutation writes on throw,
+ * which previously left attempts stuck at 0 (always "2 remaining").
+ */
 export const attemptVerify = internalMutation({
   args: {
     phone: v.string(),
@@ -113,17 +118,19 @@ export const attemptVerify = internalMutation({
       .sort((a, b) => b.createdAt - a.createdAt)[0];
 
     if (!active) {
-      throw new Error(
-        "OTP_002: OTP expired or not found. Please request a new code.",
-      );
+      return {
+        ok: false as const,
+        error: "OTP_002: OTP expired or not found. Please request a new code.",
+      };
     }
 
     if (active.cooldownUntil !== undefined && now < active.cooldownUntil) {
       const waitMs = active.cooldownUntil - now;
       const waitMins = Math.ceil(waitMs / 60_000);
-      throw new Error(
-        `OTP_001: Too many failed attempts. Please wait ${waitMins} minute(s) before trying again.`,
-      );
+      return {
+        ok: false as const,
+        error: `OTP_001: Too many failed attempts. Please wait ${waitMins} minute(s) before trying again.`,
+      };
     }
 
     const isValid = bcrypt.compareSync(code, active.otpHash);
@@ -136,14 +143,19 @@ export const attemptVerify = internalMutation({
           attempts: newAttempts,
           cooldownUntil: now + 5 * 60 * 1000,
         });
-        throw new Error(
-          "OTP_001: Too many failed attempts. Please wait 5 minutes before trying again.",
-        );
+        return {
+          ok: false as const,
+          error:
+            "OTP_001: Too many failed attempts. Please wait 5 minutes before trying again.",
+        };
       }
 
       await ctx.db.patch(active._id, { attempts: newAttempts });
       const remaining = 3 - newAttempts;
-      throw new Error(`OTP_002: Wrong OTP. ${remaining} attempt(s) remaining.`);
+      return {
+        ok: false as const,
+        error: `OTP_002: Wrong OTP. ${remaining} attempt(s) remaining.`,
+      };
     }
 
     await ctx.db.patch(active._id, { used: true });
@@ -151,12 +163,13 @@ export const attemptVerify = internalMutation({
     if (userId !== undefined) {
       const user = await ctx.db.get(userId);
       if (!user) {
-        throw new Error("DATA_003: User not found");
+        return { ok: false as const, error: "DATA_003: User not found" };
       }
       if (user.phone !== undefined && user.phone !== phone) {
-        throw new Error(
-          "PERM_001: Phone does not match this account for verification",
-        );
+        return {
+          ok: false as const,
+          error: "PERM_001: Phone does not match this account for verification",
+        };
       }
       if (user.phone === undefined) {
         await ctx.db.patch(userId, { phone, phoneVerified: true });
@@ -165,9 +178,10 @@ export const attemptVerify = internalMutation({
       }
     }
 
-    return { verified: true as const, phone };
+    return { ok: true as const, verified: true as const, phone };
   },
 });
+
 
 export const sendOtp = action({
   args: {
@@ -275,10 +289,14 @@ export const verifyOtp = action({
     }
     const effectiveUserId = userId ?? (authUserId ?? undefined);
 
-    return await ctx.runMutation(internal.otp.attemptVerify, {
+    const result = await ctx.runMutation(internal.otp.attemptVerify, {
       phone,
       code: normalized,
       userId: effectiveUserId,
     });
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+    return { verified: true as const, phone: result.phone };
   },
 });

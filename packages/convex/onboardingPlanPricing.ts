@@ -13,6 +13,7 @@ export type OnboardingPlanRow = {
 const DAY_MS = 86_400_000;
 
 export function listOnboardingPlansFromEnv(): OnboardingPlanRow[] {
+  // Defaults: ₹999 / month, ₹9999 / year taxable (ex-GST, paise). Override via Convex env if needed.
   const monthlyPaise = Number(process.env.RAZORPAY_PLAN_MONTHLY_PAISE ?? "99900");
   const yearlyPaise = Number(process.env.RAZORPAY_PLAN_YEARLY_PAISE ?? "999900");
   return [

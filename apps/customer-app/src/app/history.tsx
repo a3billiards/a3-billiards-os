@@ -22,7 +22,6 @@ import {
   formatCurrency,
   formatDuration,
 } from "@a3/utils/billing";
-import { computeFreeVisitBill } from "@a3/utils/loyaltyBilling";
 import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
 type SessionLogRow = {
@@ -42,7 +41,6 @@ type SessionLogRow = {
   creditResolvedMethod: "cash" | "upi" | "card" | null;
   createdAt: number;
   updatedAt: number;
-  isFreeVisit: boolean;
 };
 
 type SessionDetail = {
@@ -62,8 +60,6 @@ type SessionDetail = {
   creditResolvedAt: number | null;
   creditResolvedMethod: "cash" | "upi" | "card" | null;
   cancellationReason: string | null;
-  isFreeVisit: boolean;
-  freeVisitMaxMinutes: number | null;
 };
 
 function normalizeClubId(raw: string | string[] | undefined): Id<"clubs"> | undefined {
@@ -190,9 +186,6 @@ function SessionCard({
   if (isActive) {
     statusPill = t("customerApp.history.inProgress");
     pillStyle = styles.pillActive;
-  } else if (row.isFreeVisit && isCompleted) {
-    statusPill = t("customerApp.history.freeVisit");
-    pillStyle = styles.pillFreeVisit;
   } else if (isCancelled) {
     statusPill = t("customerApp.history.cancelled");
     pillStyle = styles.pillMuted;
@@ -231,40 +224,6 @@ function SessionCard({
         qty: s.qty,
         priceAtOrder: s.priceAtOrder,
       }));
-      const endMs =
-        detail.status === "active"
-          ? Date.now()
-          : detail.endTime ?? detail.startTime + 1;
-
-      if (detail.isFreeVisit && detail.freeVisitMaxMinutes != null) {
-        const bill = computeFreeVisitBill({
-          startTime: detail.startTime,
-          endTime: endMs,
-          ratePerMin: detail.ratePerMin,
-          minBillMinutes: detail.minBillMinutes,
-          snackOrders: detail.snackOrders.map((s) => ({
-            snackId: s.snackId,
-            name: s.name,
-            qty: s.qty,
-            priceAtOrder: s.priceAtOrder,
-          })),
-          freeVisitMaxMinutes: detail.freeVisitMaxMinutes,
-        });
-        return {
-          actualMinutes: bill.actualMinutes,
-          billableMinutes: bill.billableMinutes,
-          tableSubtotal: bill.tableSubtotal,
-          discountAmount: 0,
-          discountedTable: bill.discountedTable,
-          snackTotal: bill.snackTotal,
-          finalBill: bill.finalBill,
-          isFreeVisit: true as const,
-          freeVisitMaxMinutes: detail.freeVisitMaxMinutes,
-          coveredMinutes: bill.coveredMinutes,
-          overageMinutes: bill.overageMinutes,
-        };
-      }
-
       if (detail.status === "active") {
         return computeBillBreakdown({
           startTime: detail.startTime,
@@ -423,13 +382,6 @@ function SessionCard({
           ) : breakdown ? (
             <>
               <Text style={styles.breakdownHeader}>{t("customerApp.history.billBreakdown")}</Text>
-              {"isFreeVisit" in breakdown && breakdown.isFreeVisit ? (
-                <Text style={styles.freeVisitNote}>
-                  {t("customerApp.history.loyaltyFreeVisitNote", {
-                    minutes: breakdown.freeVisitMaxMinutes,
-                  })}
-                </Text>
-              ) : null}
               <Text style={styles.sectionTitle}>{t("customerApp.history.tableTime")}</Text>
               <View style={styles.rowBetween}>
                 <Text style={styles.lineDetail}>
@@ -442,18 +394,6 @@ function SessionCard({
                   {formatCurrency(breakdown.tableSubtotal, detail.currency)}
                 </Text>
               </View>
-              {"isFreeVisit" in breakdown && breakdown.isFreeVisit ? (
-                <Text style={styles.noteItalic}>
-                  {t("customerApp.history.coveredByLoyalty", {
-                    minutes: breakdown.coveredMinutes,
-                  })}
-                  {breakdown.overageMinutes > 0
-                    ? t("customerApp.history.overageCharged", {
-                        minutes: breakdown.overageMinutes,
-                      })
-                    : ""}
-                </Text>
-              ) : null}
               {breakdown.billableMinutes > breakdown.actualMinutes ? (
                 <Text style={styles.noteItalic}>
                   {t("customerApp.history.minimumCharge", {
@@ -732,7 +672,6 @@ const styles = StyleSheet.create({
   },
   pillText: { ...typography.caption, fontWeight: "600" },
   pillActive: { backgroundColor: "rgba(67, 160, 71, 0.2)" },
-  pillFreeVisit: { backgroundColor: "rgba(156, 39, 176, 0.2)" },
   pillPaid: { backgroundColor: "rgba(33, 150, 243, 0.2)" },
   pillCredit: { backgroundColor: "rgba(245, 127, 23, 0.2)" },
   pillMuted: { backgroundColor: glass.inputBg },
@@ -784,11 +723,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.secondary,
     fontStyle: "italic",
-    marginBottom: spacing[2],
-  },
-  freeVisitNote: {
-    ...typography.caption,
-    color: colors.accent.green,
     marginBottom: spacing[2],
   },
   creditNote: { ...typography.caption, color: colors.accent.amber, marginTop: spacing[2] },

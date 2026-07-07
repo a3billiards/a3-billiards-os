@@ -284,12 +284,7 @@ function DashboardScreenContent(): React.JSX.Element {
                     icon="business"
                     value={formatInt(dash.activeClubs)}
                     label={t("adminApp.dashboard.activeClubs")}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/(tabs)/users",
-                        params: { role: "owner", activeClubs: "1" },
-                      } as never)
-                    }
+                    onPress={() => router.push("/(tabs)/clubs")}
                   />
                   <GlassStatCard
                     icon="play-circle-filled"

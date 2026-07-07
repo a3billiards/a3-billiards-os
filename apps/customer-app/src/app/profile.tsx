@@ -418,6 +418,19 @@ export default function ProfileScreen(): React.JSX.Element {
         ) : null}
 
         <Text style={[styles.sectionLabel, { marginTop: spacing[4] }]}>
+          {t("customerApp.help.title")}
+        </Text>
+        <View style={styles.card}>
+          <Pressable style={styles.linkRow} onPress={() => router.push("/help")}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>{t("customerApp.help.profileLink")}</Text>
+              <Text style={styles.subtitle}>{t("customerApp.help.profileLinkHint")}</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
+
+        <Text style={[styles.sectionLabel, { marginTop: spacing[4] }]}>
           {t("customerApp.profile.dataPrivacy")}
         </Text>
         <View style={styles.card}>
@@ -719,11 +732,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing[2],
     textTransform: "uppercase",
     letterSpacing: 0.5,
-  },
-  loyaltyIntro: {
-    ...typography.caption,
-    color: colors.text.tertiary,
-    marginBottom: spacing[2],
   },
   card: {
     backgroundColor: glass.cardBg,

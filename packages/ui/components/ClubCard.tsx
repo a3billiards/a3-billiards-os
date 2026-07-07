@@ -7,7 +7,7 @@ import {
   Image,
   Platform,
 } from "react-native";
-import { getCurrentLanguage, useTranslation } from "@a3/i18n";
+import { useTranslation } from "@a3/i18n";
 import { formatHhmm12h, localizedTableTypeLabel } from "@a3/utils/clubDisplay";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
@@ -47,8 +47,8 @@ function hoursSummary(
 }
 
 export function ClubCard({ club, onPress }: ClubCardProps): React.JSX.Element {
-  const { t } = useTranslation();
-  const locale = getCurrentLanguage();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language || "en";
   const { label: hoursLabel, isSet: hoursOk } = hoursSummary(club.operatingHours, locale, t);
   const types = club.tableTypes;
   const maxChips = 3;

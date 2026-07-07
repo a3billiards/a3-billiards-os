@@ -27,7 +27,7 @@ import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { usePullToRefresh } from "@a3/ui/hooks";
 import { shareCsvExport } from "@a3/ui/shareJson";
-import { LanguagePicker, getCurrentLanguage, useTranslation } from "@a3/i18n";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 import { getActiveRoleId, setActiveRoleId } from "../lib/activeRoleStorage";
 import { useStaffRole } from "../lib/StaffRoleContext";
 import { OwnerModePasscodeGate } from "./OwnerModePasscodeGate";
@@ -37,7 +37,7 @@ import { uploadLocalFileToConvexStorage } from "../lib/uploadConvexStorage";
 import { HhMmTimeField, normalizeHhmmInput } from "./HhMmTimeField";
 import { validateBookableWithinOperating } from "@a3/utils/availability";
 import { TableTypeSelect } from "@a3/ui/components";
-import { groupTablesByFloor, tableTypeLabel } from "@a3/utils/tableTypes";
+import { groupTablesByFloor, tableTypeI18nKey, tableTypeLabel } from "@a3/utils/tableTypes";
 
 const RENEW_URL = "https://renew.a3billiards.com";
 const PREDEFINED_AMENITIES = [
@@ -56,7 +56,6 @@ const MAX_AMENITIES = 20;
 function isPredefinedAmenity(value: string): boolean {
   return PREDEFINED_AMENITY_SET.has(value);
 }
-// import { LoyaltyProgrammeSettings } from "./LoyaltyProgrammeSettings";
 
 const WEEK_DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 const SLOT_CHIP_KEYS: { min: number; key: string }[] = [
@@ -70,7 +69,6 @@ const TAB_ORDER = [
   "slots",
   "snacks",
   "kitchen",
-  // "loyalty",
   "livestream",
   "financials",
   "complaints",
@@ -90,7 +88,6 @@ type AccordionKey =
   | "staff"
   | "booking"
   | "gst"
-  // | "loyalty"
   | "profile"
   | "security";
 
@@ -219,7 +216,6 @@ export default function OwnerSettingsContent({
     staff: true,
     booking: true,
     gst: false,
-    // loyalty: false,
     profile: true,
     security: true,
   });
@@ -339,8 +335,6 @@ export default function OwnerSettingsContent({
   const [bhOpen, setBhOpen] = useState("00:00");
   const [bhClose, setBhClose] = useState("23:59");
   const [bhDays, setBhDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
-  const [requireBookingCoupon, setRequireBookingCoupon] = useState(false);
-  const [bookingCouponCode, setBookingCouponCode] = useState("");
   const [bookingErr, setBookingErr] = useState<string | null>(null);
   const [toggleBookingErr, setToggleBookingErr] = useState<string | null>(null);
 
@@ -394,8 +388,6 @@ export default function OwnerSettingsContent({
       setBhClose(club.operatingHours.close);
       setBhDays([...club.operatingHours.daysOfWeek]);
     }
-    setRequireBookingCoupon(club.bookingSettings.requireBookingCoupon === true);
-    setBookingCouponCode(club.bookingSettings.bookingCouponCode ?? "");
     setDesc(club.description);
     setAmenitiesDraft([...(club.amenities ?? [])]);
     if (club.operatingHours) {
@@ -770,10 +762,6 @@ export default function OwnerSettingsContent({
       >
         <Text style={styles.screenTitle}>{t("ownerApp.settings.title")}</Text>
 
-        <View style={styles.card}>
-          <LanguagePicker />
-        </View>
-
         {/* Club profile */}
         <View style={styles.card}>
           {accordionHeader("profile", t("ownerApp.settings.sections.clubProfile"))}
@@ -1042,7 +1030,12 @@ export default function OwnerSettingsContent({
                   <View style={{ flex: 1 }}>
                     <Text style={styles.tableLabel}>{tbl.label}</Text>
                     <Text style={styles.tableMeta}>
-                      {tbl.tableType ? tableTypeLabel(tbl.tableType) : "—"}
+                      {tbl.tableType
+                        ? (() => {
+                            const key = tableTypeI18nKey(tbl.tableType);
+                            return key ? t(key) : tableTypeLabel(tbl.tableType);
+                          })()
+                        : "—"}
                     </Text>
                     <View
                       style={[
@@ -1484,54 +1477,9 @@ export default function OwnerSettingsContent({
                 </View>
               ) : null}
 
-              <View style={styles.rowBetween}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.tableLabel}>{t("ownerApp.settings.content.requireBookingCoupon")}</Text>
-                  <Text style={styles.tableMeta}>
-                    {t("ownerApp.settings.content.couponDescription")}
-                  </Text>
-                </View>
-                <Switch
-                  value={requireBookingCoupon}
-                  disabled={frozen}
-                  onValueChange={setRequireBookingCoupon}
-                  trackColor={{ false: colors.bg.tertiary, true: colors.accent.green }}
-                />
-              </View>
-              <Text style={styles.label}>{t("ownerApp.settings.content.bookingCouponCode")}</Text>
-              <TextInput
-                style={styles.input}
-                value={bookingCouponCode}
-                onChangeText={(t) => setBookingCouponCode(t.toUpperCase())}
-                placeholder={t("ownerApp.settings.couponPlaceholder")}
-                placeholderTextColor={colors.text.tertiary}
-                autoCapitalize="characters"
-                editable={!frozen}
-                maxLength={32}
-              />
-              <Pressable
-                style={styles.secondaryBtn}
-                disabled={frozen}
-                onPress={async () => {
-                  try {
-                    await updateBookingSettings({
-                      clubId: club.clubId,
-                      settings: {
-                        requireBookingCoupon,
-                        bookingCouponCode: bookingCouponCode.trim() || undefined,
-                      },
-                    });
-                    Alert.alert(
-                      t("ownerApp.settings.content.saved"),
-                      t("ownerApp.settings.content.bookingCouponSavedBody"),
-                    );
-                  } catch (e) {
-                    Alert.alert(parseConvexError(e as Error).message);
-                  }
-                }}
-              >
-                <Text style={styles.secondaryBtnText}>{t("ownerApp.settings.content.saveCouponSettings")}</Text>
-              </Pressable>
+              <Text style={styles.tableMeta}>
+                {t("ownerApp.settings.content.onlinePaymentHint")}
+              </Text>
 
               {bookingPrecheck && !bookingPrecheck.allOk && !club.bookingSettings.enabled ? (
                 <View style={styles.warnCard}>
@@ -1918,20 +1866,6 @@ export default function OwnerSettingsContent({
           ) : null}
         </View>
 
-        {/* Loyalty programme disabled
-        <View style={styles.card}>
-          {accordionHeader("loyalty", t("ownerApp.settings.content.loyaltyProgramme"))}
-          {open.loyalty && club ? (
-            <View style={styles.accBody}>
-              <LoyaltyProgrammeSettings
-                clubId={club.clubId}
-                minBillMinutes={club.minBillMinutes}
-              />
-            </View>
-          ) : null}
-        </View>
-        */}
-
         {/* Security */}
         <View style={styles.card}>
           {accordionHeader("security", t("ownerApp.settings.sections.security"))}
@@ -1943,6 +1877,10 @@ export default function OwnerSettingsContent({
               </Pressable>
               <Pressable style={styles.rowLink} onPress={() => router.push("/change-passcode")}>
                 <Text style={styles.linkText}>{t("ownerApp.settings.content.changeSettingsPasscode")}</Text>
+                <MaterialIcons name="chevron-right" size={22} color={colors.text.secondary} />
+              </Pressable>
+              <Pressable style={styles.rowLink} onPress={() => router.push("/help")}>
+                <Text style={styles.linkText}>{t("ownerApp.help.settingsLink")}</Text>
                 <MaterialIcons name="chevron-right" size={22} color={colors.text.secondary} />
               </Pressable>
               <Pressable
@@ -2637,6 +2575,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   photoRemoveText: { color: "#fff", fontSize: 18 },
-  mapBox: { marginTop: spacing[2], minHeight: 360, borderRadius: radius.md, overflow: "hidden" },
+  mapBox: { marginTop: spacing[2], minHeight: 480, borderRadius: radius.md, overflow: "hidden" },
   map: { flex: 1 },
 });

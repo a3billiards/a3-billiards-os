@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, layout, spacing, typography, radius } from "@a3/ui/theme";
@@ -24,9 +24,14 @@ const MAX_PLAYBACK_RETRIES = 8;
 
 type PlayerPhase = "loading" | "waiting" | "playing" | "ended" | "error";
 
+type IvsQuality = { name?: string; height?: number; width?: number; bitrate?: number };
+
 type IvsPlayerRef = {
   play: () => void;
   pause: () => void;
+  getQualities?: () => IvsQuality[];
+  setQuality?: (quality: IvsQuality | null) => void;
+  setAutoQualityMode?: (auto: boolean) => void;
 };
 
 type IvsPlayerModule = {
@@ -78,6 +83,8 @@ export function LiveStreamPlayer({
 }: LiveStreamPlayerProps): React.JSX.Element {
   const { t } = useTranslation();
   const getPlaybackToken = useAction(api.livestream.getPlaybackToken);
+  const heartbeatViewer = useMutation(api.livestream.heartbeatLiveViewer);
+  const leaveViewer = useMutation(api.livestream.leaveLiveViewer);
   const streamMeta = useQuery(api.livestream.getLiveStreamPublicMeta, { liveStreamId });
   const otherStreams = useQuery(api.livestream.getActiveStreamsPlatformWide);
   const playerRef = useRef<IvsPlayerRef | null>(null);
@@ -91,6 +98,9 @@ export function LiveStreamPlayer({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusNote, setStatusNote] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
+  const [qualities, setQualities] = useState<IvsQuality[]>([]);
+  const [qualityLabel, setQualityLabel] = useState("Auto");
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
 
   const clearTimers = useCallback(() => {
     if (waitTimerRef.current) {
@@ -195,6 +205,22 @@ export function LiveStreamPlayer({
     return () => clearInterval(id);
   }, [phase, fetchToken]);
 
+  // Presence heartbeat so owner/admin/customer UIs show live watcher counts.
+  useEffect(() => {
+    let cancelled = false;
+    const beat = () => {
+      if (cancelled) return;
+      void heartbeatViewer({ liveStreamId }).catch(() => {});
+    };
+    beat();
+    const id = setInterval(beat, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      void leaveViewer({ liveStreamId }).catch(() => {});
+    };
+  }, [heartbeatViewer, leaveViewer, liveStreamId]);
+
   if (!ivsPlayerModule) {
     return (
       <View style={styles.centered}>
@@ -237,6 +263,14 @@ export function LiveStreamPlayer({
           onPlayerStateChange={(state: string) => {
             if (state === "Ended" || state === "Idle") {
               setPhase("ended");
+            }
+            if (state === "Ready" || state === "Playing") {
+              try {
+                const list = playerRef.current?.getQualities?.() ?? [];
+                if (list.length > 0) setQualities(list);
+              } catch {
+                /* player may not expose qualities yet */
+              }
             }
           }}
           onError={(error: string) => {
@@ -291,6 +325,25 @@ export function LiveStreamPlayer({
         ) : null}
         {phase === "playing" ? (
           <Pressable
+            style={styles.qualityBtn}
+            onPress={() => {
+              try {
+                const list = playerRef.current?.getQualities?.() ?? [];
+                if (list.length > 0) setQualities(list);
+              } catch {
+                /* ignore */
+              }
+              setShowQualityMenu((v) => !v);
+            }}
+            hitSlop={8}
+            accessibilityLabel={t("customerApp.streaming.quality")}
+          >
+            <MaterialIcons name="high-quality" size={18} color="#fff" />
+            <Text style={styles.qualityBtnText}>{qualityLabel}</Text>
+          </Pressable>
+        ) : null}
+        {phase === "playing" ? (
+          <Pressable
             style={styles.backBtn}
             onPress={() => setMuted((m) => !m)}
             hitSlop={12}
@@ -304,6 +357,45 @@ export function LiveStreamPlayer({
           </Pressable>
         ) : null}
       </View>
+
+      {showQualityMenu && phase === "playing" ? (
+        <View style={styles.qualityMenu}>
+          <Pressable
+            style={styles.qualityOption}
+            onPress={() => {
+              playerRef.current?.setAutoQualityMode?.(true);
+              setQualityLabel(t("customerApp.streaming.qualityAuto"));
+              setShowQualityMenu(false);
+            }}
+          >
+            <Text style={styles.qualityOptionText}>{t("customerApp.streaming.qualityAuto")}</Text>
+          </Pressable>
+          {(qualities.length > 0
+            ? [...qualities].sort((a, b) => (b.height ?? 0) - (a.height ?? 0))
+            : [
+                { name: "1080p", height: 1080 },
+                { name: "720p", height: 720 },
+                { name: "480p", height: 480 },
+              ]
+          ).map((q) => {
+            const label = q.name ?? (q.height ? `${q.height}p` : "—");
+            return (
+              <Pressable
+                key={label}
+                style={styles.qualityOption}
+                onPress={() => {
+                  playerRef.current?.setAutoQualityMode?.(false);
+                  playerRef.current?.setQuality?.(q);
+                  setQualityLabel(label);
+                  setShowQualityMenu(false);
+                }}
+              >
+                <Text style={styles.qualityOptionText}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
 
       {phase === "playing" && otherStreams && otherStreams.length > 1 ? (
         <View style={styles.otherStreamsWrap}>
@@ -384,6 +476,41 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.sm,
     overflow: "hidden",
+  },
+  qualityBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    paddingHorizontal: spacing[2],
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    minHeight: layout.touchTarget - 8,
+  },
+  qualityBtnText: {
+    ...typography.labelSmall,
+    color: "#fff",
+  },
+  qualityMenu: {
+    position: "absolute",
+    top: spacing[12] + layout.touchTarget + spacing[2],
+    right: spacing[4],
+    backgroundColor: "rgba(0,0,0,0.85)",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    minWidth: 120,
+    overflow: "hidden",
+  },
+  qualityOption: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    minHeight: layout.touchTarget,
+    justifyContent: "center",
+  },
+  qualityOptionText: {
+    ...typography.bodySmall,
+    color: "#fff",
   },
   title: { ...typography.heading3, color: colors.text.primary, textAlign: "center" },
   meta: { ...typography.bodySmall, color: colors.text.secondary, textAlign: "center" },

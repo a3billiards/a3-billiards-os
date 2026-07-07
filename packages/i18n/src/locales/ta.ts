@@ -47,6 +47,8 @@ export const ta: TranslationBundle = {
       "live-moderation": "நேரலை",
       audit: "தணிக்கை",
       notifications: "எச்சரிக்கை",
+      clubs: "கிளப்புகள்",
+      support: "ஆதரவு",
     },
   },
   profile: {

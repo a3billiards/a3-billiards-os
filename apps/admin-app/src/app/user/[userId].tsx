@@ -576,7 +576,9 @@ export default function UserProfileScreen(): React.JSX.Element {
 
           {user.role !== "admin" && !user.isFrozen ? (
             <Pressable style={styles.actionBtnDanger} onPress={onFreeze}>
-              <Text style={styles.actionBtnDangerText}>{t("adminApp.userProfile.freezeAccount")}</Text>
+              <Text style={styles.actionBtnDangerText}>
+                {t("adminApp.userProfile.freezeAccount")}
+              </Text>
             </Pressable>
           ) : null}
           {user.isFrozen ? (

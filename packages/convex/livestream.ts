@@ -69,6 +69,38 @@ function viewerCountFromStream(stream: {
   return stream.currentViewerCount ?? stream.peakViewerCount ?? 0;
 }
 
+/** Heartbeats older than this are not counted as active watchers. */
+const VIEWER_STALE_MS = 45_000;
+
+async function countActiveViewers(
+  ctx: QueryCtx | MutationCtx,
+  liveStreamId: Id<"liveStreams">,
+  now = Date.now(),
+): Promise<number> {
+  const rows = await ctx.db
+    .query("liveStreamViewers")
+    .withIndex("by_stream", (q) => q.eq("liveStreamId", liveStreamId))
+    .collect();
+  return rows.filter((r) => now - r.lastSeenAt <= VIEWER_STALE_MS).length;
+}
+
+async function applyViewerCount(
+  ctx: MutationCtx,
+  liveStreamId: Id<"liveStreams">,
+  viewerCount: number,
+): Promise<void> {
+  const live = await ctx.db.get(liveStreamId);
+  if (!live || live.status !== "live") return;
+  const peak = live.peakViewerCount ?? 0;
+  const patch: { currentViewerCount: number; peakViewerCount?: number } = {
+    currentViewerCount: viewerCount,
+  };
+  if (viewerCount > peak) {
+    patch.peakViewerCount = viewerCount;
+  }
+  await ctx.db.patch(live._id, patch);
+}
+
 async function resolveClubBannerUrl(
   ctx: QueryCtx,
   club: Doc<"clubs">,
@@ -227,17 +259,72 @@ export const updatePeakViewerCount = internalMutation({
     viewerCount: v.number(),
   },
   handler: async (ctx, { liveStreamId, viewerCount }) => {
-    const live = await ctx.db.get(liveStreamId);
-    if (!live || live.status !== "live") return;
+    // Never let a stale IVS 0 wipe active presence-based watchers.
+    const presence = await countActiveViewers(ctx, liveStreamId);
+    await applyViewerCount(ctx, liveStreamId, Math.max(viewerCount, presence));
+  },
+});
 
-    const peak = live.peakViewerCount ?? 0;
-    const patch: { currentViewerCount: number; peakViewerCount?: number } = {
-      currentViewerCount: viewerCount,
-    };
-    if (viewerCount > peak) {
-      patch.peakViewerCount = viewerCount;
+/** Client heartbeat while watching — drives live viewer counts in all apps. */
+export const heartbeatLiveViewer = mutation({
+  args: { liveStreamId: v.id("liveStreams") },
+  handler: async (ctx, { liveStreamId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throw new Error("AUTH_001: Not authenticated");
     }
-    await ctx.db.patch(live._id, patch);
+    const stream = await ctx.db.get(liveStreamId);
+    if (!stream || stream.status !== "live") {
+      return { viewerCount: 0 };
+    }
+
+    const now = Date.now();
+    const existing = await ctx.db
+      .query("liveStreamViewers")
+      .withIndex("by_stream_user", (q) =>
+        q.eq("liveStreamId", liveStreamId).eq("userId", userId),
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.patch(existing._id, { lastSeenAt: now });
+    } else {
+      await ctx.db.insert("liveStreamViewers", {
+        liveStreamId,
+        userId,
+        lastSeenAt: now,
+      });
+    }
+
+    const viewerCount = await countActiveViewers(ctx, liveStreamId, now);
+    await applyViewerCount(ctx, liveStreamId, viewerCount);
+    return { viewerCount };
+  },
+});
+
+/** Clear presence when leaving the player. */
+export const leaveLiveViewer = mutation({
+  args: { liveStreamId: v.id("liveStreams") },
+  handler: async (ctx, { liveStreamId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return { viewerCount: 0 };
+
+    const existing = await ctx.db
+      .query("liveStreamViewers")
+      .withIndex("by_stream_user", (q) =>
+        q.eq("liveStreamId", liveStreamId).eq("userId", userId),
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+
+    const stream = await ctx.db.get(liveStreamId);
+    if (!stream || stream.status !== "live") {
+      return { viewerCount: 0 };
+    }
+    const viewerCount = await countActiveViewers(ctx, liveStreamId);
+    await applyViewerCount(ctx, liveStreamId, viewerCount);
+    return { viewerCount };
   },
 });
 
@@ -370,12 +457,29 @@ export const refreshViewerCount = action({
     const stream = await ctx.runQuery(internal.livestream.getStreamChannelArn, {
       liveStreamId: args.liveStreamId,
     });
-    if (!stream?.channelArn) return { viewerCount: 0 };
-    const result = await ctx.runAction(internal.livestreamActions.getViewerCount, {
-      channelArn: stream.channelArn,
+    if (stream?.channelArn) {
+      // getViewerCount persists the merged (IVS + in-app presence) count via
+      // updatePeakViewerCount, taking the max of the two sources.
+      await ctx.runAction(internal.livestreamActions.getViewerCount, {
+        channelArn: stream.channelArn,
+        liveStreamId: args.liveStreamId,
+      });
+    }
+    // Read back the persisted, merged count rather than the raw IVS metric,
+    // which can lag several minutes behind actual in-app viewers.
+    const viewerCount = await ctx.runQuery(internal.livestream.getStreamViewerCount, {
       liveStreamId: args.liveStreamId,
     });
-    return { viewerCount: result.viewerCount };
+    return { viewerCount };
+  },
+});
+
+export const getStreamViewerCount = internalQuery({
+  args: { liveStreamId: v.id("liveStreams") },
+  handler: async (ctx, { liveStreamId }) => {
+    const stream = await ctx.db.get(liveStreamId);
+    if (!stream) return 0;
+    return viewerCountFromStream(stream);
   },
 });
 

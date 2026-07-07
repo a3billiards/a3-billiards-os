@@ -46,7 +46,7 @@ export function toE164India(local: string): string {
 
 /** Parse "N attempt(s) remaining" from Convex OTP_002 wrong-code errors. */
 export function parseOtpAttemptsRemaining(message: string): number | null {
-  const match = message.match(/(\d+)\s+attempt/i);
+  const match = message.match(/(\d+)\s+attempt(?:s|\(s\))?\s+remaining/i);
   if (!match) return null;
   const n = Number(match[1]);
   return Number.isFinite(n) ? n : null;

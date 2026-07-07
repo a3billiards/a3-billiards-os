@@ -8,7 +8,6 @@ export const OWNER_UNRESTRICTED_TABS = [
   "bookings",
   "documents",
   "kitchen",
-  // "loyalty",
   "livestream",
 ] as const;
 

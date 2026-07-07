@@ -259,22 +259,6 @@ textarea:focus {
   color: var(--accent);
 }
 
-.step-pill-button {
-  font: inherit;
-  background: transparent;
-  cursor: pointer;
-}
-
-.step-pill-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.step-pill-button:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
 .consent-row {
   display: flex;
   gap: 10px;
@@ -327,6 +311,12 @@ textarea:focus {
   font-size: 1rem;
 }
 
+.legal-doc h3 {
+  font-size: 0.95rem;
+  margin: 1rem 0 0.5rem;
+  font-weight: 600;
+}
+
 .legal-doc ul {
   padding-left: 1.25rem;
   margin: 0 0 12px;
@@ -360,79 +350,4 @@ textarea:focus {
 .legal-table th {
   background: var(--bg);
   color: var(--text);
-}
-
-.club-location-picker {
-  margin: 12px 0 20px;
-}
-
-.club-location-map-wrap {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 1fr auto;
-  align-items: start;
-}
-
-.club-location-map {
-  position: relative;
-  height: 360px;
-  width: 100%;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  overflow: hidden;
-  cursor: grab;
-  touch-action: none;
-  background: #1a2332;
-}
-
-.club-location-map--dragging {
-  cursor: grabbing;
-}
-
-.club-location-tile {
-  position: absolute;
-  width: 256px;
-  height: 256px;
-  pointer-events: none;
-  user-select: none;
-}
-
-.club-location-pin {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
-.club-location-controls {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.club-location-control {
-  min-width: 40px;
-  padding: 8px 10px;
-}
-
-.club-location-coords {
-  margin: 8px 0 12px;
-}
-
-.club-pin-dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 3px solid #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
-}
-
-@media (max-width: 640px) {
-  .club-location-map-wrap {
-    grid-template-columns: 1fr;
-  }
-
-  .club-location-controls {
-    grid-template-columns: 1fr 1fr;
-  }
 }

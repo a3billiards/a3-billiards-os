@@ -31,17 +31,6 @@ function throwErr(message: string): never {
   throw new Error(message);
 }
 
-/** Generic E.164: + then 7–15 digits (ITU-T E.164 subset). */
-function parseGenericE164OrThrow(raw: string): string {
-  const phone = raw.trim();
-  if (!/^\+[1-9]\d{6,14}$/.test(phone)) {
-    throwErr(
-      "DATA_001: Phone must be E.164 (+ followed by 7–15 digits, no spaces)",
-    );
-  }
-  return phone;
-}
-
 function isValidEmailFormat(email: string): boolean {
   const t = email.trim();
   return t.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
@@ -424,9 +413,7 @@ export const adminUnfreezeUser = mutation({
   },
 });
 
-const DELETION_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
-
-/** Admin cancels a pending owner/customer account deletion during the 30-day grace period. */
+/** Admin cancels a pending owner/customer account deletion while the user row still exists. */
 export const adminCancelDeletion = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId: targetUserId }) => {
@@ -438,9 +425,6 @@ export const adminCancelDeletion = mutation({
     }
     if (target.deletionRequestedAt === undefined) {
       return { ok: true as const };
-    }
-    if (Date.now() > target.deletionRequestedAt + DELETION_GRACE_MS) {
-      throwErr("Deletion grace period has ended for this account.");
     }
 
     const now = Date.now();
@@ -483,6 +467,37 @@ export const adminEndClubSubscription = mutation({
     const previous = club.subscriptionStatus;
     const now = Date.now();
     await ctx.db.patch(club._id, { subscriptionStatus: "frozen" });
+
+    // End live broadcasts so owners are not stuck unable to stop IVS after freeze.
+    const liveStreams = await ctx.db
+      .query("liveStreams")
+      .withIndex("by_clubId_status", (q) =>
+        q.eq("clubId", club._id).eq("status", "live"),
+      )
+      .collect();
+    const stoppedChannelArns = new Set<string>();
+    for (const stream of liveStreams) {
+      await ctx.db.patch(stream._id, {
+        status: "ended",
+        endedAt: now,
+        endedReason: "admin_force_ended",
+      });
+      await ctx.db.insert("liveStreamModerationLog", {
+        clubId: club._id,
+        liveStreamId: stream._id,
+        adminId: viewer.userId,
+        reason: "Subscription ended by admin",
+        endedAt: now,
+      });
+      const channelArn = stream.ivsChannelArn ?? club.ivsChannelArn ?? "";
+      if (channelArn && !stoppedChannelArns.has(channelArn)) {
+        stoppedChannelArns.add(channelArn);
+        await ctx.scheduler.runAfter(0, internal.livestreamActions.stopIvsStream, {
+          channelArn,
+        });
+      }
+    }
+
     await ctx.db.insert("adminAuditLog", {
       adminId: viewer.userId,
       action: "subscription_ended",
@@ -1036,15 +1051,9 @@ export const internalAdminPreparePasswordReset = internalMutation({
       createdAt: now,
     });
 
-    const acc = await ctx.db
-      .query("authAccounts")
-      .withIndex("userIdAndProvider", (q) =>
-        q.eq("userId", targetUserId).eq("provider", PASSWORD_PROVIDER),
-      )
-      .first();
-
+    // Always deliver to profile email — providerAccountId may be an E.164 phone for customers.
     return {
-      toEmail: acc?.providerAccountId ?? normalizedEmail,
+      toEmail: normalizedEmail,
     };
   },
 });

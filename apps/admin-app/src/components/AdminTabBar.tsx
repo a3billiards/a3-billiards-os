@@ -9,8 +9,10 @@ import { adminShell } from "../theme/adminShell";
 
 const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   index: "dashboard",
+  clubs: "business",
   users: "people",
   complaints: "flag",
+  support: "support-agent",
   "live-moderation": "live-tv",
   audit: "history",
   notifications: "notifications",
@@ -18,8 +20,10 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
 
 const TAB_LABEL_KEYS: Record<string, string> = {
   index: "common.tabs.admin.index",
+  clubs: "common.tabs.admin.clubs",
   users: "common.tabs.admin.users",
   complaints: "common.tabs.admin.complaints",
+  support: "common.tabs.admin.support",
   "live-moderation": "common.tabs.admin.live-moderation",
   audit: "common.tabs.admin.audit",
   notifications: "common.tabs.admin.notifications",
@@ -105,7 +109,7 @@ export default function AdminTabBar({
                 style={[styles.tabLabel, isFocused && styles.tabLabelActive]}
                 numberOfLines={1}
               >
-                {label.toUpperCase()}
+                {label}
               </Text>
             </Pressable>
           );

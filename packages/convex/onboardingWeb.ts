@@ -8,6 +8,10 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { parseGenericE164OrThrow } from "./model/phoneRegistration";
 import { listOnboardingPlansFromEnv } from "./onboardingPlanPricing";
+import {
+  getPlatformInvoiceConfig as readPlatformInvoiceConfig,
+  gstBreakdownForTaxableAmount,
+} from "./model/platformGst";
 import { isValidGeocodeLocation } from "./model/geocode";
 
 const locationObj = v.object({
@@ -344,5 +348,17 @@ export const deleteClubDraftByOwner = internalMutation({
 
 export const listSubscriptionPlans = query({
   args: {},
-  handler: async () => listOnboardingPlansFromEnv(),
+  handler: async () => {
+    const config = readPlatformInvoiceConfig();
+    return listOnboardingPlansFromEnv().map((plan) => ({
+      ...plan,
+      gst: gstBreakdownForTaxableAmount(plan.amountPaise),
+      invoiceConfig: config,
+    }));
+  },
+});
+
+export const getPlatformInvoiceConfig = query({
+  args: {},
+  handler: async () => readPlatformInvoiceConfig(),
 });

@@ -1,93 +1,203 @@
 # Translation review needed
 
-## Completed sections (all 9 locale files: en + 8 non-English)
+Keys below use English fallback or German→Dutch provisional text.
 
-| Section | Leaf keys (en) | Status |
-|---------|----------------|--------|
-| `common.*` | 92 | ✅ Complete |
-| `errors.*` | 76 | ✅ Complete |
-| `notifications.*` | 32 | ✅ Complete |
-| `sharedUi.*` | 152 | ✅ Complete |
-| `customerApp.*` | 3 | ✅ Complete (audit-gap keys only) |
-| `ownerApp.*` | ~900+ | ✅ Full TS surface migrated |
-| `customerApp.*` | ~400+ | ✅ Full TS surface migrated |
-| `auth.*` | 310 | ✅ Complete (TS + accountBlocked patch) |
-| `adminApp.*` | 294 | ✅ Complete (from TS locale modules) |
+## ar
+[ar] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
+[ar] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[ar] ownerApp.settings.content.supplyInterstate — English fallback (needs translation review)
+[ar] ownerApp.settings.content.supplyIntrastate — English fallback (needs translation review)
+[ar] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
+[ar] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
+[ar] sharedUi.liveStreamCard.liveBadge — English fallback (needs translation review)
+[ar] sharedUi.placeholders.billModal — English fallback (needs translation review)
+[ar] sharedUi.placeholders.networkGuard — English fallback (needs translation review)
+[ar] sharedUi.placeholders.offlineScreen — English fallback (needs translation review)
+[ar] sharedUi.placeholders.passcodeSetupModal — English fallback (needs translation review)
+[ar] sharedUi.placeholders.sessionTimer — English fallback (needs translation review)
+[ar] sharedUi.placeholders.userSelector — English fallback (needs translation review)
+[ar] sharedUi.safeLocationPicker.manualPinHint — English fallback (needs translation review)
+[ar] sharedUi.safeLocationPicker.noResults — English fallback (needs translation review)
+[ar] sharedUi.safeLocationPicker.searchFailed — English fallback (needs translation review)
+[ar] sharedUi.safeLocationPicker.searchPlace — English fallback (needs translation review)
+[ar] sharedUi.safeLocationPicker.searchPlaceholder — English fallback (needs translation review)
+[ar] sharedUi.safeLocationPicker.searching — English fallback (needs translation review)
+[ar] sharedUi.tablePicker.pickTableSubtitle — English fallback (needs translation review)
 
-**en.json total: 2,139 leaf keys** (+1,044 from 1,095 baseline). All 8 non-English files match en key-for-key.
+## hi
+[hi] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
+[hi] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[hi] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
+[hi] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
+[hi] sharedUi.liveStreamCard.liveBadge — English fallback (needs translation review)
+[hi] sharedUi.placeholders.billModal — English fallback (needs translation review)
+[hi] sharedUi.placeholders.networkGuard — English fallback (needs translation review)
+[hi] sharedUi.placeholders.offlineScreen — English fallback (needs translation review)
+[hi] sharedUi.placeholders.passcodeSetupModal — English fallback (needs translation review)
+[hi] sharedUi.placeholders.sessionTimer — English fallback (needs translation review)
+[hi] sharedUi.placeholders.userSelector — English fallback (needs translation review)
+[hi] sharedUi.safeLocationPicker.manualPinHint — English fallback (needs translation review)
+[hi] sharedUi.safeLocationPicker.noResults — English fallback (needs translation review)
+[hi] sharedUi.safeLocationPicker.searchFailed — English fallback (needs translation review)
+[hi] sharedUi.safeLocationPicker.searchPlace — English fallback (needs translation review)
+[hi] sharedUi.safeLocationPicker.searchPlaceholder — English fallback (needs translation review)
+[hi] sharedUi.safeLocationPicker.searching — English fallback (needs translation review)
+[hi] sharedUi.tableGrid.a11yTable — English fallback (needs translation review)
+[hi] sharedUi.tablePicker.pickTableSubtitle — English fallback (needs translation review)
 
-### Migration batch (2026-07-02)
-- `migrate-ts-to-json.ts` added 1,037 keys from legacy TS bundles
-- `gap-translations/*.json` patched 330 English-fallback keys (ar, kn, ml, te, ta, fr, nl)
-- Screen-audit gap keys added: `ownerApp.complaints.existingComplaintsWarning`, `retractModalBody`, `home.staffRoleAccessibility`, `settings.disableTableBodyExtended`, `photoPickerDevBuildBody`, `deleteAccountBodyDetailed`, `financials.perMinEquals`
-- `auth.customer.accountBlocked.*` restored after TS sync overwrite
+## kn
+[kn] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
+[kn] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[kn] ownerApp.settings.hhmmStart — English fallback (needs translation review)
+[kn] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
+[kn] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
+[kn] sharedUi.liveStreamCard.liveBadge — English fallback (needs translation review)
+[kn] sharedUi.placeholders.billModal — English fallback (needs translation review)
+[kn] sharedUi.placeholders.networkGuard — English fallback (needs translation review)
+[kn] sharedUi.placeholders.offlineScreen — English fallback (needs translation review)
+[kn] sharedUi.placeholders.passcodeSetupModal — English fallback (needs translation review)
+[kn] sharedUi.placeholders.sessionTimer — English fallback (needs translation review)
+[kn] sharedUi.placeholders.userSelector — English fallback (needs translation review)
+[kn] sharedUi.safeLocationPicker.manualPinHint — English fallback (needs translation review)
+[kn] sharedUi.safeLocationPicker.noResults — English fallback (needs translation review)
+[kn] sharedUi.safeLocationPicker.searchFailed — English fallback (needs translation review)
+[kn] sharedUi.safeLocationPicker.searchPlace — English fallback (needs translation review)
+[kn] sharedUi.safeLocationPicker.searchPlaceholder — English fallback (needs translation review)
+[kn] sharedUi.safeLocationPicker.searching — English fallback (needs translation review)
+[kn] sharedUi.tableGrid.a11yTable — English fallback (needs translation review)
+[kn] sharedUi.tablePicker.pickTableSubtitle — English fallback (needs translation review)
 
-Source merge files: `packages/i18n/locales/_merge/`. Main locale files are the canonical target (not `_merge/` alone).
+## ml
+[ml] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
+[ml] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[ml] ownerApp.settings.hhmmStart — English fallback (needs translation review)
+[ml] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
+[ml] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
+[ml] sharedUi.liveStreamCard.liveBadge — English fallback (needs translation review)
+[ml] sharedUi.placeholders.billModal — English fallback (needs translation review)
+[ml] sharedUi.placeholders.networkGuard — English fallback (needs translation review)
+[ml] sharedUi.placeholders.offlineScreen — English fallback (needs translation review)
+[ml] sharedUi.placeholders.passcodeSetupModal — English fallback (needs translation review)
+[ml] sharedUi.placeholders.sessionTimer — English fallback (needs translation review)
+[ml] sharedUi.placeholders.userSelector — English fallback (needs translation review)
+[ml] sharedUi.safeLocationPicker.manualPinHint — English fallback (needs translation review)
+[ml] sharedUi.safeLocationPicker.noResults — English fallback (needs translation review)
+[ml] sharedUi.safeLocationPicker.searchFailed — English fallback (needs translation review)
+[ml] sharedUi.safeLocationPicker.searchPlace — English fallback (needs translation review)
+[ml] sharedUi.safeLocationPicker.searchPlaceholder — English fallback (needs translation review)
+[ml] sharedUi.safeLocationPicker.searching — English fallback (needs translation review)
+[ml] sharedUi.tableGrid.a11yTable — English fallback (needs translation review)
+[ml] sharedUi.tablePicker.pickTableSubtitle — English fallback (needs translation review)
 
----
+## te
+[te] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
+[te] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[te] ownerApp.settings.hhmmStart — English fallback (needs translation review)
+[te] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
+[te] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
+[te] sharedUi.liveStreamCard.liveBadge — English fallback (needs translation review)
+[te] sharedUi.placeholders.billModal — English fallback (needs translation review)
+[te] sharedUi.placeholders.networkGuard — English fallback (needs translation review)
+[te] sharedUi.placeholders.offlineScreen — English fallback (needs translation review)
+[te] sharedUi.placeholders.passcodeSetupModal — English fallback (needs translation review)
+[te] sharedUi.placeholders.sessionTimer — English fallback (needs translation review)
+[te] sharedUi.placeholders.userSelector — English fallback (needs translation review)
+[te] sharedUi.safeLocationPicker.manualPinHint — English fallback (needs translation review)
+[te] sharedUi.safeLocationPicker.noResults — English fallback (needs translation review)
+[te] sharedUi.safeLocationPicker.searchFailed — English fallback (needs translation review)
+[te] sharedUi.safeLocationPicker.searchPlace — English fallback (needs translation review)
+[te] sharedUi.safeLocationPicker.searchPlaceholder — English fallback (needs translation review)
+[te] sharedUi.safeLocationPicker.searching — English fallback (needs translation review)
+[te] sharedUi.tableGrid.a11yTable — English fallback (needs translation review)
+[te] sharedUi.tablePicker.pickTableSubtitle — English fallback (needs translation review)
 
-## Keys flagged for native-speaker / product review
+## ta
+[ta] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
+[ta] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[ta] ownerApp.settings.hhmmStart — English fallback (needs translation review)
+[ta] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
+[ta] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
+[ta] sharedUi.liveStreamCard.liveBadge — English fallback (needs translation review)
+[ta] sharedUi.placeholders.billModal — English fallback (needs translation review)
+[ta] sharedUi.placeholders.networkGuard — English fallback (needs translation review)
+[ta] sharedUi.placeholders.offlineScreen — English fallback (needs translation review)
+[ta] sharedUi.placeholders.passcodeSetupModal — English fallback (needs translation review)
+[ta] sharedUi.placeholders.sessionTimer — English fallback (needs translation review)
+[ta] sharedUi.placeholders.userSelector — English fallback (needs translation review)
+[ta] sharedUi.safeLocationPicker.manualPinHint — English fallback (needs translation review)
+[ta] sharedUi.safeLocationPicker.noResults — English fallback (needs translation review)
+[ta] sharedUi.safeLocationPicker.searchFailed — English fallback (needs translation review)
+[ta] sharedUi.safeLocationPicker.searchPlace — English fallback (needs translation review)
+[ta] sharedUi.safeLocationPicker.searchPlaceholder — English fallback (needs translation review)
+[ta] sharedUi.safeLocationPicker.searching — English fallback (needs translation review)
+[ta] sharedUi.tableGrid.a11yTable — English fallback (needs translation review)
+[ta] sharedUi.tablePicker.pickTableSubtitle — English fallback (needs translation review)
 
-### errors.*
-- `errors.BOOKING_010` — references internal config key `slotDurationOptions`
-- `errors.BOOKING_011` — references internal config key `bookableHours`
-- `errors.GOOGLE_AUTH_001` — JWT/Google technical terms; kn/ml/te/ta keep "Audience mismatch" in English
-- `errors.OTP_005` — E.164 phone format standard name
-- `errors.LIVESTREAM_002` — AWS IVS API product name
-- `errors.PUSH_001` — Firebase product name
-- `errors.PROMOTE_001` — "Onboarding Website" product name
+## fr
+[fr] notifications.fallback — English fallback (needs translation review)
+[fr] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
+[fr] ownerApp.settings.chefRoleName — English fallback (needs translation review)
+[fr] ownerApp.settings.content.descriptionMax — English fallback (needs translation review)
+[fr] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[fr] ownerApp.settings.content.photos — English fallback (needs translation review)
+[fr] ownerApp.settings.content.tableActive — English fallback (needs translation review)
+[fr] ownerApp.settings.passcode.ok — English fallback (needs translation review)
+[fr] ownerApp.settings.sections.tables — English fallback (needs translation review)
+[fr] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
+[fr] sharedUi.bookingCard.duration30 — English fallback (needs translation review)
+[fr] sharedUi.bookingCard.durationMinutes — English fallback (needs translation review)
+[fr] sharedUi.bookingCard.estimated — English fallback (needs translation review)
+[fr] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
+[fr] sharedUi.clubCard.kmAway — English fallback (needs translation review)
+[fr] sharedUi.liveStreamCard.liveBadge — English fallback (needs translation review)
+[fr] sharedUi.placeholders.billModal — English fallback (needs translation review)
+[fr] sharedUi.placeholders.networkGuard — English fallback (needs translation review)
+[fr] sharedUi.placeholders.offlineScreen — English fallback (needs translation review)
+[fr] sharedUi.placeholders.passcodeSetupModal — English fallback (needs translation review)
+[fr] sharedUi.placeholders.sessionTimer — English fallback (needs translation review)
+[fr] sharedUi.placeholders.userSelector — English fallback (needs translation review)
+[fr] sharedUi.safeLocationPicker.latitude — English fallback (needs translation review)
+[fr] sharedUi.safeLocationPicker.longitude — English fallback (needs translation review)
+[fr] sharedUi.safeLocationPicker.manualPinHint — English fallback (needs translation review)
+[fr] sharedUi.safeLocationPicker.noResults — English fallback (needs translation review)
+[fr] sharedUi.safeLocationPicker.searchFailed — English fallback (needs translation review)
+[fr] sharedUi.safeLocationPicker.searchPlace — English fallback (needs translation review)
+[fr] sharedUi.safeLocationPicker.searchPlaceholder — English fallback (needs translation review)
+[fr] sharedUi.safeLocationPicker.searching — English fallback (needs translation review)
+[fr] sharedUi.tableGrid.a11yTable — English fallback (needs translation review)
+[fr] sharedUi.tableGrid.tableFallback — English fallback (needs translation review)
+[fr] sharedUi.tablePicker.pickTableSubtitle — English fallback (needs translation review)
+[fr] sharedUi.tableTypePicker.ratePerMin — English fallback (needs translation review)
 
-### common.* (intentional English — do not flag)
-- `common.chartMonths.*`, `common.tableTypes.*` — product/proper nouns
-- Brand/input tokens: `logoA3`, `pushChannelName`, `confirmKeyword`, `deleteKeyword`
+## nl
+[nl] *all keys* — provisional Dutch bundle derived from German until native review
+[nl] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
+[nl] ownerApp.loyalty.statusLine — English fallback (needs translation review)
+[nl] ownerApp.settings.chefRoleName — English fallback (needs translation review)
+[nl] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[nl] ownerApp.settings.hhmmStart — English fallback (needs translation review)
+[nl] ownerApp.settings.labelField — English fallback (needs translation review)
+[nl] ownerApp.settings.labelPlaceholder — English fallback (needs translation review)
+[nl] ownerApp.settings.passcode.ok — English fallback (needs translation review)
+[nl] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
+[nl] sharedUi.bookingCard.duration30 — English fallback (needs translation review)
+[nl] sharedUi.bookingCard.durationMinutes — English fallback (needs translation review)
+[nl] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
+[nl] sharedUi.clubCard.kmAway — English fallback (needs translation review)
+[nl] sharedUi.liveStreamCard.liveBadge — English fallback (needs translation review)
+[nl] sharedUi.placeholders.billModal — English fallback (needs translation review)
+[nl] sharedUi.placeholders.networkGuard — English fallback (needs translation review)
+[nl] sharedUi.placeholders.offlineScreen — English fallback (needs translation review)
+[nl] sharedUi.placeholders.passcodeSetupModal — English fallback (needs translation review)
+[nl] sharedUi.placeholders.sessionTimer — English fallback (needs translation review)
+[nl] sharedUi.placeholders.userSelector — English fallback (needs translation review)
+[nl] sharedUi.safeLocationPicker.manualPinHint — English fallback (needs translation review)
+[nl] sharedUi.safeLocationPicker.noResults — English fallback (needs translation review)
+[nl] sharedUi.safeLocationPicker.searchFailed — English fallback (needs translation review)
+[nl] sharedUi.safeLocationPicker.searchPlace — English fallback (needs translation review)
+[nl] sharedUi.safeLocationPicker.searchPlaceholder — English fallback (needs translation review)
+[nl] sharedUi.safeLocationPicker.searching — English fallback (needs translation review)
+[nl] sharedUi.tableGrid.a11yTable — English fallback (needs translation review)
+[nl] sharedUi.tablePicker.pickTableSubtitle — English fallback (needs translation review)
+[nl] sharedUi.tableTypePicker.ratePerMin — English fallback (needs translation review)
 
-### customerApp.*
-- `customerApp.googleAuth.expoGo` — keeps `GOOGLE_AUTH_001` error code prefix and `Expo Go` product name
-- `customerApp.googleAuth.missingToken` — keeps `GOOGLE_AUTH_001` and `Google ID token`
-- `customerApp.checkInPayload` — technical QR payload format `a3customer:{{userId}}` (unchanged across locales)
-
-### sharedUi.*
-- `sharedUi.placeholders.*` — React component names kept in English intentionally
-- `sharedUi.liveStreamCard.liveBadge` — kept as `LIVE` intentionally
-- `sharedUi.complaintBanner.warning` — emoji prefix `⚠` preserved
-
-### ownerApp.*
-- `ownerApp.settings.typeDeleteConfirm` — user must type `DELETE` (backend token)
-- `ownerApp.settings.timezonePlaceholder` — `Asia/Kolkata` example kept
-- `ownerApp.settings.currencyIso` — `ISO 4217` standard
-- `ownerApp.settings.timezoneIana` — `IANA` standard
-- `ownerApp.settings.gstinPlaceholder` / `itcNote` — Indian tax acronyms GSTIN/ITC
-- `ownerApp.settings.hhmmStart` / `hhmmEnd` — `HH:MM` format labels
-- `ownerApp.loyalty.programmeNamePlaceholder` — `A3 Regulars` brand example
-
-### auth.*
-- `auth.admin.shell.configErrorBody` — contains `EXPO_PUBLIC_CONVEX_URL`, `support@a3billiards.com`
-- `auth.owner.login.googleDeveloperError` — Firebase SHA-1 fingerprint, package name, file names (technical setup instructions)
-- `auth.owner.login.googleAuthFailed` — `GOOGLE_WEB_CLIENT_ID` Convex env reference
-- `auth.customer.login.invalidPhone` / `auth.customer.register.*` — E.164 format examples (`+91...`)
-- `auth.admin.userProfile.promoteWarning` / `demoteWarning` — user must type `CONFIRM`
-- `auth.phone.*` — added to non-en from en until root locale TS files define `phone` per language
-
-### adminApp.*
-- `adminApp.complaints.dateFormatHint` — `YYYY-MM-DD` format hint
-- `adminApp.moderation.forceEndBody` — AWS IVS reference
-- `adminApp.notifications.warnNoPush` / `pushNotConfigured` — Firebase setup instructions
-- `adminApp.userProfile.promoteWarning` / `demoteWarning` — `CONFIRM` keyword
-- `adminApp.userProfile.phonePlaceholder` — E.164 example `+919876543210`
-
-### Screen-audit gap keys (new)
-- `ownerApp.settings.photoPickerDevBuildBody` — EAS CLI command kept in English
-- `ownerApp.settings.deleteAccountBodyDetailed` — user must type `DELETE`
-- `ownerApp.financials.perMinEquals` — format fragment `/min = `
-- `ownerApp.complaints.existingComplaintsWarning` — emoji prefix preserved
-
-### gap-translations batch (330 keys × 7 locales)
-- Native review recommended for `ownerApp.settings.content` (98 keys) in ar, kn, ml, te, ta, fr, nl
-- `ownerApp.slots.*` checkout/group strings translated from hi reference
-- `auth.nl.*` and `adminApp.nl.*` were rewritten in Netherlands Dutch (2026-07-02). Native speaker should spot-check formal vs informal tone (`u`/`uw`).
-
----
-
-## Not yet in JSON locale files
-
-~~Legacy TS bundles still contain additional screen strings~~ **Migrated.** Screen wiring (`t()` calls) is the next step — keys exist in JSON; ~159 hardcoded strings in app source still need wiring (no new keys required except the 7 gap keys above, now added).

@@ -12,6 +12,7 @@ import {
   bookingAppliesToTable,
   resolveRatePerMinAtSessionStart,
 } from "./model/sessionRate";
+import { bookingWindowMs } from "./model/bookingDuration";
 import {
   assertMutationClubScope,
   getClubForViewer,
@@ -115,21 +116,6 @@ function overlaps(
   return !(newEndMs <= existingStartMs || newStartMs >= existingEndMs);
 }
 
-function bookingWindowMs(
-  booking: Doc<"bookings">,
-  timezone: string,
-): { startMs: number; endMs: number } {
-  const startMs = zonedWallTimeToUtcMs(
-    booking.requestedDate,
-    booking.requestedStartTime,
-    timezone,
-  );
-  return {
-    startMs,
-    endMs: startMs + booking.requestedDurationMin * 60_000,
-  };
-}
-
 async function syncBookingLog(
   ctx: Pick<MutationCtx, "db">,
   bookingId: Id<"bookings">,
@@ -191,10 +177,23 @@ function tableHasLiveSessionConflict(
   tableId: Id<"tables">,
   windowStartMs: number,
   windowEndMs: number,
+  timezone: string,
 ): boolean {
   const live = activeSessions.get(tableId);
   if (!live) return false;
-  return overlaps(windowStartMs, windowEndMs, live.startMs, live.endMs);
+
+  let sessionEndMs = live.endMs;
+  if (!Number.isFinite(sessionEndMs)) {
+    // Open walk-in: blocks same calendar day only — must not block future reservations.
+    const sessionDate = dateYmdInTimeZone(live.startMs, timezone);
+    const windowDate = dateYmdInTimeZone(windowStartMs, timezone);
+    if (sessionDate !== windowDate) {
+      return false;
+    }
+    sessionEndMs = Number.POSITIVE_INFINITY;
+  }
+
+  return overlaps(windowStartMs, windowEndMs, live.startMs, sessionEndMs);
 }
 
 /** Same rules as submitBooking / getAvailableSlots: zero-gap; pending/confirmed per table when assigned. */
@@ -206,6 +205,7 @@ function tableHasBookingConflictForWindow(
   activeBookings: Doc<"bookings">[],
   timezone: string,
   activeSessions: ReadonlyMap<Id<"tables">, ActiveSessionWindow>,
+  minBillMinutes: number,
   excludeBookingId?: Id<"bookings">,
 ): boolean {
   if (
@@ -214,6 +214,7 @@ function tableHasBookingConflictForWindow(
       table._id,
       windowStartMs,
       windowEndMs,
+      timezone,
     )
   ) {
     return true;
@@ -223,6 +224,7 @@ function tableHasBookingConflictForWindow(
     const { startMs: existingStartMs, endMs: existingEndMs } = bookingWindowMs(
       b,
       timezone,
+      minBillMinutes,
     );
     if (
       !overlaps(windowStartMs, windowEndMs, existingStartMs, existingEndMs)
@@ -349,29 +351,7 @@ export const submitBooking = mutation({
       throw new Error("BOOKING_004: Club not accepting bookings");
     }
 
-    const requireCoupon = club.bookingSettings.requireBookingCoupon === true;
-    const clubCoupon = normalizeBookingCoupon(
-      club.bookingSettings.bookingCouponCode ?? "",
-    );
-    let paidViaCoupon = false;
-    let couponCodeStored: string | undefined;
-    if (requireCoupon) {
-      if (!clubCoupon) {
-        throw new Error("BOOKING_004: Club booking coupon is not configured");
-      }
-      const submitted = normalizeBookingCoupon(args.couponCode ?? "");
-      if (submitted !== clubCoupon) {
-        throw new Error("PAYMENT_004: Invalid coupon code");
-      }
-      paidViaCoupon = true;
-      couponCodeStored = submitted;
-    } else if (args.couponCode?.trim()) {
-      if (clubCoupon && normalizeBookingCoupon(args.couponCode) === clubCoupon) {
-        paidViaCoupon = true;
-        couponCodeStored = clubCoupon;
-      }
-    }
-
+    // Booking coupons removed — payment is via Razorpay after owner approval.
     // 3 — BOOKING_009
     const normalizedBookableTypes = club.bookingSettings.bookableTableTypes.map(
       (t) => normalizeTableType(t),
@@ -499,6 +479,7 @@ export const submitBooking = mutation({
           activeBookings,
           club.timezone,
           activeSessions,
+          club.minBillMinutes,
         )
       ) {
         hasAvailableTable = true;
@@ -530,15 +511,17 @@ export const submitBooking = mutation({
       notes: notesTrimmed || undefined,
       estimatedCost,
       currency: club.currency,
-      confirmedTableId: requestedTable._id,
+      requestedTableId: requestedTable._id,
+      confirmedTableId: undefined,
       approvedAt: undefined,
       approvedByRoleId: undefined,
       approvedByRoleName: undefined,
       sessionId: undefined,
       reminderSentAt: undefined,
       approvalReminderSentAt: undefined,
-      couponCode: couponCodeStored,
-      paidViaCoupon: paidViaCoupon || undefined,
+      couponCode: undefined,
+      paidViaCoupon: undefined,
+      onlinePaymentStatus: undefined,
       createdAt: nowMs,
       updatedAt: nowMs,
     });
@@ -741,6 +724,7 @@ export const getAvailableSlots = query({
             activeBookings,
             club.timezone,
             activeSessions,
+            club.minBillMinutes,
           )
         ) {
           hasAvailableTable = true;
@@ -769,7 +753,15 @@ export const getCustomerBookings = query({
     return Promise.all(
       rows.map(async (row) => {
         const club = await ctx.db.get(row.clubId);
+        const booking = await ctx.db.get(row.bookingId);
         const windowMin = club?.bookingSettings.cancellationWindowMin ?? 30;
+        const onlinePaymentStatus =
+          booking?.onlinePaymentStatus ?? row.onlinePaymentStatus ?? null;
+        const needsPayment =
+          row.status === "confirmed" &&
+          (row.estimatedCost ?? 0) > 0 &&
+          onlinePaymentStatus !== "paid" &&
+          onlinePaymentStatus !== "refunded";
         const isLateCancellationNow =
           row.status === "confirmed" && club
             ? Date.now() >=
@@ -782,6 +774,9 @@ export const getCustomerBookings = query({
             : false;
         return {
           ...row,
+          onlinePaymentStatus,
+          needsPayment,
+          canPay: needsPayment,
           thumbnailPhotoUrl: row.thumbnailPhotoId
             ? await ctx.storage.getUrl(row.thumbnailPhotoId as Id<"_storage">)
             : null,
@@ -857,22 +852,58 @@ export const getBookingDetail = query({
       return null;
     }
     const club = await ctx.db.get(log.clubId);
+    const booking = await ctx.db.get(bookingId);
+    const cancellationWindowMin =
+      club?.bookingSettings.cancellationWindowMin ?? 30;
+    const timezone = club?.timezone ?? "Asia/Kolkata";
+    const bookingStartMs = computeBookingUnixTime(
+      log.requestedDate,
+      log.requestedStartTime,
+      timezone,
+    );
+    const cancelDeadlineMs =
+      bookingStartMs - cancellationWindowMin * 60_000;
+    const now = Date.now();
+    let onlinePaymentStatus =
+      booking?.onlinePaymentStatus ?? log.onlinePaymentStatus ?? null;
+    // Legacy coupon-marked "paid" without Razorpay still needs online payment.
+    if (
+      onlinePaymentStatus === "paid" &&
+      !booking?.razorpayPaymentId &&
+      booking?.paidViaCoupon
+    ) {
+      onlinePaymentStatus = "unpaid";
+    }
+    // Pay after owner approval — coupons no longer skip payment.
+    const needsPayment =
+      log.status === "confirmed" &&
+      (log.estimatedCost ?? 0) > 0 &&
+      onlinePaymentStatus !== "paid" &&
+      onlinePaymentStatus !== "refunded";
+    const canCancelPending = log.status === "pending_approval";
+    const canCancelConfirmed =
+      log.status === "confirmed" && now < cancelDeadlineMs;
+    const canCancel = canCancelPending || canCancelConfirmed;
+    const isPastCancelDeadline =
+      log.status === "confirmed" && now >= cancelDeadlineMs;
+
     return {
       ...log,
+      onlinePaymentStatus,
+      amountPaidPaise:
+        booking?.amountPaidPaise ?? log.amountPaidPaise ?? null,
+      paidViaCoupon: booking?.paidViaCoupon ?? false,
       thumbnailPhotoUrl: log.thumbnailPhotoId
         ? await ctx.storage.getUrl(log.thumbnailPhotoId as Id<"_storage">)
         : null,
-      cancellationWindowMin: club?.bookingSettings.cancellationWindowMin ?? 30,
-      isLateCancellationNow:
-        log.status === "confirmed" && club
-          ? Date.now() >=
-            computeBookingUnixTime(
-              log.requestedDate,
-              log.requestedStartTime,
-              club.timezone,
-            ) -
-              (club.bookingSettings.cancellationWindowMin ?? 30) * 60_000
-          : false,
+      cancellationWindowMin,
+      bookingStartMs,
+      cancelDeadlineMs,
+      needsPayment,
+      canPay: needsPayment,
+      canCancel,
+      isPastCancelDeadline,
+      isLateCancellationNow: isPastCancelDeadline,
       clubProfile: club
         ? {
             _id: club._id,
@@ -907,9 +938,12 @@ export const approveBooking = mutation({
       throw new Error("SUBSCRIPTION_003: Club account is frozen");
     }
 
+    const bookingForWindow = booking;
+
     const role = await roleContext(ctx, booking.clubId, args.roleId);
 
-    const tableIdToConfirm = args.confirmedTableId ?? booking.confirmedTableId;
+    const tableIdToConfirm =
+      args.confirmedTableId ?? booking.requestedTableId ?? booking.confirmedTableId;
     let confirmedTableLabel: string | undefined = undefined;
     if (tableIdToConfirm !== undefined) {
       const table = await ctx.db.get(tableIdToConfirm);
@@ -927,8 +961,9 @@ export const approveBooking = mutation({
         throw new Error("SESSION_001: Table occupied");
       }
       const { startMs: approveStartMs, endMs: approveEndMs } = bookingWindowMs(
-        booking,
+        bookingForWindow,
         clubDoc.timezone,
+        clubDoc.minBillMinutes,
       );
       const sameDay = await ctx.db
         .query("bookings")
@@ -949,6 +984,7 @@ export const approveBooking = mutation({
           activeSameDay,
           clubDoc.timezone,
           approveSessions,
+          clubDoc.minBillMinutes,
           args.bookingId,
         )
       ) {
@@ -959,18 +995,39 @@ export const approveBooking = mutation({
       confirmedTableLabel = table.label;
     }
 
+    const assignedDurationMin = booking.requestedDurationMin;
+    const ratePerMinute = resolveRatePerMinAtSessionStart(
+      clubDoc,
+      zonedWallTimeToUtcMs(
+        booking.requestedDate,
+        booking.requestedStartTime,
+        clubDoc.timezone,
+      ),
+      normalizeTableType(booking.tableType),
+    );
+    const estimatedCost =
+      Math.max(assignedDurationMin, clubDoc.minBillMinutes) * ratePerMinute;
+
     const now = Date.now();
+    const needsOnlinePay = estimatedCost > 0;
+    const onlinePaymentStatus = needsOnlinePay
+      ? ("unpaid" as const)
+      : ("paid" as const);
     await ctx.db.patch(args.bookingId, {
       status: "confirmed",
       confirmedTableId: tableIdToConfirm,
+      confirmedDurationMin: booking.requestedDurationMin,
+      estimatedCost,
       approvedAt: now,
       approvedByRoleId: role.roleId,
       approvedByRoleName: role.roleName,
+      onlinePaymentStatus,
       updatedAt: now,
     });
     await syncBookingLog(ctx, args.bookingId, {
       status: "confirmed",
       confirmedTableLabel,
+      onlinePaymentStatus,
       updatedAt: now,
     });
 
@@ -1083,16 +1140,39 @@ export const cancelBooking = mutation({
     }
 
     const booking = await ctx.db.get(bookingId);
-    const isLateCancellation =
-      bookingLog.status === "confirmed" &&
-      Date.now() >=
-        computeBookingUnixTime(
-          bookingLog.requestedDate,
-          bookingLog.requestedStartTime,
-          timezone,
-        ) -
-          cancellationWindowMin * 60_000;
+    const bookingStartMs = computeBookingUnixTime(
+      bookingLog.requestedDate,
+      bookingLog.requestedStartTime,
+      timezone,
+    );
+    const cancelDeadlineMs =
+      bookingStartMs - cancellationWindowMin * 60_000;
     const now = Date.now();
+
+    // Confirmed bookings: cancel only before (start − cancellationWindowMin).
+    // Pending approval can always be cancelled (no payment yet).
+    if (bookingLog.status === "confirmed") {
+      if (now >= bookingStartMs) {
+        throw new Error(
+          "BOOKING_013: Cannot cancel at or after the booking start time.",
+        );
+      }
+      if (now >= cancelDeadlineMs) {
+        throw new Error(
+          `BOOKING_013: Cancellations must be at least ${cancellationWindowMin} minutes before the booking start. Refunds are not available inside this window.`,
+        );
+      }
+    }
+
+    const paymentId = booking?.razorpayPaymentId;
+    const amountPaidPaise = booking?.amountPaidPaise;
+    const wasPaid =
+      booking?.onlinePaymentStatus === "paid" &&
+      typeof paymentId === "string" &&
+      paymentId.length > 0 &&
+      typeof amountPaidPaise === "number" &&
+      amountPaidPaise > 0;
+
     if (booking) {
       await ctx.db.patch(bookingId, {
         status: "cancelled_by_customer",
@@ -1113,27 +1193,20 @@ export const cancelBooking = mutation({
       status: "cancelled_by_customer",
       updatedAt: now,
     });
-    if (isLateCancellation) {
-      const stats = await ctx.db
-        .query("customerBookingStats")
-        .withIndex("by_customer_club", (q) =>
-          q.eq("customerId", customer.userId).eq("clubId", clubId),
-        )
-        .unique();
-      if (stats) {
-        await ctx.db.patch(stats._id, {
-          lateCancellationCount: stats.lateCancellationCount + 1,
-        });
-      } else {
-        await ctx.db.insert("customerBookingStats", {
-          customerId: customer.userId,
-          clubId,
-          noShowCount: 0,
-          lateCancellationCount: 1,
-          totalBookings: 0,
-        });
-      }
+
+    // Full refund when paid and cancelled inside the allowed window.
+    if (wasPaid && paymentId && amountPaidPaise) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.bookingPayments.refundBookingPayment,
+        {
+          bookingId,
+          paymentId,
+          amountPaise: amountPaidPaise,
+        },
+      );
     }
+
     if (club) {
       await ctx.scheduler.runAfter(
         0,
@@ -1141,7 +1214,10 @@ export const cancelBooking = mutation({
         { bookingId },
       );
     }
-    return { cancelled: true as const, isLateCancellation };
+    return {
+      cancelled: true as const,
+      refundScheduled: wasPaid,
+    };
   },
 });
 
@@ -1180,6 +1256,24 @@ export const clubCancelBooking = mutation({
       updatedAt: now,
     });
 
+    // Club-initiated cancel always refunds a paid booking in full.
+    if (
+      booking.onlinePaymentStatus === "paid" &&
+      booking.razorpayPaymentId &&
+      booking.amountPaidPaise &&
+      booking.amountPaidPaise > 0
+    ) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.bookingPayments.refundBookingPayment,
+        {
+          bookingId,
+          paymentId: booking.razorpayPaymentId,
+          amountPaise: booking.amountPaidPaise,
+        },
+      );
+    }
+
     await ctx.scheduler.runAfter(0, internal.notifications.notifyBookingCancelledByClub, {
       bookingId,
     });
@@ -1206,6 +1300,13 @@ export const startSessionFromBooking = mutation({
     if (!club) throw new Error("DATA_003: Club not found");
     if (club.subscriptionStatus === "frozen") {
       throw new Error("SUBSCRIPTION_003: Club account is frozen");
+    }
+
+    const needsOnlinePay = (booking.estimatedCost ?? 0) > 0;
+    if (needsOnlinePay && booking.onlinePaymentStatus !== "paid") {
+      throw new Error(
+        "BOOKING_012: Customer must complete online payment before starting this booking",
+      );
     }
 
     const startUnix = computeBookingUnixTime(
@@ -1237,7 +1338,8 @@ export const startSessionFromBooking = mutation({
         "COMPLAINT_001: This customer has active complaints. Acknowledge before starting the session.",
       );
     }
-    const targetTableId = booking.confirmedTableId ?? tableId;
+    const targetTableId =
+      booking.confirmedTableId ?? booking.requestedTableId ?? tableId;
     if (!targetTableId) throw new Error("SESSION_006: No table assigned");
 
     const table = await ctx.db.get(targetTableId);
@@ -1383,8 +1485,8 @@ export const listPendingBookings = query({
         const complaintTypes = complaintDocs
           .filter((c): c is NonNullable<typeof c> => c !== null && c.removedAt === undefined)
           .map((c) => c.type);
-        const requestedTable = b.confirmedTableId
-          ? await ctx.db.get(b.confirmedTableId)
+        const requestedTable = (b.confirmedTableId ?? b.requestedTableId)
+          ? await ctx.db.get((b.confirmedTableId ?? b.requestedTableId)!)
           : null;
         return {
           booking: b,
@@ -1451,7 +1553,11 @@ export const listAssignableTablesForBooking = query({
     const active = sameDayBookings.filter(
       (b) => b.status === "pending_approval" || b.status === "confirmed",
     );
-    const { startMs, endMs } = bookingWindowMs(booking, club.timezone);
+    const { startMs, endMs } = bookingWindowMs(
+      booking,
+      club.timezone,
+      club.minBillMinutes,
+    );
     return tables
       .filter((table) => {
         if (allowedSet && !allowedSet.has(table._id)) return false;
@@ -1463,6 +1569,7 @@ export const listAssignableTablesForBooking = query({
           active,
           club.timezone,
           activeSessions,
+          club.minBillMinutes,
           booking._id,
         );
       })
@@ -1509,7 +1616,8 @@ export const listUpcomingBookings = query({
     const items = await Promise.all(
       page.map(async (b) => {
         const user = await ctx.db.get(b.customerId);
-        const table = b.confirmedTableId ? await ctx.db.get(b.confirmedTableId) : null;
+        const tableId = b.confirmedTableId ?? b.requestedTableId;
+        const table = tableId ? await ctx.db.get(tableId) : null;
         const complaintDocs = await Promise.all(
           (user?.complaints ?? []).map((id) => ctx.db.get(id)),
         );

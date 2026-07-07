@@ -47,6 +47,8 @@ export const ar: TranslationBundle = {
       "live-moderation": "مباشر",
       audit: "التدقيق",
       notifications: "التنبيهات",
+      clubs: "الأندية",
+      support: "الدعم",
     },
   },
   profile: {

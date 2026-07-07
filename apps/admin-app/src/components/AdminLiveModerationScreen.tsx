@@ -8,9 +8,9 @@ import { colors, spacing, typography } from "@a3/ui/theme";
 import { usePullToRefresh } from "@a3/ui/hooks";
 import { adminTabBarTotalInset } from "../theme/adminShell";
 import { useTranslation } from "@a3/i18n";
-import { LiveStreamModerationList } from "../components/LiveStreamModerationList";
+import { LiveStreamModerationList } from "./LiveStreamModerationList";
 
-export default function LiveModerationScreen() {
+export default function AdminLiveModerationScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { refreshing, onRefresh } = usePullToRefresh();
@@ -30,7 +30,10 @@ export default function LiveModerationScreen() {
     (stream: { liveStreamId: Parameters<typeof forceEnd>[0]["liveStreamId"]; clubName: string }) => {
       router.push({
         pathname: "/live/[liveStreamId]",
-        params: { liveStreamId: stream.liveStreamId, clubName: stream.clubName },
+        params: {
+          liveStreamId: String(stream.liveStreamId),
+          ...(stream.clubName ? { clubName: stream.clubName } : {}),
+        },
       } as never);
     },
     [router],

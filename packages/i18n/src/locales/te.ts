@@ -47,6 +47,8 @@ export const te: TranslationBundle = {
       "live-moderation": "లైవ్",
       audit: "ఆడిట్",
       notifications: "అలర్ట్‌లు",
+      clubs: "క్లబ్‌లు",
+      support: "మద్దతు",
     },
   },
   profile: {

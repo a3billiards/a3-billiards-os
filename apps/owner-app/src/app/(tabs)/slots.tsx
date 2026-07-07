@@ -33,7 +33,8 @@ import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../..
 import { TabAccessDenied } from "../../components/TabAccessDenied";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
-import { useTranslation } from "@a3/i18n";
+import { useTranslation, getCurrentLanguage } from "@a3/i18n";
+import { formatBookingSlotTag, formatSlotDurationLabel, slotDurationI18nKey } from "@a3/utils/bookingDisplay";
 import {
   WalkInGroupSetup,
   type GroupPlayer,
@@ -46,6 +47,7 @@ const TOS_URL = "https://a3billiards.com/terms";
 
 function SlotsScreenContent() {
   const { t } = useTranslation();
+  const locale = getCurrentLanguage();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = ownerTabBarTotalInset(insets.bottom);
@@ -69,6 +71,8 @@ function SlotsScreenContent() {
     "choose" | "customer" | "deskRegister" | "groupSetup" | "addTeammate"
   >("choose");
   const [guestNameInput, setGuestNameInput] = useState("Walk-in");
+  const [walkInPlayDurationMin, setWalkInPlayDurationMin] = useState(60);
+  const [walkInPlayOpenEnded, setWalkInPlayOpenEnded] = useState(false);
   const [customerPhoneInput, setCustomerPhoneInput] = useState(DEFAULT_PHONE_E164);
   const [debouncedCustomerPhone, setDebouncedCustomerPhone] = useState("");
   const [pendingCustomerId, setPendingCustomerId] = useState<Id<"users"> | null>(null);
@@ -294,6 +298,8 @@ function SlotsScreenContent() {
     setPlayMode("casual");
     setLosersPay(false);
     setGroupValidationError(null);
+    setWalkInPlayDurationMin(60);
+    setWalkInPlayOpenEnded(false);
     resetPlayerLookupState();
   }, [t, resetPlayerLookupState]);
 
@@ -418,6 +424,8 @@ function SlotsScreenContent() {
         participants?: ReturnType<typeof buildParticipantsPayload>;
         playMode?: "casual" | "versus";
         losersPay?: boolean;
+        assignedPlayDurationMin?: number;
+        assignedPlayOpenEnded?: boolean;
       },
     ) => {
       setActionError(null);
@@ -433,6 +441,10 @@ function SlotsScreenContent() {
           participants: opts?.participants,
           playMode: opts?.playMode,
           losersPay: opts?.losersPay,
+          assignedPlayDurationMin: opts?.assignedPlayOpenEnded
+            ? undefined
+            : opts?.assignedPlayDurationMin,
+          assignedPlayOpenEnded: opts?.assignedPlayOpenEnded || undefined,
         });
         if ((result as { hasUpcomingBooking?: boolean }).hasUpcomingBooking) {
           const r = result as {
@@ -461,6 +473,16 @@ function SlotsScreenContent() {
     [startWalkIn, clearWalkInState, queryRoleId, t],
   );
 
+  const playDurationOptions = dashboard?.slotDurationOptions ?? [30, 60, 90, 120, 180];
+
+  const walkInPlayParams = useMemo(
+    () => ({
+      assignedPlayDurationMin: walkInPlayOpenEnded ? undefined : walkInPlayDurationMin,
+      assignedPlayOpenEnded: walkInPlayOpenEnded || undefined,
+    }),
+    [walkInPlayDurationMin, walkInPlayOpenEnded],
+  );
+
   const startGroupSession = useCallback(
     (staffAcknowledgedComplaint?: boolean) => {
       if (!walkInTableId || !walkInLockToken || !pendingCustomerId) return;
@@ -476,6 +498,7 @@ function SlotsScreenContent() {
         playMode,
         losersPay: playMode === "versus" ? losersPay : false,
         staffAcknowledgedComplaint,
+        ...walkInPlayParams,
       });
     },
     [
@@ -488,6 +511,7 @@ function SlotsScreenContent() {
       groupPlayers,
       playMode,
       losersPay,
+      walkInPlayParams,
     ],
   );
 
@@ -620,8 +644,11 @@ function SlotsScreenContent() {
   const proceedAnyway = useCallback(() => {
     if (!walkInTableId || !walkInLockToken) return;
     setShowConflictModal(false);
-    void runStartWalkIn(walkInTableId, walkInLockToken, { forceOverride: true });
-  }, [walkInTableId, walkInLockToken, runStartWalkIn]);
+    void runStartWalkIn(walkInTableId, walkInLockToken, {
+      forceOverride: true,
+      ...walkInPlayParams,
+    });
+  }, [walkInTableId, walkInLockToken, runStartWalkIn, walkInPlayParams]);
 
   const cancelWalkInStart = useCallback(async () => {
     setShowWalkInStartModal(false);
@@ -638,6 +665,53 @@ function SlotsScreenContent() {
     clearWalkInState();
   }, [walkInTableId, walkInLockToken, releaseTableLock, clearWalkInState]);
 
+  const renderPlayDurationChips = () => (
+    <View style={styles.playDurationBlock}>
+      <Text style={styles.walkInLabel}>{t("ownerApp.slots.assignPlayDuration")}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.playDurationRow}>
+          {playDurationOptions.map((min) => {
+            const key = slotDurationI18nKey(min);
+            const label = key ? t(key) : `${min} min`;
+            const active = !walkInPlayOpenEnded && walkInPlayDurationMin === min;
+            return (
+              <Pressable
+                key={min}
+                style={[styles.playDurationChip, active && styles.playDurationChipActive]}
+                onPress={() => {
+                  setWalkInPlayOpenEnded(false);
+                  setWalkInPlayDurationMin(min);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.playDurationChipText,
+                    active && styles.playDurationChipTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+          <Pressable
+            style={[styles.playDurationChip, walkInPlayOpenEnded && styles.playDurationChipActive]}
+            onPress={() => setWalkInPlayOpenEnded(true)}
+          >
+            <Text
+              style={[
+                styles.playDurationChipText,
+                walkInPlayOpenEnded && styles.playDurationChipTextActive,
+              ]}
+            >
+              {t("common.slotDurationChips.open")}
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </View>
+  );
+
   const bannerRows: ComplaintBannerRow[] = useMemo(() => {
     if (!customerComplaints?.complaints) return [];
     return customerComplaints.complaints.map((c) => ({
@@ -647,6 +721,26 @@ function SlotsScreenContent() {
       createdAt: c.createdAt,
     }));
   }, [customerComplaints]);
+
+  const localizedBookingTags = useMemo(() => {
+    if (!dashboard) return {};
+    const raw = dashboard.bookingTagByTableId ?? {};
+    const tz = dashboard.timezone;
+    const out: Record<string, { label: string }> = {};
+    for (const [tableId, tag] of Object.entries(raw)) {
+      out[tableId] = {
+        label: formatBookingSlotTag(
+          tag.startMs,
+          tag.durationMin,
+          tag.openEnded,
+          tz,
+          locale,
+          t,
+        ),
+      };
+    }
+    return out;
+  }, [dashboard, locale, t]);
 
   if (dashboard === undefined) {
     return (
@@ -743,7 +837,7 @@ function SlotsScreenContent() {
 
         <TableGrid
           tables={dashboard.tables}
-          bookingTagByTableId={dashboard.bookingTagByTableId}
+          bookingTagByTableId={localizedBookingTags}
           onTablePress={handleTablePress}
         />
 
@@ -789,6 +883,13 @@ function SlotsScreenContent() {
                         <View style={styles.elapsedDot} />
                         <Text style={styles.activeCardMeta}>
                           {t("ownerApp.slots.elapsedSuffix", { time: elapsedLabel })}
+                          {session
+                            ? ` · ${formatSlotDurationLabel(
+                                session.assignedPlayDurationMin ?? 60,
+                                session.assignedPlayOpenEnded,
+                                t,
+                              )}`
+                            : ""}
                         </Text>
                       </View>
                     ) : (
@@ -900,6 +1001,7 @@ function SlotsScreenContent() {
               >
                 <Text style={styles.modalTitle}>{t("ownerApp.slots.startSession")}</Text>
                 <Text style={styles.modalBody}>{t("ownerApp.slots.walkInModalBody")}</Text>
+                {renderPlayDurationChips()}
                 <Text style={styles.walkInLabel}>{t("ownerApp.slots.guestDisplayName")}</Text>
                 <TextInput
                   style={styles.walkInInput}
@@ -924,7 +1026,10 @@ function SlotsScreenContent() {
                       if (!walkInTableId || !walkInLockToken) return;
                       setDeskError(null);
                       const g = guestNameInput.trim() || t("ownerApp.slots.defaultWalkIn");
-                      void runStartWalkIn(walkInTableId, walkInLockToken, { guestName: g });
+                      void runStartWalkIn(walkInTableId, walkInLockToken, {
+                        guestName: g,
+                        ...walkInPlayParams,
+                      });
                     }}
                   >
                     <Text style={styles.modalBtnPrimaryText}>{t("ownerApp.slots.walkInGuest")}</Text>
@@ -1624,6 +1729,7 @@ function SlotsScreenContent() {
                 void runStartWalkIn(walkInTableId, walkInLockToken, {
                   customerId: pendingCustomerId,
                   staffAcknowledgedComplaint: true,
+                  ...walkInPlayParams,
                 });
               }}
             />
@@ -2044,6 +2150,22 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.88 },
   modalBtnDisabled: { opacity: 0.55 },
+  playDurationBlock: { marginBottom: spacing[3] },
+  playDurationRow: { flexDirection: "row", gap: spacing[2], paddingVertical: spacing[1] },
+  playDurationChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: colors.bg.tertiary,
+  },
+  playDurationChipActive: {
+    borderColor: colors.accent.green,
+    backgroundColor: "rgba(67,160,71,0.15)",
+  },
+  playDurationChipText: { ...typography.caption, color: colors.text.secondary },
+  playDurationChipTextActive: { color: colors.accent.green, fontWeight: "600" },
   walkInLabel: {
     ...typography.caption,
     color: colors.text.secondary,

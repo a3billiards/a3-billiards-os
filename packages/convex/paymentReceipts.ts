@@ -63,12 +63,36 @@ export const handleWebhook = internalAction({
 
     const notes =
       (entity.notes as Record<string, unknown> | undefined) ?? {};
-    const ownerId = notes.ownerId != null ? String(notes.ownerId) : "";
     const amount = Number(entity.amount);
-    const periodMs = Number(notes.periodMs);
     const paymentId = String(entity.id ?? "").trim();
     const flowRaw =
       notes.flow != null ? String(notes.flow).toLowerCase() : "renewal";
+
+    if (!paymentId) {
+      throw new Error("PAYMENT_002: Missing payment id");
+    }
+
+    // Customer booking payment (full amount after owner approval).
+    if (flowRaw === "booking") {
+      const bookingId = notes.bookingId != null ? String(notes.bookingId) : "";
+      const customerId =
+        notes.customerId != null ? String(notes.customerId) : "";
+      if (!bookingId || !customerId || !Number.isFinite(amount)) {
+        throw new Error(
+          "PAYMENT_002: Missing bookingId or customerId in payment notes",
+        );
+      }
+      await ctx.runMutation(internal.bookingPayments.processBookingPayment, {
+        paymentId,
+        bookingId,
+        customerId,
+        amountPaise: amount,
+      });
+      return { status: "processed" as const, paymentId, flow: "booking" };
+    }
+
+    const ownerId = notes.ownerId != null ? String(notes.ownerId) : "";
+    const periodMs = Number(notes.periodMs);
     const flow = flowRaw === "onboarding" ? "onboarding" : "renewal";
 
     if (!ownerId || !Number.isFinite(periodMs) || Number.isNaN(periodMs)) {
@@ -77,11 +101,6 @@ export const handleWebhook = internalAction({
       );
     }
     if (periodMs <= 0) {
-      throw new Error(
-        "PAYMENT_002: Missing ownerId or periodMs in payment notes",
-      );
-    }
-    if (!paymentId) {
       throw new Error(
         "PAYMENT_002: Missing ownerId or periodMs in payment notes",
       );

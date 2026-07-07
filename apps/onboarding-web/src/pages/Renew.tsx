@@ -4,6 +4,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../convexApi";
 import { parseConvexError } from "../lib/parseConvexError";
 import { captureEvent } from "../instrumentation";
+import { SubscriptionGstBreakdown } from "../components/SubscriptionGstBreakdown";
 
 type SubscriptionPlanRow = {
   id: "monthly" | "yearly";
@@ -11,6 +12,23 @@ type SubscriptionPlanRow = {
   periodMs: number;
   amountPaise: number;
   currency: string;
+  gst: {
+    totalPaise: number;
+    taxablePaise: number;
+    gstPaise: number;
+    gstRatePercent: number;
+    cgstPaise: number;
+    sgstPaise: number;
+    igstPaise: number;
+    splitMode: "igst" | "cgst_sgst";
+  };
+  invoiceConfig: {
+    legalName: string;
+    gstin: string | null;
+    gstRatePercent: number;
+    gstSplitMode: "igst" | "cgst_sgst";
+    sacCode: string;
+  };
 };
 
 function loadRazorpayScript(): Promise<void> {
@@ -30,7 +48,6 @@ export default function Renew() {
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const { signIn } = useAuthActions();
   const createOrder = useAction(api.onboardingWebActions.createRazorpayOrder);
-  const applyCoupon = useAction(api.onboardingWebActions.applyCouponFreeAccess);
   const status = useQuery(api.onboardingWeb.getMyOnboardingStatus);
   const plans = useQuery(api.onboardingWeb.listSubscriptionPlans);
 
@@ -43,21 +60,37 @@ export default function Renew() {
   const [paymentPending, setPaymentPending] = useState(false);
   const [expiryBeforePay, setExpiryBeforePay] = useState<number | null>(null);
   const [renewSuccess, setRenewSuccess] = useState(false);
-  const [couponCode, setCouponCode] = useState("");
 
   const handleLogin = useCallback(async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      setError("Email and password are required.");
+      return;
+    }
     setError(null);
     setLoginBusy(true);
     try {
       const { signingIn } = await signIn("password", {
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
         flow: "signIn",
       });
-      if (!signingIn) setError("Sign-in failed.");
+      if (!signingIn) setError("Sign-in failed. Check your email and password.");
       else captureEvent("renew_login");
     } catch (e) {
-      setError(parseConvexError(e as Error).message);
+      const parsed = parseConvexError(e as Error);
+      if (parsed.code === "AUTH_009") {
+        setError("Verify your email first.");
+        window.location.assign(
+          `/verify-email?email=${encodeURIComponent(normalizedEmail)}`,
+        );
+        return;
+      }
+      if (parsed.code === "AUTH_001") {
+        setError("Invalid email or password.");
+        return;
+      }
+      setError(parsed.message);
     } finally {
       setLoginBusy(false);
     }
@@ -76,13 +109,19 @@ export default function Renew() {
     try {
       await loadRazorpayScript();
       const order = await createOrder({ flow: "renewal", planId });
+      const selectedPlan = (plans as SubscriptionPlanRow[] | undefined)?.find(
+        (p) => p.id === planId,
+      );
+      const gstNote = selectedPlan
+        ? ` (incl. GST ${selectedPlan.gst.gstRatePercent}%)`
+        : "";
       const RazorpayCtor = (window as unknown as { Razorpay: new (opts: object) => { open: () => void } }).Razorpay;
       const rzp = new RazorpayCtor({
         key: order.keyId,
         order_id: order.orderId,
         currency: order.currency,
         name: "A3 Billiards OS",
-        description: `Renew — ${planId}`,
+        description: `Renew — ${planId}${gstNote}`,
         handler: () => {
           captureEvent("renew_razorpay_success", { planId });
         },
@@ -102,33 +141,7 @@ export default function Renew() {
       setPaymentPending(false);
       setExpiryBeforePay(null);
     }
-  }, [createOrder, planId, email, status]);
-
-  const handleCoupon = useCallback(async () => {
-    setError(null);
-    setRenewSuccess(false);
-    setPayBusy(true);
-    const baseline =
-      status?.loggedIn && status.subscriptionExpiresAt != null
-        ? status.subscriptionExpiresAt
-        : 0;
-    setExpiryBeforePay(baseline);
-    setPaymentPending(true);
-    try {
-      await applyCoupon({
-        flow: "renewal",
-        planId,
-        couponCode,
-      });
-      captureEvent("renew_coupon_applied", { planId });
-    } catch (e) {
-      setError(parseConvexError(e as Error).message);
-      setPaymentPending(false);
-      setExpiryBeforePay(null);
-    } finally {
-      setPayBusy(false);
-    }
-  }, [applyCoupon, couponCode, planId, status]);
+  }, [createOrder, planId, email, status, plans]);
 
   useEffect(() => {
     if (!paymentPending || expiryBeforePay === null || !status?.loggedIn) return;
@@ -242,11 +255,26 @@ export default function Renew() {
               >
                 <h3>{p.label}</h3>
                 <p className="muted" style={{ margin: 0 }}>
-                  {(p.amountPaise / 100).toLocaleString("en-IN")} {p.currency}
+                  {(p.amountPaise / 100).toLocaleString("en-IN")} {p.currency} excl. GST
                 </p>
               </div>
             ))}
           </div>
+          {(() => {
+            const selected = (plans as SubscriptionPlanRow[]).find((p) => p.id === planId);
+            if (!selected) return null;
+            return (
+              <>
+                <p className="muted" style={{ marginTop: 12 }}>
+                  SAC: {selected.invoiceConfig.sacCode}
+                  {selected.invoiceConfig.gstin
+                    ? ` · Supplier GSTIN: ${selected.invoiceConfig.gstin}`
+                    : null}
+                </p>
+                <SubscriptionGstBreakdown gst={selected.gst} currency={selected.currency} compact />
+              </>
+            );
+          })()}
           <p className="muted">
             Early renewal preserves unused paid time: your new expiry is the later of your current expiry or today, plus
             the period you buy.
@@ -259,26 +287,6 @@ export default function Renew() {
           >
             Pay with Razorpay
           </button>
-          <div style={{ marginTop: 16 }}>
-            <label htmlFor="renewCouponCode">Coupon (testing)</label>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}>
-              <input
-                id="renewCouponCode"
-                value={couponCode}
-                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                placeholder="A3A3A3"
-                disabled={payBusy || paymentPending}
-              />
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={payBusy || paymentPending || couponCode.trim().length === 0}
-                onClick={() => void handleCoupon()}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
           {paymentPending ? (
             <p className="muted" style={{ marginTop: 16 }}>
               Waiting for confirmation…

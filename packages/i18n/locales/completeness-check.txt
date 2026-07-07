@@ -1,0 +1,11 @@
+en.json leaf keys: 2476
+ar.json leaf keys: 2476
+hi.json leaf keys: 2477
+kn.json leaf keys: 2476
+ml.json leaf keys: 2476
+te.json leaf keys: 2476
+ta.json leaf keys: 2476
+fr.json leaf keys: 2476
+nl.json leaf keys: 2476
+
+hi: extra ownerApp.financials.perMinEquals

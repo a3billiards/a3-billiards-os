@@ -12,6 +12,7 @@ import {
   zonedWallTimeToUtcMs,
 } from "@a3/utils/timezone";
 import { dateAllowsMinAdvance } from "@a3/utils/availability";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing, radius, layout } from "../theme/spacing";
@@ -35,25 +36,25 @@ export interface DateStripProps {
   noDatesLabel?: string;
 }
 
-function monthShort(ymd: string, tz: string): string {
+function monthShort(ymd: string, tz: string, locale: string): string {
   const ms = zonedWallTimeToUtcMs(ymd, "12:00", tz);
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: tz,
     month: "short",
   }).format(new Date(ms));
 }
 
-function dayNum(ymd: string, tz: string): string {
+function dayNum(ymd: string, tz: string, locale: string): string {
   const ms = zonedWallTimeToUtcMs(ymd, "12:00", tz);
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: tz,
     day: "numeric",
   }).format(new Date(ms));
 }
 
-function weekdayShort(ymd: string, tz: string): string {
+function weekdayShort(ymd: string, tz: string, locale: string): string {
   const ms = zonedWallTimeToUtcMs(ymd, "12:00", tz);
-  const wd = new Intl.DateTimeFormat("en-US", {
+  const wd = new Intl.DateTimeFormat(locale, {
     timeZone: tz,
     weekday: "short",
   }).format(new Date(ms));
@@ -92,10 +93,17 @@ export function DateStrip({
   slotDurationOptions,
   selectedYmd,
   onSelectYmd,
-  headingLabel = "When do you want to play?",
-  todayLabel = "Today",
+  headingLabel,
+  todayLabel,
   noDatesLabel,
 }: DateStripProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = getCurrentLanguage();
+  const heading = headingLabel ?? t("sharedUi.dateStrip.heading");
+  const today = todayLabel ?? t("sharedUi.dateStrip.today");
+  const noDates =
+    noDatesLabel ??
+    t("sharedUi.dateStrip.noBookableDates", { maxAdvanceDays });
   const todayYmd = dateYmdInTimeZone(nowMs, timeZone);
   const minDurationMin = Math.min(...slotDurationOptions, 30);
 
@@ -135,12 +143,9 @@ export function DateStrip({
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>{headingLabel}</Text>
+      <Text style={styles.title}>{heading}</Text>
       {selectableDays.length === 0 ? (
-        <Text style={styles.emptyHint}>
-          {noDatesLabel ??
-            `No bookable dates in the next ${maxAdvanceDays} days. The club may need to update bookable days or hours in Settings.`}
-        </Text>
+        <Text style={styles.emptyHint}>{noDates}</Text>
       ) : null}
       <ScrollView
         horizontal
@@ -182,7 +187,7 @@ export function DateStrip({
                   selected && !disabled && styles.textOnSelected,
                 ]}
               >
-                {weekdayShort(ymd, timeZone)}
+                {weekdayShort(ymd, timeZone, locale)}
               </Text>
               <Text
                 style={[
@@ -191,7 +196,7 @@ export function DateStrip({
                   selected && !disabled && styles.textOnSelected,
                 ]}
               >
-                {dayNum(ymd, timeZone)}
+                {dayNum(ymd, timeZone, locale)}
               </Text>
               <Text
                 style={[
@@ -200,7 +205,7 @@ export function DateStrip({
                   selected && !disabled && styles.textOnSelected,
                 ]}
               >
-                {monthShort(ymd, timeZone)}
+                {monthShort(ymd, timeZone, locale)}
               </Text>
               {isToday && !disabled ? (
                 <Text
@@ -209,7 +214,7 @@ export function DateStrip({
                     selected && styles.textOnSelected,
                   ]}
                 >
-                  {todayLabel}
+                  {today}
                 </Text>
               ) : (
                 <View style={styles.todaySpacer} />

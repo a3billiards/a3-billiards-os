@@ -13,8 +13,11 @@ import { action } from "./_generated/server";
 import { listOnboardingPlansFromEnv } from "./onboardingPlanPricing";
 import { geocodeAddress } from "./model/geocode";
 import { assertStrongPasswordOrThrow } from "./model/passwordPolicy";
-
-const FREE_ACCESS_COUPON = "A3A3A3";
+import {
+  gstBreakdownForTaxableAmount,
+  platformGstin,
+  platformLegalName,
+} from "./model/platformGst";
 
 async function assertFlowEligibility(
   ctx: any,
@@ -112,11 +115,14 @@ export const createRazorpayOrder = action({
 
     await assertFlowEligibility(ctx, userId, flow);
 
+    const gst = gstBreakdownForTaxableAmount(plan.amountPaise);
+    const supplierGstin = platformGstin();
+
     const receipt = `a3_${flow}_${String(userId).slice(-8)}_${Date.now()}`;
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
 
     const orderBody = {
-      amount: plan.amountPaise,
+      amount: gst.totalPaise,
       currency: plan.currency,
       receipt,
       notes: {
@@ -124,6 +130,12 @@ export const createRazorpayOrder = action({
         periodMs: String(plan.periodMs),
         flow,
         planId,
+        supplierName: platformLegalName(),
+        ...(supplierGstin ? { supplierGstin } : {}),
+        taxableAmountPaise: String(gst.taxablePaise),
+        gstAmountPaise: String(gst.gstPaise),
+        gstRatePercent: String(gst.gstRatePercent),
+        sacCode: "998314",
       },
     };
 
@@ -149,52 +161,11 @@ export const createRazorpayOrder = action({
 
     return {
       orderId: json.id,
-      amountPaise: plan.amountPaise,
+      amountPaise: gst.totalPaise,
       currency: plan.currency,
       keyId,
       periodMs: plan.periodMs,
+      gst,
     };
-  },
-});
-
-export const applyCouponFreeAccess = action({
-  args: {
-    flow: v.union(v.literal("onboarding"), v.literal("renewal")),
-    planId: v.union(v.literal("monthly"), v.literal("yearly")),
-    couponCode: v.string(),
-  },
-  handler: async (ctx, { flow, planId, couponCode }) => {
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) throw new Error("AUTH_001: Not authenticated");
-
-    const normalizedCoupon = couponCode.trim().toUpperCase();
-    if (normalizedCoupon !== FREE_ACCESS_COUPON) {
-      throw new Error("PAYMENT_004: Invalid coupon code");
-    }
-
-    const plans = listOnboardingPlansFromEnv();
-    const plan = plans.find((p) => p.id === planId);
-    if (!plan) throw new Error("DATA_001: Unknown subscription plan");
-
-    await assertFlowEligibility(ctx, userId, flow);
-
-    const paymentId = `coupon_${flow}_${String(userId).slice(-8)}_${Date.now()}`;
-    if (flow === "onboarding") {
-      await ctx.runMutation(internal.paymentReceipts.processOnboardingPayment, {
-        paymentId,
-        ownerId: String(userId),
-        amount: 0,
-        periodMs: plan.periodMs,
-      });
-    } else {
-      await ctx.runMutation(internal.paymentReceipts.processPayment, {
-        paymentId,
-        ownerId: String(userId),
-        amount: 0,
-        periodMs: plan.periodMs,
-      });
-    }
-
-    return { applied: true as const };
   },
 });

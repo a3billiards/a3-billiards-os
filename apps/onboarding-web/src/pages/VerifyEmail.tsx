@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../convexApi";
@@ -18,14 +18,23 @@ export default function VerifyEmail() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [codeSent, setCodeSent] = useState(initialEmail.length > 0);
+  const [info, setInfo] = useState<string | null>(null);
+  const [codeSent, setCodeSent] = useState(false);
+  const autoSent = useRef(false);
 
   const handleSendCode = useCallback(async () => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) {
+      setError("Enter your email address.");
+      return;
+    }
     setError(null);
+    setInfo(null);
     setBusy(true);
     try {
-      await sendVerificationCode({ email: email.trim().toLowerCase() });
+      await sendVerificationCode({ email: normalized });
       setCodeSent(true);
+      setInfo("If an account exists for this email, a 6-digit code was sent.");
     } catch (e) {
       setError(parseConvexError(e as Error).message);
     } finally {
@@ -33,8 +42,17 @@ export default function VerifyEmail() {
     }
   }, [email, sendVerificationCode]);
 
+  // Auto-send when opened from login with ?email=
+  useEffect(() => {
+    if (autoSent.current) return;
+    if (!initialEmail.trim()) return;
+    autoSent.current = true;
+    void handleSendCode();
+  }, [initialEmail, handleSendCode]);
+
   const handleVerify = useCallback(async () => {
     setError(null);
+    setInfo(null);
     setBusy(true);
     try {
       await verifyEmailCode({
@@ -54,8 +72,11 @@ export default function VerifyEmail() {
   return (
     <div className="card">
       <h1>Verify email</h1>
-      <p className="muted">Enter the 6-digit code we sent to your email.</p>
+      <p className="muted">
+        Owners must verify email before signing in. Enter the 6-digit code from your inbox.
+      </p>
       {error ? <div className="error-banner">{error}</div> : null}
+      {info ? <div className="success-banner">{info}</div> : null}
       <label htmlFor="verifyEmail">Email</label>
       <input
         id="verifyEmail"
@@ -63,6 +84,7 @@ export default function VerifyEmail() {
         autoComplete="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        disabled={busy}
       />
       {!codeSent ? (
         <button
@@ -83,6 +105,10 @@ export default function VerifyEmail() {
             maxLength={6}
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            disabled={busy}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && code.length === 6) void handleVerify();
+            }}
           />
           <div className="inline-actions">
             <button

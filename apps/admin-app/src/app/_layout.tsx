@@ -110,8 +110,7 @@ function AdminAuthShellInner(): React.JSX.Element {
       return;
     }
     if (!user.adminMfaVerifiedAt) {
-      const onTabs = firstSegment === "(tabs)";
-      if (!onPublicAuthRoute && !onTabs) {
+      if (firstSegment !== "mfa") {
         router.replace("/mfa");
       }
       return;
@@ -181,8 +180,7 @@ function AdminAuthShellInner(): React.JSX.Element {
   }
 
   if (!user.adminMfaVerifiedAt) {
-    const onTabs = firstSegment === "(tabs)";
-    if (!onPublicAuthRoute && !onTabs) {
+    if (firstSegment !== "mfa") {
       return <Redirect href="/mfa" />;
     }
     return (
@@ -208,7 +206,13 @@ function AdminAuthShellInner(): React.JSX.Element {
           contentStyle: { backgroundColor: glass.pageBgBottom },
           animation: "fade",
         }}
-      />
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="live" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen name="user/[userId]" />
+        <Stack.Screen name="login" options={{ animation: "fade" }} />
+        <Stack.Screen name="mfa" options={{ animation: "fade" }} />
+      </Stack>
     </>
   );
 }

@@ -34,6 +34,7 @@ import {
   zonedWallTimeToUtcMs,
 } from "@a3/utils/timezone";
 import { formatHhmm12h } from "@a3/utils/availability";
+import { tableTypeI18nKey, tableTypeLabel } from "@a3/utils/tableTypes";
 import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
 const STEP_KEYS = [
@@ -88,11 +89,12 @@ function formatMoney(currency: string, amount: number): string {
   }
 }
 
-function capitalizeWords(s: string): string {
-  return s
-    .split(/\s+/)
-    .map((w) => (w.length ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(" ");
+function localizedTableType(
+  raw: string,
+  t: (key: string) => string,
+): string {
+  const key = tableTypeI18nKey(raw);
+  return key ? t(key) : tableTypeLabel(raw);
 }
 
 function BookClubScreenContent() {
@@ -115,7 +117,6 @@ function BookClubScreenContent() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
-  const [couponCode, setCouponCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const slotDurationOptions = ctx?.bookingSettings.slotDurationOptions;
@@ -220,13 +221,6 @@ function BookClubScreenContent() {
     if (!ctx || !tableType || !selectedTableId || !dateYmd || !selectedTime || durationMin === null) {
       return;
     }
-    if (ctx.bookingSettings.requireBookingCoupon && !couponCode.trim()) {
-      Alert.alert(
-        t("customerApp.booking.alerts.couponRequiredTitle"),
-        t("customerApp.booking.alerts.couponRequiredBody"),
-      );
-      return;
-    }
     setSubmitting(true);
     try {
       await submit({
@@ -237,13 +231,12 @@ function BookClubScreenContent() {
         requestedStartTime: selectedTime,
         requestedDurationMin: durationMin,
         notes: notes.trim() || undefined,
-        couponCode: couponCode.trim() || undefined,
       });
       router.replace("/(tabs)/bookings");
       setTimeout(() => {
         Alert.alert(
           t("customerApp.booking.alerts.requestSentTitle"),
-          t("customerApp.booking.alerts.requestSentBody"),
+          t("customerApp.booking.alerts.requestSentPayBody"),
         );
       }, 0);
     } catch (e) {
@@ -528,7 +521,7 @@ function BookClubScreenContent() {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryKey}>{t("customerApp.booking.summaryTableType")}</Text>
                 <Text style={styles.summaryVal}>
-                  {capitalizeWords(tableType)}
+                  {localizedTableType(tableType, t)}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
@@ -538,7 +531,7 @@ function BookClubScreenContent() {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryKey}>{t("customerApp.booking.summaryTime")}</Text>
                 <Text style={styles.summaryVal}>
-                  {formatHhmm12h(selectedTime)}
+                  {formatHhmm12h(selectedTime, getCurrentLanguage())}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
@@ -562,23 +555,7 @@ function BookClubScreenContent() {
             </View>
             <Text style={styles.tzHint}>{t("customerApp.booking.timesShownIn", { tz: tzLabel })}</Text>
 
-            {ctx.bookingSettings.requireBookingCoupon ? (
-              <>
-                <Text style={styles.notesLabel}>{t("customerApp.booking.bookingCoupon")}</Text>
-                <Text style={styles.couponHint}>
-                  {t("customerApp.booking.couponHint")}
-                </Text>
-                <TextInput
-                  style={styles.notesInput}
-                  placeholder={t("customerApp.booking.couponPlaceholder")}
-                  placeholderTextColor={colors.text.tertiary}
-                  value={couponCode}
-                  onChangeText={(t: string) => setCouponCode(t.toUpperCase().slice(0, 32))}
-                  autoCapitalize="characters"
-                  maxLength={32}
-                />
-              </>
-            ) : null}
+            <Text style={styles.payHint}>{t("customerApp.booking.payAfterApprovalHint")}</Text>
 
             <Text style={styles.notesLabel}>{t("customerApp.booking.notesOptional")}</Text>
             <TextInput
@@ -788,6 +765,12 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   notesLabel: { ...typography.label, color: colors.text.secondary },
+  payHint: {
+    ...typography.bodySmall,
+    color: colors.accent.green,
+    marginBottom: spacing[3],
+    lineHeight: 20,
+  },
   couponHint: {
     ...typography.caption,
     color: colors.text.secondary,

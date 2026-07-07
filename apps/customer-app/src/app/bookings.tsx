@@ -36,6 +36,8 @@ type CustomerBookingLog = {
   thumbnailPhotoUrl?: string | null;
   cancellationWindowMin?: number;
   isLateCancellationNow?: boolean;
+  needsPayment?: boolean;
+  canPay?: boolean;
 };
 
 const UPCOMING = new Set(["pending_approval", "confirmed"]);
@@ -213,6 +215,7 @@ export default function MyBookingsScreen() {
                 confirmedTableLabel: log.confirmedTableLabel,
                 rejectionReason: log.rejectionReason,
                 thumbnailPhotoUrl: log.thumbnailPhotoUrl,
+                needsPayment: log.needsPayment === true,
               }}
               onPress={() => router.push(`/booking/${log.bookingId}`)}
               onCancel={

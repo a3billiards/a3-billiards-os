@@ -47,11 +47,11 @@ function intervalsOverlap(
 export const STALE_SLOT_WARNING_MS = 120_000;
 
 /** Display HH:MM (24h wall) as 12-hour label (en-US). */
-export function formatHhmm12h(hhmm: string): string {
+export function formatHhmm12h(hhmm: string, locale = "en-US"): string {
   const [h, m] = hhmm.split(":").map((x) => Number(x));
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,

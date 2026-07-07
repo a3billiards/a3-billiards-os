@@ -138,11 +138,14 @@ export const ownerCompleteDeskCustomerRegistration = action({
       );
     }
 
-    await ctx.runMutation(internal.otp.attemptVerify, {
+    const otpResult = await ctx.runMutation(internal.otp.attemptVerify, {
       phone: normalized,
       code: normalizedCode,
       userId: undefined,
     });
+    if (!otpResult.ok) {
+      throw new Error(otpResult.error);
+    }
 
     return await ctx.runMutation(
       internal.ownerDeskCustomerMutations.insertDeskRegisteredCustomer,

@@ -15,11 +15,14 @@
     "./analytics": "./analytics.ts",
     "./bookingRate": "./bookingRate.ts",
     "./gstReport": "./gstReport.ts",
-    "./loyaltyBilling": "./loyaltyBilling.ts",
     "./phone": "./phone.ts",
     "./passwordPolicy": "./passwordPolicy.ts",
     "./tableTypes": "./tableTypes.ts",
-    "./csv": "./csv.ts"
+    "./clubDisplay": "./clubDisplay.ts",
+    "./bookingDisplay": "./bookingDisplay.ts",
+    "./supportContact": "./supportContact.ts",
+    "./csv": "./csv.ts",
+    "./subscriptionInvoiceGst": "./subscriptionInvoiceGst.ts"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

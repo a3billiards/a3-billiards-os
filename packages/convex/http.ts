@@ -273,4 +273,93 @@ http.route({
   }),
 });
 
+// ─────────────────────────────────────────────
+// Booking payment Checkout (opened from Customer app)
+// Query: orderId, keyId, amount, currency, name, email, contact, description
+// ─────────────────────────────────────────────
+http.route({
+  path: "/booking-pay",
+  method: "GET",
+  handler: httpAction(async (_ctx, req) => {
+    const url = new URL(req.url);
+    const orderId = url.searchParams.get("orderId") ?? "";
+    const keyId = url.searchParams.get("keyId") ?? "";
+    const amount = url.searchParams.get("amount") ?? "";
+    const currency = url.searchParams.get("currency") ?? "INR";
+    const name = url.searchParams.get("name") ?? "";
+    const email = url.searchParams.get("email") ?? "";
+    const contact = url.searchParams.get("contact") ?? "";
+    const description = url.searchParams.get("description") ?? "Booking payment";
+
+    if (!orderId || !keyId || !amount) {
+      return htmlPage(
+        "Payment",
+        `<div class="logo">A3 Billiards</div><h1>Payment unavailable</h1><p class="muted">Missing payment details. Return to the app and try again.</p>`,
+      );
+    }
+
+    const safe = (s: string) =>
+      s.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/</g, "");
+
+    const body = `
+<div class="logo">A3 Billiards</div>
+<h1>Complete payment</h1>
+<p class="muted">${safe(description)}</p>
+<p class="muted" id="status">Opening Razorpay…</p>
+<div id="msg"></div>
+<script src="https://checkout.razorpay.com/v1/checkout.js"><\/script>
+<script>
+(function(){
+  var opts = {
+    key: '${safe(keyId)}',
+    amount: ${Number(amount)},
+    currency: '${safe(currency)}',
+    name: 'A3 Billiards',
+    description: '${safe(description)}',
+    order_id: '${safe(orderId)}',
+    prefill: {
+      name: '${safe(name)}',
+      email: '${safe(email)}',
+      contact: '${safe(contact)}'
+    },
+    theme: { color: '#4ade80' },
+    handler: function(resp){
+      document.getElementById('status').textContent = 'Payment successful';
+      document.getElementById('msg').innerHTML = '<div class="success">Payment received. You can close this page and return to the A3 Customer app. Pull to refresh your booking.</div>';
+      post({ type: 'success', paymentId: resp && resp.razorpay_payment_id });
+    },
+    modal: {
+      ondismiss: function(){
+        document.getElementById('status').textContent = 'Payment cancelled';
+        document.getElementById('msg').innerHTML = '<div class="error">Payment was not completed. Return to the app to try again.</div>';
+        post({ type: 'dismiss' });
+      }
+    }
+  };
+  function post(payload) {
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+    }
+  }
+  try {
+    var rzp = new Razorpay(opts);
+    rzp.on('payment.failed', function(resp){
+      document.getElementById('status').textContent = 'Payment failed';
+      var reason = (resp && resp.error && resp.error.description) ? resp.error.description : 'Payment failed';
+      document.getElementById('msg').innerHTML = '<div class="error">' + reason + '</div>';
+      post({ type: 'failed', reason: reason });
+    });
+    rzp.open();
+  } catch (e) {
+    document.getElementById('status').textContent = 'Could not open checkout';
+    document.getElementById('msg').innerHTML = '<div class="error">Razorpay could not start. Check that keys are configured.</div>';
+    post({ type: 'error', reason: String(e) });
+  }
+})();
+<\/script>`;
+
+    return htmlPage("Pay for booking", body);
+  }),
+});
+
 export default http;

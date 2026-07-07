@@ -191,11 +191,6 @@ type ClubMemberRow = {
     noShowCount: number;
     lateCancellationCount: number;
   };
-  loyalty: {
-    availableCredits: number;
-    lifetimeCreditsEarned: number;
-    lifetimeCreditsRedeemed: number;
-  } | null;
   complaintsAtClub: number;
 };
 
@@ -223,9 +218,6 @@ export function clubMembersCsv(args: {
       "Bookings at this club",
       "No-shows",
       "Late cancellations",
-      "Loyalty credits available",
-      "Loyalty credits earned (lifetime)",
-      "Loyalty credits used (lifetime)",
       "Complaints at this club",
     ],
     ...args.members.map((m) => [
@@ -240,9 +232,6 @@ export function clubMembersCsv(args: {
       m.bookingStatsAtClub.totalBookings,
       m.bookingStatsAtClub.noShowCount,
       m.bookingStatsAtClub.lateCancellationCount,
-      m.loyalty?.availableCredits ?? 0,
-      m.loyalty?.lifetimeCreditsEarned ?? 0,
-      m.loyalty?.lifetimeCreditsRedeemed ?? 0,
       m.complaintsAtClub,
     ]),
     [],

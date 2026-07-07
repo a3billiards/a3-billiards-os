@@ -2,7 +2,7 @@
  * Builds packages/i18n/locales/*.json from existing TS locale modules + audit gaps.
  * Run: pnpm --filter @a3/i18n run build:locales
  */
-import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,6 +27,42 @@ import { nl } from "../src/locales/nl";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const localesDir = join(__dirname, "..", "locales");
+const mergeDir = join(localesDir, "_merge");
+const gapPatchDir = join(mergeDir, "gap-translations");
+
+const MERGE_SECTIONS = [
+  "sharedUi",
+  "notifications",
+  "ownerApp",
+  "customerApp",
+  "adminApp",
+  "auth",
+] as const;
+
+function loadJsonIfExists(path: string): JsonObject | null {
+  if (!existsSync(path)) return null;
+  return JSON.parse(readFileSync(path, "utf8")) as JsonObject;
+}
+
+/** Deep-merge reviewed _merge/*.json and gap-translations overlays onto built bundles. */
+function applyLocaleOverlays(bundle: JsonObject, locale: LocaleCode): JsonObject {
+  if (locale === "en") return bundle;
+  let out = bundle;
+  for (const section of MERGE_SECTIONS) {
+    const data = loadJsonIfExists(join(mergeDir, `${section}.${locale}.json`));
+    if (data) {
+      out = {
+        ...out,
+        [section]: deepMerge((out[section] ?? {}) as JsonObject, data),
+      };
+    }
+  }
+  const gap = loadJsonIfExists(join(gapPatchDir, `${locale}.json`));
+  if (gap) {
+    out = deepMerge(out, gap);
+  }
+  return out;
+}
 
 type JsonObject = Record<string, unknown>;
 
@@ -65,6 +101,68 @@ function deepMerge<T extends JsonObject>(base: T, ...overlays: JsonObject[]): T 
   return out as T;
 }
 
+type OwnerLocale = (typeof ownerByLocale)[LocaleCode];
+
+/** English bundle as fallback; localized owner modules override matching keys. */
+function buildLocalizedOwnerApp(
+  enOwnerApp: JsonObject,
+  owner: OwnerLocale,
+): JsonObject {
+  const enSettings = (enOwnerApp.settings ?? {}) as JsonObject;
+  const enSettingsContent = (enSettings.content ?? {}) as JsonObject;
+
+  return deepMerge(enOwnerApp, {
+    shell: { noClub: owner.noClub, accessDenied: owner.accessDenied },
+    home: owner.home,
+    slots: owner.slots,
+    snacks: owner.snacks,
+    financials: deepMerge(
+      (enOwnerApp.financials ?? {}) as JsonObject,
+      (owner.financials ?? {}) as JsonObject,
+    ),
+    complaints: deepMerge(
+      (enOwnerApp.complaints ?? {}) as JsonObject,
+      (owner.complaints ?? {}) as JsonObject,
+    ),
+    bookings: deepMerge(
+      (enOwnerApp.bookings ?? {}) as JsonObject,
+      (owner.bookings ?? {}) as JsonObject,
+    ),
+    documents: deepMerge(
+      (enOwnerApp.documents ?? {}) as JsonObject,
+      (owner.documents ?? {}) as JsonObject,
+    ),
+    kitchen: owner.kitchen,
+    livestream: owner.livestream,
+    help: owner.help ?? enOwnerApp.help,
+    settings: deepMerge(
+      enSettings,
+      {
+        content: deepMerge(enSettingsContent, owner.settingsContent ?? {}),
+        passcode: owner.passcode,
+      },
+      owner.settings ?? {},
+    ),
+  });
+}
+
+function buildSharedCommonOverlay(
+  enCommon: JsonObject,
+  shared: (typeof sharedEn),
+): JsonObject {
+  return deepMerge(enCommon, {
+    ...(shared.common ?? {}),
+    tabs: shared.tabs,
+    phone: shared.phone ?? enCommon.phone,
+    language: shared.settings,
+    config: shared.config,
+    subscription: shared.subscription,
+    inbox: shared.inbox,
+    streaming: shared.streaming,
+    profile: shared.profile,
+  });
+}
+
 function buildEnBundle(): JsonObject {
   return {
     common: deepMerge(
@@ -82,6 +180,7 @@ function buildEnBundle(): JsonObject {
       },
     ),
     auth: {
+      phone: sharedEn.phone,
       owner: {
         login: ownerEn.login,
         register: ownerEn.register,
@@ -137,6 +236,7 @@ function buildEnBundle(): JsonObject {
         kitchen: ownerEn.kitchen,
         loyalty: auditGapsEn.ownerApp.loyalty,
         livestream: ownerEn.livestream,
+        help: ownerEn.help,
         gstReport: {
           financialsGst: {
             disclaimerTitle: ownerEn.financials.gstDisclaimerTitle,
@@ -186,6 +286,7 @@ function buildEnBundle(): JsonObject {
         profile: customerEn.profile,
         streaming: customerEn.streaming,
         screens: customerEn.screens,
+        help: customerEn.help,
       },
       auditGapsEn.customerApp as JsonObject,
     ),
@@ -200,6 +301,8 @@ function buildEnBundle(): JsonObject {
       sessions: adminEn.sessions,
       bookings: adminEn.bookings,
       userProfile: adminEn.userProfile,
+      support: adminEn.support,
+      clubs: adminEn.clubs,
     },
     sharedUi: auditGapsEn.sharedUi,
     errors: deepMerge(
@@ -223,20 +326,12 @@ function translateBundle(
   const admin = adminByLocale[locale as keyof typeof adminByLocale];
 
   return deepMerge(enBundle, {
-    common: deepMerge(
-      { ...(shared.common ?? {}) },
-      {
-        tabs: shared.tabs,
-        phone: shared.phone,
-        language: shared.settings,
-        config: shared.config,
-        subscription: shared.subscription,
-        inbox: shared.inbox,
-        streaming: shared.streaming,
-        profile: shared.profile,
-      },
+    common: buildSharedCommonOverlay(
+      enBundle.common as JsonObject,
+      shared,
     ),
     auth: {
+      phone: shared.phone ?? (enBundle.auth as JsonObject)?.phone ?? sharedEn.phone,
       owner: {
         login: owner.login,
         register: owner.register,
@@ -259,38 +354,9 @@ function translateBundle(
         shell: admin.shell,
       },
     },
-    ownerApp: deepMerge(
-      {
-        shell: { noClub: owner.noClub, accessDenied: owner.accessDenied },
-        home: owner.home,
-        slots: owner.slots,
-        snacks: owner.snacks,
-        financials: owner.financials,
-        complaints: owner.complaints,
-        bookings: owner.bookings,
-        settings: {
-          ...owner.settings,
-          content: owner.settingsContent,
-          passcode: owner.passcode,
-        },
-        documents: owner.documents,
-        kitchen: owner.kitchen,
-        livestream: owner.livestream,
-      },
-      locale === "en"
-        ? {}
-        : {
-            // audit-only sections stay English until reviewed
-            loyalty: enBundle.ownerApp
-              ? (enBundle.ownerApp as JsonObject).loyalty
-              : undefined,
-            resetCredential: (enBundle.ownerApp as JsonObject)?.resetCredential,
-            financials: deepMerge(
-              {},
-              ((enBundle.ownerApp as JsonObject)?.financials as JsonObject) ??
-                {},
-            ),
-          },
+    ownerApp: buildLocalizedOwnerApp(
+      enBundle.ownerApp as JsonObject,
+      owner,
     ),
     customerApp: deepMerge(
       {
@@ -305,6 +371,7 @@ function translateBundle(
         live: customer.live,
         streaming: customer.streaming,
         screens: customer.screens,
+        help: customer.help ?? (enBundle.customerApp as JsonObject)?.help,
       },
       locale === "en"
         ? {}
@@ -321,6 +388,8 @@ function translateBundle(
       sessions: admin.sessions,
       bookings: admin.bookings,
       userProfile: admin.userProfile,
+      support: admin.support ?? (enBundle.adminApp as JsonObject)?.support,
+      clubs: admin.clubs ?? (enBundle.adminApp as JsonObject)?.clubs,
     },
     errors: shared.errors ?? enBundle.errors,
     // sharedUi, notifications, audit gaps: English fallback for non-en until native review
@@ -359,7 +428,7 @@ function main(): void {
 
   for (const locale of SUPPORTED) {
     if (locale === "en") continue;
-    const bundle = translateBundle(locale, enBundle);
+    const bundle = applyLocaleOverlays(translateBundle(locale, enBundle), locale);
     writeFileSync(
       join(localesDir, `${locale}.json`),
       `${JSON.stringify(bundle, null, 2)}\n`,

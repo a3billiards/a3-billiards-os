@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,13 +13,14 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import { GlassPageBackground } from "@a3/ui/components";
 import { colors, spacing, radius, typography, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
 import { usePullToRefresh } from "@a3/ui/hooks";
 import { useTranslation } from "@a3/i18n";
+import { setPendingCheckoutUrl } from "../../lib/pendingCheckout";
 
 function to12h(hhmm: string): string {
   const [h, m] = hhmm.split(":").map((x) => Number(x));
@@ -83,10 +84,12 @@ export default function BookingDetailScreen() {
     bookingId ? { bookingId: bookingId as any } : "skip",
   );
   const cancelBooking = useMutation(api.bookings.cancelBooking);
+  const createPaymentOrder = useAction(api.bookingPayments.createBookingPaymentOrder);
   const [loadingCancel, setLoadingCancel] = useState(false);
+  const [loadingPay, setLoadingPay] = useState(false);
 
-  const canCancel =
-    detail?.status === "pending_approval" || detail?.status === "confirmed";
+  const canCancel = detail?.canCancel === true;
+  const canPay = detail?.canPay === true;
   const statusChip = detail ? statusPalette(detail.status) : null;
 
   const venue = useMemo(() => {
@@ -98,6 +101,38 @@ export default function BookingDetailScreen() {
       tombstone: club === null,
     };
   }, [detail, t]);
+
+  const paymentStatusLabel = useMemo(() => {
+    if (!detail) return null;
+    const s = detail.onlinePaymentStatus;
+    if (s === "paid") return t("customerApp.bookingDetail.paymentPaid");
+    if (s === "pending") return t("customerApp.bookingDetail.paymentPending");
+    if (s === "refunded") return t("customerApp.bookingDetail.paymentRefunded");
+    if (s === "refund_failed") return t("customerApp.bookingDetail.paymentRefundFailed");
+    if (s === "unpaid" || detail.needsPayment) {
+      return t("customerApp.bookingDetail.paymentUnpaid");
+    }
+    return null;
+  }, [detail, t]);
+
+  const onPay = useCallback(async () => {
+    if (!detail || !canPay) return;
+    setLoadingPay(true);
+    try {
+      const order = await createPaymentOrder({
+        bookingId: detail.bookingId as any,
+      });
+      setPendingCheckoutUrl(order.checkoutUrl);
+      router.push("/pay");
+    } catch (e) {
+      Alert.alert(
+        t("customerApp.bookingDetail.payFailedTitle"),
+        parseConvexError(e as Error).message,
+      );
+    } finally {
+      setLoadingPay(false);
+    }
+  }, [canPay, createPaymentOrder, detail, router, t]);
 
   if (!bookingId) {
     return (
@@ -140,19 +175,19 @@ export default function BookingDetailScreen() {
 
   const onCancel = () => {
     if (!canCancel) return;
+    const refundNote =
+      detail.onlinePaymentStatus === "paid"
+        ? `\n\n${t("customerApp.bookingDetail.cancelRefundNote")}`
+        : "";
     Alert.alert(
       t("customerApp.myBookings.cancelTitle"),
       detail.status === "pending_approval"
         ? t("customerApp.myBookings.cancelPendingBody", { clubName: detail.clubName })
-        : detail.isLateCancellationNow
-          ? t("customerApp.myBookings.cancelLateBody", {
-              minutes: detail.cancellationWindowMin ?? 30,
-            })
-          : t("customerApp.myBookings.cancelConfirmedBody", {
-              clubName: detail.clubName,
-              date: detail.requestedDate,
-              time: detail.requestedStartTime,
-            }),
+        : t("customerApp.myBookings.cancelConfirmedBody", {
+            clubName: detail.clubName,
+            date: detail.requestedDate,
+            time: detail.requestedStartTime,
+          }) + refundNote,
       [
         { text: t("customerApp.myBookings.keepBooking"), style: "cancel" },
         {
@@ -161,8 +196,16 @@ export default function BookingDetailScreen() {
           onPress: async () => {
             try {
               setLoadingCancel(true);
-              await cancelBooking({ bookingId: detail.bookingId, clubId: detail.clubId });
-              Alert.alert(t("customerApp.myBookings.cancelledSuccess"));
+              const result = await cancelBooking({
+                bookingId: detail.bookingId,
+                clubId: detail.clubId,
+              });
+              Alert.alert(
+                t("customerApp.myBookings.cancelledSuccess"),
+                result.refundScheduled
+                  ? t("customerApp.bookingDetail.refundScheduled")
+                  : undefined,
+              );
             } catch (e) {
               Alert.alert(parseConvexError(e as Error).message);
             } finally {
@@ -237,7 +280,25 @@ export default function BookingDetailScreen() {
               amount: detail.estimatedCost ?? 0,
             })}
           />
-          <Text style={styles.note}>{t("customerApp.bookingDetail.billNote")}</Text>
+          {paymentStatusLabel ? (
+            <Row
+              label={t("customerApp.bookingDetail.paymentStatus")}
+              value={paymentStatusLabel}
+            />
+          ) : null}
+          {detail.status === "confirmed" && detail.isPastCancelDeadline ? (
+            <Text style={styles.note}>
+              {t("customerApp.bookingDetail.cancelWindowClosed", {
+                minutes: detail.cancellationWindowMin ?? 30,
+              })}
+            </Text>
+          ) : (
+            <Text style={styles.note}>
+              {t("customerApp.bookingDetail.billNote", {
+                minutes: detail.cancellationWindowMin ?? 30,
+              })}
+            </Text>
+          )}
           {detail.notes ? <Row label={t("customerApp.bookingDetail.yourNotes")} value={detail.notes} /> : null}
           {detail.status === "rejected" && detail.rejectionReason ? (
             <Row label={t("customerApp.bookingDetail.reason")} value={detail.rejectionReason} />
@@ -246,6 +307,24 @@ export default function BookingDetailScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        {canPay ? (
+          <Pressable
+            style={[styles.payBtn, loadingPay && { opacity: 0.7 }]}
+            onPress={() => void onPay()}
+            disabled={loadingPay}
+          >
+            {loadingPay ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.payBtnText}>
+                {t("customerApp.bookingDetail.payNow", {
+                  symbol: currencySymbol(detail.currency),
+                  amount: detail.estimatedCost ?? 0,
+                })}
+              </Text>
+            )}
+          </Pressable>
+        ) : null}
         {!venue?.tombstone ? (
           <Pressable style={styles.secondaryBtn} onPress={() => router.push(`/club/${detail.clubId}` as any)}>
             <Text style={styles.secondaryBtnText}>{t("customerApp.bookingDetail.viewClub")}</Text>
@@ -360,6 +439,15 @@ const styles = StyleSheet.create({
     borderTopColor: glass.tabPillBorder,
     gap: spacing[2],
   },
+  payBtn: {
+    minHeight: layout.buttonHeight,
+    borderRadius: radius.md,
+    backgroundColor: glass.ctaBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[2],
+  },
+  payBtnText: { ...typography.buttonLarge, color: "#000", fontWeight: "700" },
   cancelBtn: {
     minHeight: 49,
     borderRadius: radius.xl,

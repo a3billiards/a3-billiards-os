@@ -1,6 +1,8 @@
 import { Link, Navigate, useParams } from "react-router-dom";
 import { useConvexAuth, useQuery } from "convex/react";
+import { splitSubscriptionGstInclusive } from "@a3/utils/subscriptionInvoiceGst";
 import { api } from "../convexApi";
+import { SubscriptionGstBreakdown } from "../components/SubscriptionGstBreakdown";
 
 type PaymentRow = {
   _id: string;
@@ -13,12 +15,17 @@ export default function InvoiceDetail() {
   const { id } = useParams();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const user = useQuery(api.users.getCurrentUser, isAuthenticated ? {} : "skip");
+  const invoiceConfig = useQuery(api.onboardingWeb.getPlatformInvoiceConfig);
   const payments = useQuery(
     api.paymentReceipts.getPaymentHistory,
     user?._id ? { ownerId: user._id } : "skip",
   );
 
-  if (isLoading || (isAuthenticated && (user === undefined || payments === undefined))) {
+  if (
+    isLoading ||
+    (isAuthenticated &&
+      (user === undefined || payments === undefined || invoiceConfig === undefined))
+  ) {
     return (
       <div className="card">
         <p className="muted">Loading invoice…</p>
@@ -31,7 +38,7 @@ export default function InvoiceDetail() {
   }
 
   const receipt = (payments as PaymentRow[]).find((p) => p._id === id);
-  if (!receipt) {
+  if (!receipt || !invoiceConfig) {
     return (
       <div className="card">
         <h1>Invoice not found</h1>
@@ -40,16 +47,35 @@ export default function InvoiceDetail() {
     );
   }
 
-  const subtotal = receipt.amountPaid / 100;
-  const gst = 0;
-  const total = subtotal + gst;
+  const gst = splitSubscriptionGstInclusive(
+    receipt.amountPaid,
+    invoiceConfig.gstRatePercent,
+    invoiceConfig.gstSplitMode,
+  );
 
   return (
     <div className="card">
-      <h1>Invoice</h1>
-      <p className="muted">Invoice ID: {receipt.paymentId}</p>
+      <h1>Tax invoice</h1>
+      <p className="muted">Invoice / payment ID: {receipt.paymentId}</p>
       <table className="legal-table">
         <tbody>
+          <tr>
+            <th>Supplier</th>
+            <td>{invoiceConfig.legalName}</td>
+          </tr>
+          {invoiceConfig.gstin ? (
+            <tr>
+              <th>Supplier GSTIN</th>
+              <td>{invoiceConfig.gstin}</td>
+            </tr>
+          ) : null}
+          <tr>
+            <th>Bill to</th>
+            <td>
+              {user.name}
+              {user.email ? ` · ${user.email}` : ""}
+            </td>
+          </tr>
           <tr>
             <th>Date</th>
             <td>
@@ -60,21 +86,12 @@ export default function InvoiceDetail() {
             </td>
           </tr>
           <tr>
-            <th>Subtotal</th>
-            <td>{subtotal.toLocaleString("en-IN")} INR</td>
-          </tr>
-          <tr>
-            <th>GST</th>
-            <td>{gst.toLocaleString("en-IN")} INR</td>
-          </tr>
-          <tr>
-            <th>Total paid</th>
-            <td>
-              <strong>{total.toLocaleString("en-IN")} INR</strong>
-            </td>
+            <th>Description</th>
+            <td>A3 Billiards OS software subscription (SAC {invoiceConfig.sacCode})</td>
           </tr>
         </tbody>
       </table>
+      <SubscriptionGstBreakdown gst={gst} />
       <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
         <button type="button" className="btn btn-secondary" onClick={() => window.print()}>
           Print
@@ -86,4 +103,3 @@ export default function InvoiceDetail() {
     </div>
   );
 }
-

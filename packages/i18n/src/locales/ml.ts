@@ -47,6 +47,8 @@ export const ml: TranslationBundle = {
       "live-moderation": "ലൈവ്",
       audit: "ഓഡിറ്റ്",
       notifications: "അലേർട്ടുകൾ",
+      clubs: "ക്ലബുകൾ",
+      support: "പിന്തുണ",
     },
   },
   profile: {

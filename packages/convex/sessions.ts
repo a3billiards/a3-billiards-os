@@ -10,7 +10,6 @@ import {
   requireCustomer,
   requireViewer,
 } from "./model/viewer";
-import { revertReservedFreeVisitCredit } from "./model/loyaltyCore";
 
 export const forceEndSession = mutation({
   args: {
@@ -39,8 +38,6 @@ export const forceEndSession = mutation({
       endTime: now,
       updatedAt: now,
     });
-
-    await revertReservedFreeVisitCredit(ctx, session);
 
     if (table !== null && table.currentSessionId === sessionId) {
       await ctx.db.patch(table._id, {
@@ -116,7 +113,6 @@ export const getCustomerSessionHistory = query({
 
     const enriched = [];
     for (const r of rows) {
-      const session = await ctx.db.get(r.sessionId);
       enriched.push({
         _id: r._id,
         sessionId: r.sessionId,
@@ -134,7 +130,6 @@ export const getCustomerSessionHistory = query({
         creditResolvedMethod: r.creditResolvedMethod ?? null,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
-        isFreeVisit: session?.isFreeVisit === true,
       });
     }
     return enriched;
@@ -193,8 +188,6 @@ export const getSessionDetail = query({
       creditResolvedAt: session.creditResolvedAt ?? null,
       creditResolvedMethod: session.creditResolvedMethod ?? null,
       cancellationReason: session.cancellationReason ?? null,
-      isFreeVisit: session.isFreeVisit === true,
-      freeVisitMaxMinutes: session.freeVisitMaxMinutes ?? null,
     };
   },
 });

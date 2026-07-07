@@ -90,6 +90,8 @@ function UsersScreenContent(): React.JSX.Element {
   const exportAllUsers = useAction(api.dataExportActions.adminExportAllUsersData);
   const sendResetEmail = useAction(api.usersAdminActions.adminResetUserPassword);
   const cancelDeletion = useMutation(api.users.adminCancelDeletion);
+  const endClubSubscription = useMutation(api.users.adminEndClubSubscription);
+  const freezeUser = useMutation(api.users.adminFreezeUser);
 
   const onSendResetPassword = useCallback(
     (item: UserRow) => {
@@ -151,6 +153,13 @@ function UsersScreenContent(): React.JSX.Element {
               void (async () => {
                 try {
                   await cancelDeletion({ userId: item._id as Id<"users"> });
+                  setRows((prev) =>
+                    prev.map((row) =>
+                      row._id === item._id
+                        ? { ...row, deletionRequested: false }
+                        : row,
+                    ),
+                  );
                   Alert.alert(
                     t("adminApp.userProfile.done"),
                     t("adminApp.userProfile.deletionCancelled"),
@@ -168,6 +177,88 @@ function UsersScreenContent(): React.JSX.Element {
       );
     },
     [cancelDeletion, t],
+  );
+
+  const onEndAccess = useCallback(
+    (item: UserRow) => {
+      if (item.role === "owner") {
+        if (item.subscriptionStatus === "frozen") return;
+        Alert.alert(
+          t("adminApp.userProfile.endSubscriptionTitle"),
+          t("adminApp.userProfile.endSubscriptionMessage", {
+            clubName: item.clubName ?? item.name,
+          }),
+          [
+            { text: t("common.cancel"), style: "cancel" },
+            {
+              text: t("adminApp.userProfile.endSubscription"),
+              style: "destructive",
+              onPress: () => {
+                void (async () => {
+                  try {
+                    await endClubSubscription({
+                      userId: item._id as Id<"users">,
+                    });
+                    setRows((prev) =>
+                      prev.map((row) =>
+                        row._id === item._id
+                          ? { ...row, subscriptionStatus: "frozen" }
+                          : row,
+                      ),
+                    );
+                    Alert.alert(
+                      t("adminApp.userProfile.done"),
+                      t("adminApp.userProfile.subscriptionEnded"),
+                    );
+                  } catch (e) {
+                    Alert.alert(
+                      t("auth.admin.mfa.errorLabel"),
+                      parseConvexError(e as Error).message,
+                    );
+                  }
+                })();
+              },
+            },
+          ],
+        );
+        return;
+      }
+      if (item.role === "customer" && !item.isFrozen) {
+        Alert.alert(
+          t("adminApp.userProfile.freezeTitle"),
+          t("adminApp.userProfile.freezeMessage", { name: item.name }),
+          [
+            { text: t("common.cancel"), style: "cancel" },
+            {
+              text: t("adminApp.userProfile.freeze"),
+              style: "destructive",
+              onPress: () => {
+                void (async () => {
+                  try {
+                    await freezeUser({ userId: item._id as Id<"users"> });
+                    setRows((prev) =>
+                      prev.map((row) =>
+                        row._id === item._id ? { ...row, isFrozen: true } : row,
+                      ),
+                    );
+                    Alert.alert(
+                      t("adminApp.userProfile.done"),
+                      t("adminApp.userProfile.accountFrozen"),
+                    );
+                  } catch (e) {
+                    Alert.alert(
+                      t("auth.admin.mfa.errorLabel"),
+                      parseConvexError(e as Error).message,
+                    );
+                  }
+                })();
+              },
+            },
+          ],
+        );
+      }
+    },
+    [endClubSubscription, freezeUser, t],
   );
 
   useEffect(() => {
@@ -212,6 +303,7 @@ function UsersScreenContent(): React.JSX.Element {
 
   const { refreshing, onRefresh } = usePullToRefresh(useCallback(() => {
     setFetchCursor(undefined);
+    setRows([]);
   }, []));
 
   const loadMore = useCallback(() => {
@@ -405,6 +497,26 @@ function UsersScreenContent(): React.JSX.Element {
                       name="mail-outline"
                       size={20}
                       color={item.email ? glass.accentBlue : colors.text.secondary}
+                    />
+                  </Pressable>
+                ) : null}
+                {(item.role === "owner" &&
+                  item.subscriptionStatus !== "frozen") ||
+                (item.role === "customer" && !item.isFrozen) ? (
+                  <Pressable
+                    onPress={() => onEndAccess(item)}
+                    hitSlop={8}
+                    style={({ pressed }) => [styles.resetBtn, pressed && { opacity: 0.7 }]}
+                    accessibilityLabel={
+                      item.role === "owner"
+                        ? t("adminApp.userProfile.endSubscription")
+                        : t("adminApp.userProfile.freezeAccount")
+                    }
+                  >
+                    <MaterialIcons
+                      name="block"
+                      size={20}
+                      color={colors.status.error}
                     />
                   </Pressable>
                 ) : null}

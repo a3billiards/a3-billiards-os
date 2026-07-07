@@ -6,7 +6,6 @@ const GATED_TAB_ROUTES = [
   "slots",
   "snacks",
   "kitchen",
-  // "loyalty",
   "livestream",
   "financials",
   "complaints",

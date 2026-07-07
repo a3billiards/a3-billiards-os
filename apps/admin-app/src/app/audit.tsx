@@ -44,6 +44,25 @@ function formatWhen(ts: number): string {
   });
 }
 
+function localizeAuditValue(
+  value: string,
+  t: (key: string) => string,
+): string {
+  if (value === "true") return t("adminApp.audit.valueTrue");
+  if (value === "false") return t("adminApp.audit.valueFalse");
+  return value;
+}
+
+function auditActionLabel(
+  action: string,
+  fallback: string,
+  t: (key: string) => string,
+): string {
+  const key = `adminApp.audit.actions.${action}`;
+  const translated = t(key);
+  return translated !== key ? translated : fallback;
+}
+
 function actionIcon(action: string): keyof typeof MaterialIcons.glyphMap {
   switch (action) {
     case "user_freeze":
@@ -172,7 +191,9 @@ export default function AuditLogScreen(): React.JSX.Element {
                     />
                   </View>
                   <View style={styles.rowMain}>
-                    <Text style={styles.actionLabel}>{item.actionLabel}</Text>
+                    <Text style={styles.actionLabel}>
+                      {auditActionLabel(item.action, item.actionLabel, t)}
+                    </Text>
                     <Text style={styles.meta}>
                       {item.adminName}
                       {item.targetUserName ? ` → ${item.targetUserName}` : ""}
@@ -184,12 +205,16 @@ export default function AuditLogScreen(): React.JSX.Element {
                   <View style={styles.changeRow}>
                     {item.previousValue ? (
                       <Text style={styles.changeText} numberOfLines={2}>
-                        {t("adminApp.audit.from", { value: item.previousValue })}
+                        {t("adminApp.audit.from", {
+                          value: localizeAuditValue(item.previousValue, t),
+                        })}
                       </Text>
                     ) : null}
                     {item.newValue ? (
                       <Text style={styles.changeText} numberOfLines={2}>
-                        {t("adminApp.audit.to", { value: item.newValue })}
+                        {t("adminApp.audit.to", {
+                          value: localizeAuditValue(item.newValue, t),
+                        })}
                       </Text>
                     ) : null}
                   </View>

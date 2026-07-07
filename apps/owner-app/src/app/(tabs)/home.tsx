@@ -24,7 +24,7 @@ import {
   NotificationBellButton,
 } from "@a3/ui/components";
 import { formatCurrency } from "@a3/utils/billing";
-import { useTranslation } from "@a3/i18n";
+import { LanguagePicker, useTranslation } from "@a3/i18n";
 import { useStaffRole, staffRoleQueryId } from "../../lib/StaffRoleContext";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { OwnerModePasscodeGate } from "../../components/OwnerModePasscodeGate";
@@ -163,6 +163,7 @@ function HomeScreenContent(): React.JSX.Element {
               <Text style={styles.headerSubtitle}>{t("ownerApp.home.subtitle")}</Text>
             </View>
             <View style={styles.headerActions}>
+              <LanguagePicker variant="icon" />
               <NotificationBellButton
                 unreadCount={unreadInbox?.count}
                 onPress={() => router.push("/inbox-notifications")}

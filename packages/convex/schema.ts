@@ -67,7 +67,17 @@ const paymentMethod = v.union(
   v.literal("cash"),
   v.literal("upi"),
   v.literal("card"),
-  v.literal("credit")
+  v.literal("credit"),
+  v.literal("online")
+);
+
+/** Online booking payment (Razorpay) — pay after owner approves. */
+const onlinePaymentStatus = v.union(
+  v.literal("unpaid"),
+  v.literal("pending"),
+  v.literal("paid"),
+  v.literal("refunded"),
+  v.literal("refund_failed")
 );
 
 // creditResolvedMethod excludes 'credit' — you resolve FROM credit TO a real method
@@ -124,6 +134,7 @@ const adminAuditAction = v.union(
   v.literal("data_export"),
   v.literal("deletion_cancelled"),
   v.literal("subscription_ended"),
+  v.literal("support_request_update"),
 );
 
 // Per-recipient delivery status for admin broadcasts
@@ -162,23 +173,6 @@ const snackFulfillmentType = v.union(
   v.literal("kitchen"),
 );
 
-const loyaltyProgrammeStatus = v.union(
-  v.literal("draft"),
-  v.literal("active"),
-  v.literal("archived"),
-);
-
-const loyaltyCreditStatus = v.union(
-  v.literal("available"),
-  v.literal("reserved"),
-  v.literal("redeemed"),
-);
-
-const loyaltyAwardSource = v.union(
-  v.literal("automatic"),
-  v.literal("manual"),
-);
-
 const liveStreamStatus = v.union(v.literal("live"), v.literal("ended"));
 
 const liveStreamEndedReason = v.union(
@@ -200,6 +194,8 @@ const kitchenOrderItem = v.object({
   name: v.string(),
   qty: v.number(),
   priceAtOrder: v.number(),
+  unavailablePending: v.optional(v.boolean()),
+  unavailableConfirmed: v.optional(v.boolean()),
 });
 
 const specialRate = v.object({
@@ -376,7 +372,14 @@ export default defineSchema({
   userInboxNotifications: defineTable({
     userId: v.id("users"),
     adminNotificationId: v.optional(v.id("adminNotifications")),
-    kind: v.union(v.literal("admin_broadcast")),
+    kitchenOrderId: v.optional(v.id("kitchenOrders")),
+    kind: v.union(
+      v.literal("admin_broadcast"),
+      v.literal("kitchen_order_preparing"),
+      v.literal("kitchen_order_ready"),
+      v.literal("kitchen_order_served"),
+      v.literal("kitchen_item_unavailable"),
+    ),
     title: v.string(),
     body: v.string(),
     isRead: v.boolean(),
@@ -384,6 +387,33 @@ export default defineSchema({
   })
     .index("by_user_createdAt", ["userId", "createdAt"])
     .index("by_user_isRead_createdAt", ["userId", "isRead", "createdAt"]),
+
+  // ── supportRequests ────────────────────────────────────────────────────────
+  // Customer / owner → platform customer care (admin app queue).
+  supportRequests: defineTable({
+    userId: v.id("users"),
+    userRole: v.string(),
+    audience: v.union(v.literal("customer"), v.literal("owner")),
+    category: v.string(),
+    subject: v.string(),
+    message: v.string(),
+    status: v.union(
+      v.literal("open"),
+      v.literal("in_progress"),
+      v.literal("resolved"),
+      v.literal("closed"),
+    ),
+    userName: v.string(),
+    userEmail: v.optional(v.string()),
+    userPhone: v.optional(v.string()),
+    adminNotes: v.optional(v.string()),
+    resolvedByAdminId: v.optional(v.id("users")),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status_createdAt", ["status", "createdAt"])
+    .index("by_user_createdAt", ["userId", "createdAt"]),
 
   // ── passwordResetTokens ────────────────────────────────────────────────────
   // SHA-256 hashed tokens for password and passcode resets.
@@ -536,6 +566,8 @@ export default defineSchema({
     requestedDate: v.string(),                    // YYYY-MM-DD in club timezone.
     requestedStartTime: v.string(),               // HH:MM in club timezone.
     requestedDurationMin: v.number(),             // Requested duration in minutes.
+    onlinePaymentStatus: v.optional(onlinePaymentStatus),
+    amountPaidPaise: v.optional(v.number()),
     createdAt: v.number(),                        // Unix ms.
     updatedAt: v.number(),                        // Unix ms.
   })
@@ -544,6 +576,20 @@ export default defineSchema({
     // FIX H: Global club limit check (submitBooking) filters by customerId + status for active bookings
     .index("by_customer_status", ["customerId", "status"])
     // FIX #2: startSessionFromBooking + every status-change mutation looks up bookingLog by bookingId
+    .index("by_bookingId", ["bookingId"]),
+
+  // Idempotent Razorpay receipts for customer booking payments (full amount after approval).
+  bookingPayments: defineTable({
+    paymentId: v.string(),
+    bookingId: v.id("bookings"),
+    customerId: v.id("users"),
+    clubId: v.id("clubs"),
+    amountPaise: v.number(),
+    status: v.union(v.literal("paid"), v.literal("refunded")),
+    refundId: v.optional(v.string()),
+    processedAt: v.number(),
+  })
+    .index("by_paymentId", ["paymentId"])
     .index("by_bookingId", ["bookingId"]),
 
   // ── paymentReceipts ────────────────────────────────────────────────────────
@@ -713,6 +759,8 @@ export default defineSchema({
     // FIX #1: forceEndSession (PRD §6.2) sets cancellationReason to 'admin_force_end'
     cancellationReason: v.optional(v.string()),    // Reason for cancellation. 'admin_force_end' for force-ended sessions.
                                                   // Null for normal cancellations by staff. Max 300 chars for admin force-end.
+    assignedPlayDurationMin: v.optional(v.number()), // Owner-assigned expected play time at walk-in start.
+    assignedPlayOpenEnded: v.optional(v.boolean()), // True when play time is open-ended (no fixed duration).
     timerAlertMinutes: v.optional(v.number()),    // FCM alert fires when elapsed ≥ this value. Updatable mid-session.
     timerAlertFiredAt: v.optional(v.number()),    // Unix ms. Prevents duplicate alerts on app restart.
                                                   // Updating timerAlertMinutes resets this (clears it) so alert can refire.
@@ -724,9 +772,13 @@ export default defineSchema({
     bookingId: v.optional(v.id("bookings")),      // Reference to originating booking. Null for walk-in sessions.
     discountAppliedByRoleId: v.optional(v.id("staffRoles")), // Role that applied discount. Null if owner mode.
     discountAppliedAt: v.optional(v.number()),    // Unix ms when discount was applied. Null if no discount.
-    isFreeVisit: v.optional(v.boolean()),         // Loyalty free-visit redemption (table charge waived up to cap).
-    freeVisitCreditId: v.optional(v.id("loyaltyCredits")),
-    freeVisitMaxMinutes: v.optional(v.number()),  // Cap copied at redemption time.
+    // DEPRECATED — the loyalty free-visit feature was removed from the product.
+    // These fields are kept (rather than deleted) only because historical session
+    // documents still carry them; no code reads or writes them anymore. Do not
+    // use v.id("loyaltyCredits") since that table is no longer declared above.
+    isFreeVisit: v.optional(v.boolean()),
+    freeVisitCreditId: v.optional(v.string()),
+    freeVisitMaxMinutes: v.optional(v.number()),
     /** casual = group play; versus = competitive sides (sideA vs sideB). */
     playMode: v.optional(sessionPlayMode),
     /** When true with versus mode, checkout records which side lost and pays. */
@@ -764,6 +816,8 @@ export default defineSchema({
     requestedDate: v.string(),                    // YYYY-MM-DD in club timezone.
     requestedStartTime: v.string(),               // HH:MM in club timezone.
     requestedDurationMin: v.number(),             // Requested duration in minutes. Must be in slotDurationOptions.
+    confirmedDurationMin: v.optional(v.number()), // Owner-assigned duration at approval (defaults to requested).
+    openEnded: v.optional(v.boolean()),             // When true, no fixed end — slot tag shows "Open".
     status: bookingStatus,                        // 7-state enum. Every mutation verifies current status first.
     rejectionReason: v.optional(v.string()),       // Max 300 chars. Owner-provided on rejection.
     notes: v.optional(v.string()),                 // Max 200 chars. Customer-provided notes (e.g. 'birthday party').
@@ -772,6 +826,7 @@ export default defineSchema({
     currency: v.string(),                         // ISO 4217 locked at submission from clubs.currency.
     confirmedTableId: v.optional(v.id("tables")), // Table assigned by owner during approval. May differ from initial.
                                                   // If null at arrival, staff picks a table of matching type.
+    requestedTableId: v.optional(v.id("tables")), // Table the customer picked in the booking flow (pending).
     approvedAt: v.optional(v.number()),           // Unix ms when approved.
     approvedByRoleId: v.optional(v.id("staffRoles")), // Staff role that approved. Null if owner unrestricted mode.
                                                   // Server enforces allowedTableIds if role has restrictions.
@@ -782,6 +837,14 @@ export default defineSchema({
     approvalReminderSentAt: v.optional(v.number()), // Unix ms. Prevents duplicate 50%-deadline owner reminder sends.
     couponCode: v.optional(v.string()),           // Coupon entered at booking (if club requires one).
     paidViaCoupon: v.optional(v.boolean()),       // True when a valid booking coupon was applied at submit.
+    // Online payment (Razorpay) — required after approval when estimatedCost > 0 and not coupon-paid.
+    onlinePaymentStatus: v.optional(onlinePaymentStatus),
+    razorpayOrderId: v.optional(v.string()),
+    razorpayPaymentId: v.optional(v.string()),
+    amountPaidPaise: v.optional(v.number()),
+    paidAt: v.optional(v.number()),
+    refundId: v.optional(v.string()),
+    refundedAt: v.optional(v.number()),
     createdAt: v.number(),                        // Unix ms.
     updatedAt: v.number(),                        // Unix ms.
   })
@@ -877,6 +940,8 @@ export default defineSchema({
     tableId: v.id("tables"),
     items: v.array(kitchenOrderItem),
     status: kitchenOrderStatus,
+    unavailablePending: v.optional(v.boolean()),   // Chef reported items unavailable; awaiting owner confirm.
+    unavailableConfirmed: v.optional(v.boolean()),
     createdAt: v.number(),
     preparingAt: v.optional(v.number()),
     preparingByRoleId: v.optional(v.id("staffRoles")),
@@ -888,97 +953,12 @@ export default defineSchema({
     .index("by_club_status", ["clubId", "status"])
     .index("by_session", ["sessionId"]),
 
-  // ── loyaltyProgrammes ────────────────────────────────────────────────────────
-  loyaltyProgrammes: defineTable({
-    clubId: v.id("clubs"),
-    name: v.string(),
-    status: loyaltyProgrammeStatus,
-    freeVisitMaxMinutes: v.number(),
-    createdBy: v.id("users"),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    archivedAt: v.optional(v.number()),
-  }).index("by_clubId_status", ["clubId", "status"]),
-
-  loyaltyTiers: defineTable({
-    clubId: v.id("clubs"),
-    programmeId: v.id("loyaltyProgrammes"),
-    name: v.string(),
-    windowDays: v.number(),
-    thresholdMinutes: v.number(),
-    creditsAwarded: v.number(),
-    rank: v.number(),
-    createdAt: v.number(),
-  }).index("by_programmeId", ["programmeId"]),
-
-  loyaltyLedgers: defineTable({
-    clubId: v.id("clubs"),
-    userId: v.id("users"),
-    programmeId: v.id("loyaltyProgrammes"),
-    availableCredits: v.number(),
-    lifetimeCreditsEarned: v.number(),
-    lifetimeCreditsRedeemed: v.number(),
-    highestTierReachedId: v.optional(v.id("loyaltyTiers")),
-    lastAwardedAt: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_clubId_userId", ["clubId", "userId"])
-    .index("by_userId", ["userId"])
-    .index("by_clubId", ["clubId"]),
-
-  loyaltyPlayLog: defineTable({
-    clubId: v.id("clubs"),
-    userId: v.id("users"),
-    sessionId: v.id("sessions"),
-    programmeId: v.id("loyaltyProgrammes"),
-    endTime: v.number(),
-    billableMinutes: v.number(),
-  })
-    .index("by_clubId_userId_endTime", ["clubId", "userId", "endTime"])
-    .index("by_sessionId", ["sessionId"]),
-
-  loyaltyCredits: defineTable({
-    clubId: v.id("clubs"),
-    userId: v.id("users"),
-    programmeId: v.id("loyaltyProgrammes"),
-    tierId: v.optional(v.id("loyaltyTiers")),
-    status: loyaltyCreditStatus,
-    awardedAt: v.number(),
-    reservedAt: v.optional(v.number()),
-    redeemedAt: v.optional(v.number()),
-    sessionId: v.optional(v.id("sessions")),
-    reservedForSessionId: v.optional(v.id("sessions")),
-  }).index("by_clubId_userId_status", ["clubId", "userId", "status"]),
-
-  loyaltyCreditAwardLog: defineTable({
-    clubId: v.id("clubs"),
-    userId: v.id("users"),
-    programmeId: v.id("loyaltyProgrammes"),
-    tierId: v.optional(v.id("loyaltyTiers")),
-    creditsAwarded: v.number(),
-    cumulativeMinutesAtAward: v.number(),
-    sessionId: v.optional(v.id("sessions")),
-    source: loyaltyAwardSource,
-    manualReason: v.optional(v.string()),
-    awardedBy: v.optional(v.id("users")),
-    awardedAt: v.number(),
-  })
-    .index("by_clubId_userId", ["clubId", "userId"])
-    .index("by_clubId_userId_tierId", ["clubId", "userId", "tierId"]),
-
-  loyaltyCreditRedemptionLog: defineTable({
-    clubId: v.id("clubs"),
-    userId: v.id("users"),
-    creditId: v.id("loyaltyCredits"),
-    sessionId: v.id("sessions"),
-    freeVisitMaxMinutesApplied: v.number(),
-    billableMinutes: v.number(),
-    overageMinutes: v.number(),
-    overageBilled: v.number(),
-    redeemedBy: v.id("users"),
-    redeemedAt: v.number(),
-  }).index("by_clubId_userId", ["clubId", "userId"]),
+  // NOTE: The loyalty programme / free-visit reward feature (loyaltyProgrammes,
+  // loyaltyTiers, loyaltyLedgers, loyaltyPlayLog, loyaltyCredits,
+  // loyaltyCreditAwardLog, loyaltyCreditRedemptionLog) was removed from the
+  // product. Those tables are intentionally left undeclared here (rather than
+  // deleted) so any historical dev/test data in them is preserved and inert —
+  // no code reads or writes them anymore.
 
   // ── liveStreams ─────────────────────────────────────────────────────────────
   // Club DB. Multiple concurrent streams per club allowed (one per table).
@@ -1004,6 +984,16 @@ export default defineSchema({
     .index("by_tableId_status", ["tableId", "status"])
     .index("by_ivsChannelArn", ["ivsChannelArn"]),
 
+  // Active watchers (heartbeat). IVS viewerCount is often 0 with playback auth;
+  // presence is the source of truth for UI counts.
+  liveStreamViewers: defineTable({
+    liveStreamId: v.id("liveStreams"),
+    userId: v.id("users"),
+    lastSeenAt: v.number(),
+  })
+    .index("by_stream", ["liveStreamId"])
+    .index("by_stream_user", ["liveStreamId", "userId"]),
+
   // ── staffRoles ─────────────────────────────────────────────────────────────
   // Named roles for staff operating the owner's shared device.
   // Staff don't have individual logins — owner selects active role via 6-digit passcode.
@@ -1012,7 +1002,7 @@ export default defineSchema({
   staffRoles: defineTable({
     clubId: v.id("clubs"),                        // Parent club.
     name: v.string(),                             // e.g. 'Cashier', 'Manager', 'Supervisor'.
-    allowedTabs: v.array(v.string()),             // Valid: 'slots' | 'snacks' | 'financials' | 'complaints' | 'bookings' | 'documents' | 'kitchen' | 'loyalty' | 'livestream'.
+    allowedTabs: v.array(v.string()),             // Valid: 'slots' | 'snacks' | 'financials' | 'complaints' | 'bookings' | 'documents' | 'kitchen' | 'livestream'.
                                                   // Must have at least one. Empty array rejected with STAFF_001.
     allowedTableIds: v.optional(v.array(v.id("tables"))), // Null = access to all tables.
                                                   // Server enforces: approval/session start rejects if table outside set.

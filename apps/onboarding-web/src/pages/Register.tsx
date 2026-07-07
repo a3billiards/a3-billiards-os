@@ -6,6 +6,7 @@ import { api } from "../convexApi";
 import { parseConvexError } from "../lib/parseConvexError";
 import { captureEvent } from "../instrumentation";
 import { ClubLocationPinPicker } from "../components/ClubLocationPinPicker";
+import { SubscriptionGstBreakdown } from "../components/SubscriptionGstBreakdown";
 import {
   getStrongPasswordError,
   getPasswordStrength,
@@ -73,6 +74,23 @@ type SubscriptionPlanRow = {
   periodMs: number;
   amountPaise: number;
   currency: string;
+  gst: {
+    totalPaise: number;
+    taxablePaise: number;
+    gstPaise: number;
+    gstRatePercent: number;
+    cgstPaise: number;
+    sgstPaise: number;
+    igstPaise: number;
+    splitMode: "igst" | "cgst_sgst";
+  };
+  invoiceConfig: {
+    legalName: string;
+    gstin: string | null;
+    gstRatePercent: number;
+    gstSplitMode: "igst" | "cgst_sgst";
+    sacCode: string;
+  };
 };
 
 const PHONE_COUNTRY_CODE = "+91";
@@ -89,7 +107,6 @@ export default function Register() {
   );
   const verifyEmailCode = useAction(api.ownerEmailVerificationActions.verifyOwnerEmailCode);
   const createOrder = useAction(api.onboardingWebActions.createRazorpayOrder);
-  const applyCoupon = useAction(api.onboardingWebActions.applyCouponFreeAccess);
   const saveDraft = useMutation(api.onboardingWeb.saveClubDraft);
   const status = useQuery(api.onboardingWeb.getMyOnboardingStatus);
   const plans = useQuery(api.onboardingWeb.listSubscriptionPlans);
@@ -121,7 +138,6 @@ export default function Register() {
 
   const [planId, setPlanId] = useState<"monthly" | "yearly">("monthly");
   const [paymentPending, setPaymentPending] = useState(false);
-  const [couponCode, setCouponCode] = useState("");
   const [postSignInPending, setPostSignInPending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [mapFocusLat, setMapFocusLat] = useState<number | null>(null);
@@ -385,13 +401,17 @@ export default function Register() {
     try {
       await loadRazorpayScript();
       const order = await createOrder({ flow: "onboarding", planId });
+      const selectedPlan = (plans as SubscriptionPlanRow[]).find((p) => p.id === planId);
+      const gstNote = selectedPlan
+        ? ` (incl. GST ${selectedPlan.gst.gstRatePercent}%)`
+        : "";
       const RazorpayCtor = (window as unknown as { Razorpay: new (opts: object) => { open: () => void } }).Razorpay;
       const rzp = new RazorpayCtor({
         key: order.keyId,
         order_id: order.orderId,
         currency: order.currency,
         name: "A3 Billiards OS",
-        description: `Subscription — ${planId}`,
+        description: `Subscription — ${planId}${gstNote}`,
         handler: () => {
           captureEvent("onboarding_razorpay_success", { planId });
         },
@@ -411,29 +431,7 @@ export default function Register() {
       setBusy(false);
       setPaymentPending(false);
     }
-  }, [canUseProtectedOnboarding, createOrder, planId, email, name]);
-
-  const handleCoupon = useCallback(async () => {
-    setError(null);
-    if (!canUseProtectedOnboarding) {
-      return;
-    }
-    setBusy(true);
-    setPaymentPending(true);
-    try {
-      await applyCoupon({
-        flow: "onboarding",
-        planId,
-        couponCode,
-      });
-      captureEvent("onboarding_coupon_applied", { planId });
-    } catch (e) {
-      setError(parseConvexError(e as Error).message);
-      setPaymentPending(false);
-    } finally {
-      setBusy(false);
-    }
-  }, [canUseProtectedOnboarding, applyCoupon, couponCode, planId]);
+  }, [canUseProtectedOnboarding, createOrder, planId, email, name, plans]);
 
   useEffect(() => {
     if (!paymentPending || !status?.loggedIn) return;
@@ -751,12 +749,28 @@ export default function Register() {
               >
                 <h3>{p.label}</h3>
                 <p className="muted" style={{ margin: 0 }}>
-                  {(p.amountPaise / 100).toLocaleString("en-IN")} {p.currency}{" "}
-                  · {(p.periodMs / 86_400_000).toFixed(0)} days access
+                  {(p.amountPaise / 100).toLocaleString("en-IN")} {p.currency} excl. GST
+                  {" · "}
+                  {(p.periodMs / 86_400_000).toFixed(0)} days access
                 </p>
               </div>
             ))}
           </div>
+          {(() => {
+            const selected = (plans as SubscriptionPlanRow[]).find((p) => p.id === planId);
+            if (!selected) return null;
+            return (
+              <>
+                <p className="muted" style={{ marginTop: 12 }}>
+                  SAC: {selected.invoiceConfig.sacCode}
+                  {selected.invoiceConfig.gstin
+                    ? ` · Supplier GSTIN: ${selected.invoiceConfig.gstin}`
+                    : null}
+                </p>
+                <SubscriptionGstBreakdown gst={selected.gst} currency={selected.currency} compact />
+              </>
+            );
+          })()}
           <p className="muted">
             Payment confirms in the background. This page advances when your club is created.
           </p>
@@ -768,31 +782,6 @@ export default function Register() {
           >
             Pay with Razorpay
           </button>
-          <div style={{ marginTop: 16 }}>
-            <label htmlFor="couponCode">Coupon (testing)</label>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}>
-              <input
-                id="couponCode"
-                value={couponCode}
-                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                placeholder="A3A3A3"
-                disabled={busy || paymentPending}
-              />
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={
-                  busy ||
-                  paymentPending ||
-                  couponCode.trim().length === 0 ||
-                  !canUseProtectedOnboarding
-                }
-                onClick={() => void handleCoupon()}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
           {paymentPending && !status?.hasClub ? (
             <p className="muted" style={{ marginTop: 16 }}>
               Waiting for confirmation…

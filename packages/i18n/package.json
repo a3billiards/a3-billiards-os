@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build:locales": "tsx scripts/build-json-locales.ts"
+    "audit:keys": "node scripts/find-missing-keys.mjs",
+    "build:locales": "tsx scripts/build-json-locales.ts && node scripts/patch-admin-customer-locales.mjs && node scripts/patch-final-gaps.mjs && node scripts/find-missing-keys.mjs"
   },
   "exports": {
     ".": "./index.ts",

@@ -596,6 +596,37 @@ function formatKitchenItemSummary(
   return head;
 }
 
+export const insertOwnerInboxNotification = internalMutation({
+  args: {
+    userId: v.id("users"),
+    kind: v.union(
+      v.literal("admin_broadcast"),
+      v.literal("kitchen_order_preparing"),
+      v.literal("kitchen_order_ready"),
+      v.literal("kitchen_order_served"),
+      v.literal("kitchen_item_unavailable"),
+    ),
+    title: v.string(),
+    body: v.string(),
+    kitchenOrderId: v.optional(v.id("kitchenOrders")),
+    adminNotificationId: v.optional(v.id("adminNotifications")),
+    createdAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("userInboxNotifications", {
+      userId: args.userId,
+      kind: args.kind,
+      title: args.title,
+      body: args.body,
+      kitchenOrderId: args.kitchenOrderId,
+      adminNotificationId: args.adminNotificationId,
+      isRead: false,
+      createdAt: args.createdAt,
+    });
+    return { ok: true as const };
+  },
+});
+
 /** Owner account push — kitchen tablet + floor device if both registered. */
 export const notifyKitchenNewOrder = internalAction({
   args: { orderId: v.id("kitchenOrders") },
@@ -618,8 +649,69 @@ export const notifyKitchenNewOrder = internalAction({
   },
 });
 
-/** PRD v28 — owner-facing alert when food is ready to run to the table. */
-export const notifyKitchenOrderReady = internalAction({
+/** Owner + floor staff devices — alert when chef advances an order. */
+export const notifyKitchenOrderStatus = internalAction({
+  args: {
+    orderId: v.id("kitchenOrders"),
+    status: v.union(
+      v.literal("preparing"),
+      v.literal("ready"),
+      v.literal("served"),
+    ),
+  },
+  handler: async (ctx, { orderId, status }) => {
+    const row = await ctx.runQuery(
+      internal.notifications.getKitchenOrderForNotification,
+      { orderId },
+    );
+    if (!row?.owner) return;
+    const summary = formatKitchenItemSummary(row.order.items);
+    const tablePart = row.tableLabel;
+    const copy: Record<
+      typeof status,
+      { title: string; body: string; kind: "kitchen_order_preparing" | "kitchen_order_ready" | "kitchen_order_served" }
+    > = {
+      preparing: {
+        title: "Kitchen Order Preparing",
+        body: `${tablePart} — ${summary}. Now preparing.`,
+        kind: "kitchen_order_preparing",
+      },
+      ready: {
+        title: "Kitchen Order Ready",
+        body: `${tablePart} — ${summary}. Ready to serve.`,
+        kind: "kitchen_order_ready",
+      },
+      served: {
+        title: "Kitchen Order Served",
+        body: `${tablePart} — ${summary}. Served.`,
+        kind: "kitchen_order_served",
+      },
+    };
+    const { title, body, kind } = copy[status];
+    const now = Date.now();
+
+    await ctx.runMutation(internal.notifications.insertOwnerInboxNotification, {
+      userId: row.owner._id,
+      kind,
+      title,
+      body,
+      kitchenOrderId: orderId,
+      createdAt: now,
+    });
+
+    const tokens = row.owner.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+    await ctx.runAction(internal.notifications.deliverFcm, {
+      tokens,
+      title,
+      body,
+      data: { screen: "kitchen" },
+    });
+  },
+});
+
+/** Owner + staff inbox + push when chef reports an order unavailable. */
+export const notifyKitchenOrderUnavailable = internalAction({
   args: { orderId: v.id("kitchenOrders") },
   handler: async (ctx, { orderId }) => {
     const row = await ctx.runQuery(
@@ -627,49 +719,52 @@ export const notifyKitchenOrderReady = internalAction({
       { orderId },
     );
     if (!row?.owner) return;
+
+    const summary = formatKitchenItemSummary(row.order.items);
+    const title = "Kitchen Item Unavailable";
+    const body = `${row.tableLabel}: Chef reports items unavailable (${summary}). Confirm in Kitchen.`;
+    const now = Date.now();
+
+    await ctx.runMutation(internal.notifications.insertOwnerInboxNotification, {
+      userId: row.owner._id,
+      kind: "kitchen_item_unavailable",
+      title,
+      body,
+      kitchenOrderId: orderId,
+      createdAt: now,
+    });
+
     const tokens = row.owner.fcmTokens ?? [];
     if (tokens.length === 0) return;
-    const summary = formatKitchenItemSummary(row.order.items);
-    const body = `${row.tableLabel} — ${summary}. Ready to serve.`;
     await ctx.runAction(internal.notifications.deliverFcm, {
       tokens,
-      title: "Kitchen Order Ready",
+      title,
       body,
       data: { screen: "kitchen" },
     });
   },
 });
 
-/** PRD v29 — customer notified when free-visit credits are awarded. */
-export const notifyLoyaltyCreditAwarded = internalAction({
+/** @deprecated Use notifyKitchenOrderUnavailable */
+export const notifyKitchenItemUnavailable = internalAction({
   args: {
-    clubId: v.id("clubs"),
-    userId: v.id("users"),
-    creditsAwarded: v.number(),
-    newBalance: v.number(),
+    orderId: v.id("kitchenOrders"),
+    itemIndex: v.number(),
   },
-  handler: async (ctx, args) => {
-    const user = await ctx.runQuery(internal.notifications.getUserById, {
-      userId: args.userId,
+  handler: async (ctx, { orderId }) => {
+    await ctx.runAction(internal.notifications.notifyKitchenOrderUnavailable, {
+      orderId,
     });
-    if (!user) return;
-    const tokens = user.fcmTokens ?? [];
-    if (tokens.length === 0) return;
-    const club = await ctx.runQuery(internal.deletion.getClubById, {
-      clubId: args.clubId,
-    });
-    const clubLabel = club?.name ?? "this club";
-    const plural = args.creditsAwarded === 1 ? "credit" : "credits";
-    await ctx.runAction(internal.notifications.deliverFcm, {
-      tokens,
-      title: "Loyalty reward earned!",
-      body: `You earned ${args.creditsAwarded} free-visit ${plural} at ${clubLabel}. You now have ${args.newBalance} available here (not at other clubs).`,
-      data: {
-        type: "loyalty_credit_awarded",
-        clubId: args.clubId,
-        creditsAwarded: String(args.creditsAwarded),
-        newBalance: String(args.newBalance),
-      },
+  },
+});
+
+/** @deprecated Use notifyKitchenOrderStatus — kept for in-flight schedulers. */
+export const notifyKitchenOrderReady = internalAction({
+  args: { orderId: v.id("kitchenOrders") },
+  handler: async (ctx, { orderId }) => {
+    await ctx.runAction(internal.notifications.notifyKitchenOrderStatus, {
+      orderId,
+      status: "ready",
     });
   },
 });

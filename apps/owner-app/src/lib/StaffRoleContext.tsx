@@ -16,6 +16,7 @@ type StaffRoleContextValue = {
   roleId: Id<"staffRoles"> | null | undefined;
   allowedTabs: string[];
   isOwnerMode: boolean;
+  isChefKitchenRole: boolean;
   canAccessTab: (tab: string) => boolean;
   refreshRole: () => void;
 };
@@ -45,10 +46,12 @@ export function StaffRoleProvider({ children }: { children: ReactNode }): React.
   const value = useMemo((): StaffRoleContextValue => {
     const allowedTabs = access?.allowedTabs ?? [];
     const isOwnerMode = access?.isOwnerMode ?? roleId === null;
+    const isChefKitchenRole = access?.isChefKitchenRole ?? false;
     return {
       roleId,
       allowedTabs,
       isOwnerMode,
+      isChefKitchenRole,
       canAccessTab: (tab: string) => {
         if (roleId === undefined || access === undefined) return false;
         if (isOwnerMode) return true;

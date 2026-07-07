@@ -118,6 +118,72 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   session_force_end: "Session force-ended",
 };
 
+export const getAdminClubs = query({
+  args: {
+    searchText: v.optional(v.string()),
+    statusFilter: v.optional(
+      v.union(v.literal("active"), v.literal("grace"), v.literal("frozen")),
+    ),
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdminWithMfa(ctx);
+    const limit = Math.min(Math.max(args.limit ?? 20, 1), 50);
+
+    let clubs = await ctx.db.query("clubs").collect();
+    if (args.statusFilter !== undefined) {
+      clubs = clubs.filter((c) => c.subscriptionStatus === args.statusFilter);
+    }
+    const search = args.searchText?.trim().toLowerCase();
+    if (search) {
+      clubs = clubs.filter(
+        (c) =>
+          c.name.toLowerCase().includes(search) ||
+          c.address.toLowerCase().includes(search),
+      );
+    }
+    clubs.sort((a, b) => a.name.localeCompare(b.name));
+
+    let offset = 0;
+    if (args.cursor !== undefined && args.cursor.length > 0) {
+      const n = parseInt(args.cursor, 10);
+      if (!Number.isNaN(n) && n >= 0) offset = n;
+    }
+    const slice = clubs.slice(offset, offset + limit);
+    const nextCursor =
+      offset + limit < clubs.length ? String(offset + limit) : null;
+
+    const rows = await Promise.all(
+      slice.map(async (c) => {
+        const [owner, tables] = await Promise.all([
+          ctx.db.get(c.ownerId),
+          ctx.db
+            .query("tables")
+            .withIndex("by_club", (q) => q.eq("clubId", c._id))
+            .collect(),
+        ]);
+        return {
+          clubId: c._id,
+          ownerId: c.ownerId,
+          name: c.name,
+          address: c.address,
+          subscriptionStatus: c.subscriptionStatus,
+          subscriptionExpiresAt: c.subscriptionExpiresAt,
+          isDiscoverable: c.isDiscoverable,
+          ownerName: owner?.name ?? "Unknown",
+          ownerPhone: owner?.phone ?? null,
+          ownerFrozen: owner?.isFrozen ?? false,
+          tableCount: tables.filter((t) => t.isActive).length,
+          createdAt: c.createdAt,
+        };
+      }),
+    );
+
+    return { clubs: rows, nextCursor, totalCount: clubs.length };
+  },
+});
+
 export const getAdminAuditLog = query({
   args: {
     cursor: v.optional(v.string()),

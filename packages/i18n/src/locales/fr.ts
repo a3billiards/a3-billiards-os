@@ -48,6 +48,8 @@ export const fr: TranslationBundle = {
       "live-moderation": "Direct",
       audit: "Audit",
       notifications: "Alertes",
+      clubs: "Clubs",
+      support: "Assistance",
     },
   },
   profile: {

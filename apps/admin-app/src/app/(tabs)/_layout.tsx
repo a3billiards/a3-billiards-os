@@ -15,6 +15,10 @@ export default function TabsLayout() {
   );
   const openComplaints = dash?.openComplaints ?? 0;
   const activeLiveStreams = dash?.activeLiveStreams ?? 0;
+  const openSupport = useQuery(
+    api.supportRequests.countOpenSupportRequests,
+    canDash ? {} : "skip",
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: glass.pageBgBottom }}>
@@ -32,6 +36,7 @@ export default function TabsLayout() {
         }}
       >
         <Tabs.Screen name="index" options={{ title: "Dashboard" }} />
+        <Tabs.Screen name="clubs" options={{ title: "Clubs" }} />
         <Tabs.Screen name="users" options={{ title: "Users" }} />
         <Tabs.Screen
           name="complaints"
@@ -54,6 +59,18 @@ export default function TabsLayout() {
                 ? activeLiveStreams > 99
                   ? "99+"
                   : activeLiveStreams
+                : undefined,
+          }}
+        />
+        <Tabs.Screen
+          name="support"
+          options={{
+            title: "Support",
+            tabBarBadge:
+              (openSupport ?? 0) > 0
+                ? (openSupport ?? 0) > 99
+                  ? "99+"
+                  : openSupport
                 : undefined,
           }}
         />

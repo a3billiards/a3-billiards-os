@@ -37,7 +37,9 @@ export default () => {
   const googleSchemes = googleIosUrlSchemes();
   const plistPath = process.env.GOOGLE_SERVICE_INFO_PLIST;
   const androidJsonPath = resolveGoogleServicesJsonPath();
-  /** Embed Google Maps SDK keys (EAS secrets). Required for `react-native-maps` MapView. */
+  /** Optional native Google Maps SDK keys. Not required by the club location
+   * picker (it uses a WebView + OpenStreetMap), kept only in case another
+   * native MapView is added later. */
   const googleMapsAndroidKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY;
   const googleMapsIosKey = process.env.GOOGLE_MAPS_IOS_API_KEY;
   const isDevClientBuild = process.env.EAS_BUILD_PROFILE === "development";

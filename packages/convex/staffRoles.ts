@@ -18,7 +18,6 @@ const TAB_VALUES = [
   "bookings",
   "documents",
   "kitchen",
-  "loyalty",
   "livestream",
 ] as const;
 
@@ -62,7 +61,7 @@ export const getActiveStaffTabAccess = query({
   handler: async (ctx, { roleId }) => {
     const owner = requireOwner(await requireViewer(ctx));
     if (owner.clubId === null) {
-      return { allowedTabs: [] as string[], isOwnerMode: true };
+      return { allowedTabs: [] as string[], isOwnerMode: true, isChefKitchenRole: false };
     }
     return await resolveStaffTabAccess(ctx, owner.clubId, roleId);
   },

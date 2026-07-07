@@ -79,6 +79,7 @@ export const auditGapsEn = {
       hour1_5: "1.5 hours",
       hours2: "2 hours",
       hours3: "3 hours",
+      open: "Open",
     },
     amenityPresets: {
       ac: "AC",
@@ -92,6 +93,7 @@ export const auditGapsEn = {
       americanPool: "American Pool",
       frenchBilliards: "French Billiards",
       snooker: "Snooker",
+      pool: "Pool",
       eightBall: "8-Ball",
       nineBall: "9-Ball",
     },
@@ -120,6 +122,7 @@ export const auditGapsEn = {
     tablePicker: {
       title: "Which table?",
       empty: "No active tables for this type. Ask the club to check table setup in Settings.",
+      pickTableSubtitle: "{{type}} — pick a table number",
     },
     tableTypeSelect: {
       customName: "Custom type name",
@@ -235,6 +238,7 @@ export const auditGapsEn = {
       duration1Hour: "1 hour",
       durationHours: "{{count}} hours",
       durationMinutes: "{{min}} min",
+      paymentDue: "Payment due — tap to pay",
     },
     passwordStrength: {
       weak: "Weak",
@@ -292,6 +296,12 @@ export const auditGapsEn = {
       latError: "Latitude must be a number between -90 and 90.",
       lngError: "Longitude must be a number between -180 and 180.",
       useCoordinates: "Use these coordinates",
+      searchPlace: "Search for a place",
+      searchPlaceholder: "Club name or address…",
+      searching: "Searching…",
+      noResults: "No results. Try a different search or enter coordinates manually.",
+      searchFailed: "Search failed. Check your connection or enter coordinates manually.",
+      manualPinHint: "Or enter latitude and longitude manually below.",
     },
     safeBarChart: {
       noData: "No data to display for this period.",

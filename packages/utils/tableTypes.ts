@@ -23,6 +23,20 @@ export function tableTypeLabel(typeId: string): string {
     .join(" ");
 }
 
+const TABLE_TYPE_I18N_KEYS: Record<string, string> = {
+  american: "common.tableTypes.americanPool",
+  french: "common.tableTypes.frenchBilliards",
+  snooker: "common.tableTypes.snooker",
+  pool: "common.tableTypes.pool",
+  "8-ball": "common.tableTypes.eightBall",
+  "9-ball": "common.tableTypes.nineBall",
+};
+
+/** i18n key for preset table types; undefined for custom labels. */
+export function tableTypeI18nKey(typeId: string): string | undefined {
+  return TABLE_TYPE_I18N_KEYS[normalizeTableTypeId(typeId)];
+}
+
 export function groupTablesByFloor<T extends { floor?: string | null }>(
   items: T[],
 ): Array<{ floor: string; items: T[] }> {

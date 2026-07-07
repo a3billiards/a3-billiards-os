@@ -88,9 +88,18 @@ export default function InboxNotificationsScreen(): React.JSX.Element {
 
       }
 
+      if (
+        row?.kind === "kitchen_order_preparing" ||
+        row?.kind === "kitchen_order_ready" ||
+        row?.kind === "kitchen_order_served" ||
+        row?.kind === "kitchen_item_unavailable"
+      ) {
+        router.push("/(tabs)/kitchen");
+      }
+
     },
 
-    [markRead, page?.notifications],
+    [markRead, page?.notifications, router],
 
   );
 
@@ -132,7 +141,29 @@ export default function InboxNotificationsScreen(): React.JSX.Element {
 
         <InboxNotificationsPanel
 
-          rows={page?.notifications}
+          rows={page?.notifications?.map((row) => {
+            const isKitchen =
+              row.kind === "kitchen_order_preparing" ||
+              row.kind === "kitchen_order_ready" ||
+              row.kind === "kitchen_order_served" ||
+              row.kind === "kitchen_item_unavailable";
+            const localizedTitle = isKitchen
+              ? row.kind === "kitchen_order_preparing"
+                ? t("common.inbox.kitchenOrderPreparing")
+                : row.kind === "kitchen_order_served"
+                  ? t("common.inbox.kitchenOrderServed")
+                  : row.kind === "kitchen_item_unavailable"
+                    ? t("common.inbox.kitchenItemUnavailable")
+                    : t("common.inbox.kitchenOrderReady")
+              : row.title;
+            return {
+              ...row,
+              title: localizedTitle,
+              sourceLabel: isKitchen
+                ? t("common.inbox.fromKitchen")
+                : t("common.inbox.fromAdmin"),
+            };
+          })}
 
           onOpen={(id) => void onOpen(id)}
 

@@ -117,8 +117,11 @@ export function I18nProvider({
   return (
     <I18nContext.Provider value={value}>
       {ready ? (
+        // No `key={locale}` here: react-i18next's `useTranslation()` already
+        // re-renders every consumer on language change via the "languageChanged"
+        // event. Remounting on locale change previously reset the entire
+        // navigation stack (and all in-flight screens) on every language switch.
         <View
-          key={locale}
           style={[
             styles.root,
             // Text direction only. Full layout mirroring (forceRTL) is handled in applyAppLocale

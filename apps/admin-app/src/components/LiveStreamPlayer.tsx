@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, layout, spacing, typography, radius } from "@a3/ui/theme";
@@ -78,6 +78,8 @@ export function LiveStreamPlayer({
 }: LiveStreamPlayerProps): React.JSX.Element {
   const { t } = useTranslation();
   const getPlaybackToken = useAction(api.livestream.getPlaybackToken);
+  const heartbeatViewer = useMutation(api.livestream.heartbeatLiveViewer);
+  const leaveViewer = useMutation(api.livestream.leaveLiveViewer);
   const streamMeta = useQuery(api.livestream.getLiveStreamPublicMeta, { liveStreamId });
   const otherStreams = useQuery(api.livestream.getActiveStreamsPlatformWide);
   const playerRef = useRef<IvsPlayerRef | null>(null);
@@ -194,6 +196,21 @@ export function LiveStreamPlayer({
     }, TOKEN_REFRESH_MS);
     return () => clearInterval(id);
   }, [phase, fetchToken]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const beat = () => {
+      if (cancelled) return;
+      void heartbeatViewer({ liveStreamId }).catch(() => {});
+    };
+    beat();
+    const id = setInterval(beat, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      void leaveViewer({ liveStreamId }).catch(() => {});
+    };
+  }, [heartbeatViewer, leaveViewer, liveStreamId]);
 
   if (!ivsPlayerModule) {
     return (

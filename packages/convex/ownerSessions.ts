@@ -13,14 +13,7 @@ import { bookingAppliesToTable, resolveRatePerMinAtSessionStart } from "./model/
 import { computeBookingUnixTime, dateYmdInTimeZone } from "@a3/utils/timezone";
 import { countActiveComplaintsForUser } from "./complaints";
 import { computeBill, clampDiscountPercent } from "@a3/utils/billing";
-import { computeFreeVisitBill } from "@a3/utils/loyaltyBilling";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
-import { internal } from "./_generated/api";
-import {
-  finalizeFreeVisitRedemption,
-  getActiveLoyaltyProgramme,
-  reserveFreeVisitCredit,
-} from "./model/loyaltyCore";
 
 const sessionParticipantSideArg = v.union(
   v.literal("sideA"),
@@ -120,6 +113,12 @@ async function validateAndNormalizeParticipants(
         const customer = await ctx.db.get(p.customerId);
         if (!customer || customer.role !== "customer") {
           throw new Error("DATA_003: Customer not found");
+        }
+        if (customer.isFrozen) {
+          throw new Error("SESSION_003: Customer frozen");
+        }
+        if (customer.deletionRequestedAt !== undefined) {
+          throw new Error("SESSION_004: Customer deleted");
         }
         if (!customer.phoneVerified) {
           throw new Error(
@@ -364,12 +363,13 @@ export const startWalkInSession = mutation({
     guestName: v.optional(v.string()),
     forceStartDespiteConflict: v.optional(v.boolean()),
     customerId: v.optional(v.id("users")),
-    freeVisitCreditId: v.optional(v.id("loyaltyCredits")),
     roleId: v.optional(v.id("staffRoles")),
     staffAcknowledgedComplaint: v.optional(v.boolean()),
     participants: v.optional(v.array(sessionParticipantArg)),
     playMode: v.optional(sessionPlayModeArg),
     losersPay: v.optional(v.boolean()),
+    assignedPlayDurationMin: v.optional(v.number()),
+    assignedPlayOpenEnded: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const {
@@ -378,12 +378,13 @@ export const startWalkInSession = mutation({
       guestName,
       forceStartDespiteConflict,
       customerId,
-      freeVisitCreditId,
       roleId,
       staffAcknowledgedComplaint,
       participants: participantsArg,
       playMode: playModeArg,
       losersPay: losersPayArg,
+      assignedPlayDurationMin,
+      assignedPlayOpenEnded,
     } = args;
     const viewer = await requireViewer(ctx);
     const owner = requireOwnerWithClub(viewer);
@@ -450,29 +451,6 @@ export const startWalkInSession = mutation({
         "DATA_001: Provide either a registered customer or a guest name, not both",
       );
     }
-    if (freeVisitCreditId !== undefined && customerId === undefined) {
-      throw new Error("LOYALTY_021: Free visit requires a registered customer");
-    }
-
-    let freeVisitMaxMinutes: number | undefined;
-    let isFreeVisit = false;
-    if (freeVisitCreditId !== undefined) {
-      const programme = await getActiveLoyaltyProgramme(ctx, owner.clubId);
-      if (!programme) {
-        throw new Error("LOYALTY_022: No active loyalty programme");
-      }
-      const credit = await ctx.db.get(freeVisitCreditId);
-      if (
-        !credit ||
-        credit.clubId !== owner.clubId ||
-        credit.userId !== customerId ||
-        credit.status !== "available"
-      ) {
-        throw new Error("LOYALTY_023: Free-visit credit not available");
-      }
-      isFreeVisit = true;
-      freeVisitMaxMinutes = programme.freeVisitMaxMinutes;
-    }
 
     const ratePerMin = resolveRatePerMinAtSessionStart(
       club,
@@ -481,6 +459,16 @@ export const startWalkInSession = mutation({
     );
     const minBillMinutes = club.minBillMinutes;
     const currency = club.currency;
+
+    const playOpenEnded = assignedPlayOpenEnded === true;
+    let playDurationMin: number | undefined;
+    if (!playOpenEnded) {
+      const dur = assignedPlayDurationMin ?? club.bookingSettings.slotDurationOptions[0] ?? 60;
+      if (!club.bookingSettings.slotDurationOptions.includes(dur)) {
+        throw new Error("BOOKING_008: Invalid play duration");
+      }
+      playDurationMin = dur;
+    }
 
     const {
       participants: normalizedParticipants,
@@ -506,6 +494,12 @@ export const startWalkInSession = mutation({
       const customer = await ctx.db.get(customerId);
       if (!customer || customer.role !== "customer") {
         throw new Error("DATA_003: Customer not found");
+      }
+      if (customer.isFrozen) {
+        throw new Error("SESSION_003: Customer frozen");
+      }
+      if (customer.deletionRequestedAt !== undefined) {
+        throw new Error("SESSION_004: Customer deleted");
       }
       if (!customer.phoneVerified) {
         throw new Error(
@@ -541,7 +535,9 @@ export const startWalkInSession = mutation({
       paymentStatus: "pending",
       status: "active",
       cancellationReason: undefined,
-      timerAlertMinutes: undefined,
+      assignedPlayDurationMin: playOpenEnded ? undefined : playDurationMin,
+      assignedPlayOpenEnded: playOpenEnded ? true : undefined,
+      timerAlertMinutes: playOpenEnded ? undefined : playDurationMin,
       timerAlertFiredAt: undefined,
       creditResolvedAt: undefined,
       creditResolvedMethod: undefined,
@@ -551,9 +547,6 @@ export const startWalkInSession = mutation({
       bookingId: undefined,
       discountAppliedByRoleId: undefined,
       discountAppliedAt: undefined,
-      isFreeVisit: isFreeVisit || undefined,
-      freeVisitCreditId: isFreeVisit ? freeVisitCreditId : undefined,
-      freeVisitMaxMinutes,
       playMode: normalizedParticipants.length > 0 ? playMode : undefined,
       losersPay: losersPay || undefined,
       participants:
@@ -562,16 +555,6 @@ export const startWalkInSession = mutation({
       createdAt: now,
       updatedAt: now,
     });
-
-    if (isFreeVisit && freeVisitCreditId && sessionCustomerId) {
-      await reserveFreeVisitCredit(ctx, {
-        creditId: freeVisitCreditId,
-        clubId: owner.clubId,
-        userId: sessionCustomerId,
-        sessionId,
-        now,
-      });
-    }
 
     await ctx.db.patch(tableId, {
       currentSessionId: sessionId,
@@ -655,8 +638,6 @@ function computeCheckoutBill(session: {
   minBillMinutes: number;
   snackOrders: { snackId: Id<"snacks">; name: string; qty: number; priceAtOrder: number }[];
   discount?: number;
-  isFreeVisit?: boolean;
-  freeVisitMaxMinutes?: number;
 }) {
   const now = Date.now();
   const endTime = now <= session.startTime ? session.startTime + 1 : now;
@@ -666,18 +647,6 @@ function computeCheckoutBill(session: {
     qty: o.qty,
     priceAtOrder: o.priceAtOrder,
   }));
-
-  if (session.isFreeVisit && session.freeVisitMaxMinutes != null) {
-    const bill = computeFreeVisitBill({
-      startTime: session.startTime,
-      endTime,
-      ratePerMin: session.ratePerMin,
-      minBillMinutes: session.minBillMinutes,
-      snackOrders,
-      freeVisitMaxMinutes: session.freeVisitMaxMinutes,
-    });
-    return { endTime, bill };
-  }
 
   return {
     endTime,
@@ -745,13 +714,12 @@ export const previewTableCheckout = query({
     }
 
     const perms = await resolveDiscountPermissions(ctx, owner.clubId, roleId);
-    const isFreeVisit = session.isFreeVisit === true;
     const requested =
       typeof discountPercent === "number" && Number.isFinite(discountPercent)
         ? discountPercent
         : 0;
     const appliedDiscountPct =
-      isFreeVisit || requested <= 0
+      requested <= 0
         ? 0
         : clampDiscountPercent(
             requested,
@@ -790,10 +758,8 @@ export const previewTableCheckout = query({
       discountedTable: bill.discountedTable,
       discountAmount: bill.discountAmount,
       discountPercent: appliedDiscountPct,
-      canApplyDiscount: isFreeVisit ? false : perms.canApplyDiscount,
+      canApplyDiscount: perms.canApplyDiscount,
       maxDiscountPercent: perms.maxDiscountPercent,
-      isFreeVisit,
-      freeVisitMaxMinutes: session.freeVisitMaxMinutes ?? null,
       playMode: session.playMode ?? "casual",
       losersPay: session.losersPay === true,
       participants,
@@ -854,21 +820,15 @@ export const checkoutTableSession = mutation({
     }
 
     const perms = await resolveDiscountPermissions(ctx, owner.clubId, roleId);
-    const isFreeVisit = session.isFreeVisit === true;
     const requested =
       typeof discountPercent === "number" && Number.isFinite(discountPercent)
         ? discountPercent
         : 0;
-    if (isFreeVisit && requested > 0) {
-      throw new Error("LOYALTY_024: Discount cannot be applied on a free-visit session");
-    }
-    const appliedDiscountPct = isFreeVisit
-      ? 0
-      : clampDiscountPercent(
-          requested,
-          perms.canApplyDiscount,
-          perms.maxDiscountPercent,
-        );
+    const appliedDiscountPct = clampDiscountPercent(
+      requested,
+      perms.canApplyDiscount,
+      perms.maxDiscountPercent,
+    );
 
     const { endTime, bill } = computeCheckoutBill({
       ...session,
@@ -930,27 +890,6 @@ export const checkoutTableSession = mutation({
         status: "completed",
         createdAt: now,
         updatedAt: now,
-      });
-    }
-
-    const completedSession = await ctx.db.get(session._id);
-    if (completedSession) {
-      if (completedSession.isFreeVisit) {
-        const overageMinutes =
-          "overageMinutes" in bill
-            ? (bill as { overageMinutes: number }).overageMinutes
-            : 0;
-        await finalizeFreeVisitRedemption(ctx, {
-          session: completedSession,
-          billableMinutes: bill.billableMinutes,
-          overageMinutes,
-          overageBilled: bill.discountedTable,
-          redeemedBy: owner.userId,
-          now,
-        });
-      }
-      await ctx.scheduler.runAfter(0, internal.loyalty.evaluateCheckoutLoyalty, {
-        sessionId: session._id,
       });
     }
 

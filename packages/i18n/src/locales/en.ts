@@ -13,6 +13,7 @@ export const en = {
     success: "Success",
     yes: "Yes",
     no: "No",
+    done: "Done",
   },
   settings: {
     language: "Language",
@@ -53,6 +54,8 @@ export const en = {
       "live-moderation": "Live",
       audit: "Audit",
       notifications: "Alerts",
+      support: "Support",
+      clubs: "Clubs",
     },
   },
   profile: {
@@ -95,6 +98,11 @@ export const en = {
     fromAdmin: "A3 Billiards",
     bellAccessibility: "Notifications",
     loadMore: "Load more",
+    fromKitchen: "Kitchen",
+    kitchenOrderPreparing: "Kitchen Order Preparing",
+    kitchenOrderReady: "Kitchen Order Ready",
+    kitchenOrderServed: "Kitchen Order Served",
+    kitchenItemUnavailable: "Kitchen Item Unavailable",
   },
   errors: errorMessagesEn,
 } satisfies TranslationBundle;

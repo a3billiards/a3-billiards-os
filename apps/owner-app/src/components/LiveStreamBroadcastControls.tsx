@@ -119,6 +119,12 @@ export function LiveStreamBroadcastControls({
     }
   }, [activeStream, phase]);
 
+  useEffect(() => {
+    if (activeStream?.viewerCount != null) {
+      setViewerCount(activeStream.viewerCount);
+    }
+  }, [activeStream?.viewerCount]);
+
   const isLive = phase === "live" || phase === "reconnecting";
   const wantsCamera = isFocused || isLive;
   const mountCamera = wantsCamera && previewAllowed && cameraReady;
@@ -166,17 +172,22 @@ export function LiveStreamBroadcastControls({
   const remoteLiveOnly = Boolean(activeStream && !credentialsRef.current);
 
   useEffect(() => {
-    if (phase !== "live" && phase !== "reconnecting") return;
     const streamId =
       credentialsRef.current?.liveStreamId ?? activeStream?.liveStreamId;
     if (!streamId) return;
-    const id = setInterval(() => {
+    const shouldPoll = isLive || remoteLiveOnly;
+    if (!shouldPoll) return;
+
+    const refresh = () => {
       void onRefreshViewerCount(streamId)
         .then((count) => setViewerCount(count))
         .catch(() => undefined);
-    }, 30_000);
+    };
+
+    refresh();
+    const id = setInterval(refresh, 10_000);
     return () => clearInterval(id);
-  }, [phase, onRefreshViewerCount, activeStream?.liveStreamId]);
+  }, [isLive, remoteLiveOnly, onRefreshViewerCount, activeStream?.liveStreamId]);
 
   const handleBroadcastState = useCallback(
     (stateStatus: string) => {
@@ -367,13 +378,24 @@ export function LiveStreamBroadcastControls({
             </Text>
           </View>
         )}
-        {isLive ? (
-          <View style={styles.liveBadge}>
-            <Text style={styles.liveBadgeText}>
-              {phase === "reconnecting"
-                ? t("ownerApp.livestream.reconnectingBadge")
-                : t("ownerApp.livestream.liveBadge")}
-            </Text>
+        {isLive || remoteLiveOnly ? (
+          <View style={styles.previewOverlayRow}>
+            {isLive ? (
+              <View style={styles.liveBadge}>
+                <Text style={styles.liveBadgeText}>
+                  {phase === "reconnecting"
+                    ? t("ownerApp.livestream.reconnectingBadge")
+                    : t("ownerApp.livestream.liveBadge")}
+                </Text>
+              </View>
+            ) : (
+              <View />
+            )}
+            <View style={styles.viewerBadge}>
+              <Text style={styles.viewerBadgeText}>
+                {t("ownerApp.livestream.viewers", { count: viewerCount })}
+              </Text>
+            </View>
           </View>
         ) : null}
       </View>
@@ -549,10 +571,17 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.text.tertiary,
   },
-  liveBadge: {
+  previewOverlayRow: {
     position: "absolute",
     top: spacing[2],
     left: spacing[2],
+    right: spacing[2],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing[2],
+  },
+  liveBadge: {
     backgroundColor: colors.status.error,
     paddingHorizontal: spacing[2],
     paddingVertical: 4,
@@ -562,6 +591,19 @@ const styles = StyleSheet.create({
     ...typography.labelSmall,
     color: "#fff",
     fontWeight: "700",
+  },
+  viewerBadge: {
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    paddingHorizontal: spacing[2],
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  viewerBadgeText: {
+    ...typography.labelSmall,
+    color: "#fff",
+    fontWeight: "600",
   },
   statusNote: { ...typography.bodySmall, color: colors.accent.amber },
   viewers: { ...typography.body, color: colors.text.primary },

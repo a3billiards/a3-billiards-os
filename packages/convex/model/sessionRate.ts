@@ -64,8 +64,9 @@ export function bookingAppliesToTable(
   booking: Doc<"bookings">,
   table: Doc<"tables">,
 ): boolean {
-  if (booking.confirmedTableId !== undefined) {
-    return booking.confirmedTableId === table._id;
+  const reservedTableId = booking.confirmedTableId ?? booking.requestedTableId;
+  if (reservedTableId !== undefined) {
+    return reservedTableId === table._id;
   }
   return (
     normalizeTableType(booking.tableType) ===

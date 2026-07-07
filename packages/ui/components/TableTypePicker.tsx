@@ -6,16 +6,11 @@ import {
   Pressable,
   ScrollView,
 } from "react-native";
+import { useTranslation, getCurrentLanguage } from "@a3/i18n";
+import { tableTypeI18nKey, tableTypeLabel } from "@a3/utils/tableTypes";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing, radius, layout } from "../theme/spacing";
-
-function capitalizeWords(s: string): string {
-  return s
-    .split(/\s+/)
-    .map((w) => (w.length ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(" ");
-}
 
 export interface TableTypePickerProps {
   bookableTypes: string[];
@@ -26,9 +21,13 @@ export interface TableTypePickerProps {
   onSelectType: (tableType: string) => void;
 }
 
-function formatRateLabel(currencyCode: string, rate: number): string {
+function formatRateForPicker(
+  currencyCode: string,
+  rate: number,
+  locale: string,
+): string {
   try {
-    const sym = new Intl.NumberFormat("en", {
+    const sym = new Intl.NumberFormat(locale, {
       style: "currency",
       currency: currencyCode,
       currencyDisplay: "narrowSymbol",
@@ -36,13 +35,22 @@ function formatRateLabel(currencyCode: string, rate: number): string {
     })
       .formatToParts(rate)
       .find((p) => p.type === "currency")?.value;
-    const num = new Intl.NumberFormat("en", {
+    const num = new Intl.NumberFormat(locale, {
       maximumFractionDigits: rate % 1 === 0 ? 0 : 1,
     }).format(rate);
-    return `${sym ?? currencyCode}${num}/min`;
+    return `${sym ?? currencyCode}${num}`;
   } catch {
-    return `${currencyCode} ${rate}/min`;
+    return `${currencyCode} ${rate}`;
   }
+}
+
+function displayTypeName(
+  raw: string,
+  t: (key: string) => string,
+): string {
+  const key = raw.trim().toLowerCase();
+  const i18nKey = tableTypeI18nKey(key);
+  return i18nKey ? t(i18nKey) : tableTypeLabel(key);
 }
 
 export function TableTypePicker({
@@ -53,7 +61,10 @@ export function TableTypePicker({
   selectedType,
   onSelectType,
 }: TableTypePickerProps): React.JSX.Element {
-  const rateLabel = formatRateLabel(currencyCode, baseRatePerMin);
+  const { t } = useTranslation();
+  const locale = getCurrentLanguage();
+  const rateFormatted = formatRateForPicker(currencyCode, baseRatePerMin, locale);
+  const rateLabel = t("sharedUi.tableTypePicker.ratePerMin", { rate: rateFormatted });
 
   return (
     <ScrollView
@@ -61,7 +72,7 @@ export function TableTypePicker({
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.title}>What type of table?</Text>
+      <Text style={styles.title}>{t("sharedUi.tableTypePicker.heading")}</Text>
       <View style={styles.list}>
         {bookableTypes.map((raw) => {
           const key = raw.trim().toLowerCase();
@@ -79,11 +90,11 @@ export function TableTypePicker({
             >
               <View style={styles.cardInner}>
                 <View style={styles.cardLeft}>
-                  <Text style={styles.cardTitle}>
-                    {capitalizeWords(key)}
-                  </Text>
+                  <Text style={styles.cardTitle}>{displayTypeName(raw, t)}</Text>
                   <Text style={styles.cardSubtitle}>
-                    {count === 1 ? "1 table available" : `${count} tables available`}
+                    {count === 1
+                      ? t("sharedUi.tableTypePicker.oneTable")
+                      : t("sharedUi.tableTypePicker.tablesAvailable", { count })}
                   </Text>
                 </View>
                 <Text style={styles.rate}>{rateLabel}</Text>

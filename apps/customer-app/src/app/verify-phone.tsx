@@ -36,7 +36,11 @@ type ScreenMode =
 export default function VerifyPhoneScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const rawPhone = useLocalSearchParams<{ phone: string }>().phone;
+  // Expo Router can URL-encode '+' as '%2B' — decode it back to E.164
+  const phone = Array.isArray(rawPhone)
+    ? decodeURIComponent(rawPhone[0] ?? "")
+    : decodeURIComponent(rawPhone ?? "");
   const { isAuthenticated } = useConvexAuth();
   const sendOtp = useAction(api.otp.sendOtp);
   const verifyOtp = useAction(api.otp.verifyOtp);
@@ -56,7 +60,13 @@ export default function VerifyPhoneScreen() {
 
   // ── Auto-send OTP on mount (wait for current user when signed in — sendOtp needs verificationUserId) ──
   useEffect(() => {
-    if (!phone || sentInitial.current) return;
+    if (sentInitial.current) return;
+    if (!phone) {
+      sentInitial.current = true;
+      setError(t("auth.customer.verifyPhone.missingPhone"));
+      setMode("input");
+      return;
+    }
     if (isAuthenticated && currentUser === undefined) return;
 
     sentInitial.current = true;
@@ -78,7 +88,7 @@ export default function VerifyPhoneScreen() {
           setMode("input");
         }
       });
-  }, [phone, sendOtp, isAuthenticated, currentUser]);
+  }, [phone, sendOtp, isAuthenticated, currentUser, t]);
 
   // ── Resend cooldown timer (60s between sends) ──
   useEffect(() => {

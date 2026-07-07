@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable, Image } from "react-native";
+import { useTranslation } from "@a3/i18n";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing, radius, layout } from "../theme/spacing";
@@ -64,6 +65,7 @@ export interface BookingCardProps {
     confirmedTableLabel?: string;
     rejectionReason?: string;
     thumbnailPhotoUrl?: string | null;
+    needsPayment?: boolean;
   };
   onPress?: () => void;
   mode: BookingCardMode;
@@ -95,8 +97,10 @@ export function BookingCard({
   isLoading,
   footerText,
 }: BookingCardProps): React.JSX.Element {
+  const { t } = useTranslation();
+
   if (log && onPress) {
-    const palette = customerStatusPalette(log.status);
+    const palette = customerStatusPalette(log.status, t);
     return (
       <Pressable onPress={onPress} style={({ pressed }) => [styles.container, pressed && styles.pressed]}>
         <View style={styles.customerRow}>
@@ -120,32 +124,38 @@ export function BookingCard({
             </View>
             <Text style={styles.customerMeta}>
               {capitalize(log.tableType)} • {log.requestedDate} • {to12h(log.requestedStartTime)} •{" "}
-              {humanDuration(log.requestedDurationMin)}
+              {humanDuration(log.requestedDurationMin, t)}
             </Text>
             {log.status === "pending_approval" && log.confirmedTableLabel ? (
               <Text style={styles.customerSubline}>
-                Table: {log.confirmedTableLabel}
+                {t("sharedUi.bookingCard.tableLabel", { label: log.confirmedTableLabel })}
               </Text>
             ) : null}
             {log.status === "confirmed" && log.confirmedTableLabel ? (
-              <Text style={styles.customerSubline}>Table: {log.confirmedTableLabel}</Text>
+              <Text style={styles.customerSubline}>
+                {t("sharedUi.bookingCard.tableLabel", { label: log.confirmedTableLabel })}
+              </Text>
             ) : null}
             {log.status === "rejected" && log.rejectionReason ? (
               <Text style={styles.customerSubline} numberOfLines={1}>
-                Reason: {log.rejectionReason}
+                {t("sharedUi.bookingCard.reasonLabel", { reason: log.rejectionReason })}
               </Text>
             ) : null}
             {log.estimatedCost !== undefined ? (
               <Text style={styles.priceLine}>
-                Est. {currencySymbol(log.currency)}
-                {log.estimatedCost}
+                {t("sharedUi.bookingCard.estimated", {
+                  amount: `${currencySymbol(log.currency)}${log.estimatedCost}`,
+                })}
               </Text>
+            ) : null}
+            {log.needsPayment ? (
+              <Text style={styles.payDueLine}>{t("sharedUi.bookingCard.paymentDue")}</Text>
             ) : null}
           </View>
         </View>
         {(log.status === "pending_approval" || log.status === "confirmed") && onCancel ? (
           <Pressable style={styles.customerCancelBtn} onPress={onCancel}>
-            <Text style={styles.customerCancelText}>Cancel</Text>
+            <Text style={styles.customerCancelText}>{t("sharedUi.bookingCard.cancel")}</Text>
           </Pressable>
         ) : null}
       </Pressable>
@@ -157,7 +167,7 @@ export function BookingCard({
   const isOwnerHistory = mode === "owner-history";
   const showCustomerMeta = mode !== "customer";
   const chip = statusChipPalette(booking.status);
-  const statusLabel = formatStatusLabel(booking.status);
+  const statusLabel = formatStatusLabel(booking.status, t);
 
   return (
     <View style={styles.container}>
@@ -165,7 +175,7 @@ export function BookingCard({
         <View style={styles.headerRow}>
           <View style={styles.nameBlock}>
             <Text style={styles.cardTitle} numberOfLines={3}>
-              {booking.customerName ?? "Customer"}
+              {booking.customerName ?? t("sharedUi.bookingCard.customerFallback")}
             </Text>
             {booking.customerPhone ? (
               <Text style={styles.phoneLine}>{booking.customerPhone}</Text>
@@ -186,14 +196,14 @@ export function BookingCard({
         <Text style={styles.metaDot}>·</Text>
         <Text style={styles.metaItem}>{booking.requestedStartTime}</Text>
         <Text style={styles.metaDot}>·</Text>
-        <Text style={styles.metaItem}>{durationLabel(booking.requestedDurationMin)}</Text>
+        <Text style={styles.metaItem}>{humanDuration(booking.requestedDurationMin, t)}</Text>
       </View>
 
       {booking.confirmedTableLabel ? (
         <Text style={styles.secondaryLine}>
           {isOwnerPending
-            ? `Requested table: ${booking.confirmedTableLabel}`
-            : `Assigned: ${booking.confirmedTableLabel}`}
+            ? t("sharedUi.bookingCard.requestedTable", { label: booking.confirmedTableLabel })
+            : t("sharedUi.bookingCard.assignedTable", { label: booking.confirmedTableLabel })}
         </Text>
       ) : null}
 
@@ -205,10 +215,12 @@ export function BookingCard({
 
       {isOwnerPending && customerStats ? (
         <Text style={styles.trackRecord}>
-          At this club: {customerStats.thisClub.totalBookings} bookings,{" "}
-          {customerStats.thisClub.noShowCount} no-shows | Platform-wide:{" "}
-          {customerStats.platformWide.totalBookings} bookings,{" "}
-          {customerStats.platformWide.noShowCount} no-shows
+          {t("sharedUi.bookingCard.statsAtClub", {
+            bookings: customerStats.thisClub.totalBookings,
+            noShows: customerStats.thisClub.noShowCount,
+            platformBookings: customerStats.platformWide.totalBookings,
+            platformNoShows: customerStats.platformWide.noShowCount,
+          })}
         </Text>
       ) : null}
 
@@ -222,7 +234,9 @@ export function BookingCard({
 
       {booking.notes ? <Text style={styles.notes}>{booking.notes}</Text> : null}
       {isOwnerHistory && booking.rejectionReason ? (
-        <Text style={styles.reason}>Reason: {booking.rejectionReason}</Text>
+        <Text style={styles.reason}>
+          {t("sharedUi.bookingCard.reasonLabel", { reason: booking.rejectionReason })}
+        </Text>
       ) : null}
       {footerText ? <Text style={styles.footer}>{footerText}</Text> : null}
 
@@ -237,7 +251,7 @@ export function BookingCard({
               isLoading && styles.disabled,
             ]}
           >
-            <Text style={styles.approveText}>Approve</Text>
+            <Text style={styles.approveText}>{t("sharedUi.bookingCard.approve")}</Text>
           </Pressable>
           <Pressable
             disabled={isLoading}
@@ -248,7 +262,7 @@ export function BookingCard({
               isLoading && styles.disabled,
             ]}
           >
-            <Text style={styles.rejectText}>Reject</Text>
+            <Text style={styles.rejectText}>{t("sharedUi.bookingCard.reject")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -265,7 +279,7 @@ export function BookingCard({
                 isLoading && styles.disabled,
               ]}
             >
-              <Text style={styles.approveText}>Start Session</Text>
+              <Text style={styles.approveText}>{t("sharedUi.bookingCard.startSession")}</Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -277,7 +291,7 @@ export function BookingCard({
               isLoading && styles.disabled,
             ]}
           >
-            <Text style={styles.rejectText}>Cancel</Text>
+            <Text style={styles.rejectText}>{t("sharedUi.bookingCard.cancel")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -306,12 +320,12 @@ function to12h(hhmm: string): string {
   return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
-function humanDuration(min: number): string {
-  if (min === 30) return "30 min";
-  if (min === 60) return "1 hour";
-  if (min % 60 === 0) return `${min / 60} hours`;
-  if (min % 30 === 0) return `${(min / 60).toFixed(1)} hours`;
-  return `${min} min`;
+function humanDuration(min: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  if (min === 30) return t("sharedUi.bookingCard.duration30");
+  if (min === 60) return t("sharedUi.bookingCard.duration1Hour");
+  if (min % 60 === 0) return t("sharedUi.bookingCard.durationHours", { count: min / 60 });
+  if (min % 30 === 0) return t("sharedUi.bookingCard.durationHours", { count: min / 60 });
+  return t("sharedUi.bookingCard.durationMinutes", { min });
 }
 
 function currencySymbol(code: string): string {
@@ -321,37 +335,46 @@ function currencySymbol(code: string): string {
   return `${code} `;
 }
 
-function customerStatusPalette(status: string): { bg: string; fg: string; label: string } {
+function customerStatusPalette(
+  status: string,
+  t: (key: string) => string,
+): { bg: string; fg: string; label: string } {
   switch (status) {
     case "pending_approval":
-      return { bg: "rgba(245,127,23,0.18)", fg: colors.accent.amber, label: "Pending" };
+      return { bg: "rgba(245,127,23,0.18)", fg: colors.accent.amber, label: t("sharedUi.bookingCard.statusPending") };
     case "confirmed":
-      return { bg: "rgba(67,160,71,0.18)", fg: colors.accent.green, label: "Confirmed" };
+      return { bg: "rgba(67,160,71,0.18)", fg: colors.accent.green, label: t("sharedUi.bookingCard.statusConfirmed") };
     case "rejected":
-      return { bg: "rgba(244,67,54,0.18)", fg: colors.status.error, label: "Declined" };
+      return { bg: "rgba(244,67,54,0.18)", fg: colors.status.error, label: t("sharedUi.bookingCard.statusDeclined") };
     case "cancelled_by_customer":
-      return { bg: "rgba(139,148,158,0.18)", fg: colors.text.secondary, label: "Cancelled" };
+      return { bg: "rgba(139,148,158,0.18)", fg: colors.text.secondary, label: t("sharedUi.bookingCard.statusCancelled") };
     case "cancelled_by_club":
-      return { bg: "rgba(139,148,158,0.18)", fg: colors.text.secondary, label: "Cancelled by Club" };
+      return { bg: "rgba(139,148,158,0.18)", fg: colors.text.secondary, label: t("sharedUi.bookingCard.statusCancelledByClub") };
     case "expired":
-      return { bg: "rgba(139,148,158,0.18)", fg: colors.text.secondary, label: "Expired" };
+      return { bg: "rgba(139,148,158,0.18)", fg: colors.text.secondary, label: t("sharedUi.bookingCard.statusExpired") };
     default:
-      return { bg: "rgba(33,150,243,0.18)", fg: colors.status.info, label: "Completed" };
+      return { bg: "rgba(33,150,243,0.18)", fg: colors.status.info, label: t("sharedUi.bookingCard.statusCompleted") };
   }
 }
 
-function formatStatusLabel(status: string): string {
+function formatStatusLabel(status: string, t: (key: string) => string): string {
   switch (status) {
     case "pending_approval":
-      return "Awaiting Approval";
+      return t("sharedUi.bookingCard.awaitingApproval");
+    case "confirmed":
+      return t("sharedUi.bookingCard.statusConfirmed");
+    case "rejected":
+      return t("sharedUi.bookingCard.statusDeclined");
     case "cancelled_by_customer":
+      return t("sharedUi.bookingCard.statusCancelled");
     case "cancelled_by_club":
-      return "Cancelled";
+      return t("sharedUi.bookingCard.statusCancelledByClub");
+    case "expired":
+      return t("sharedUi.bookingCard.statusExpired");
+    case "completed":
+      return t("sharedUi.bookingCard.statusCompleted");
     default:
-      return status
-        .split("_")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" ");
+      return t("sharedUi.bookingCard.statusPending");
   }
 }
 
@@ -482,6 +505,13 @@ const styles = StyleSheet.create({
     lineHeight: FIGMA.metaLine,
     fontWeight: "600",
     color: FIGMA.priceColor,
+  },
+  payDueLine: {
+    fontSize: FIGMA.metaSize,
+    lineHeight: FIGMA.metaLine,
+    fontWeight: "700",
+    color: "#F5A623",
+    marginTop: 4,
   },
   notes: {
     fontSize: FIGMA.metaSize,

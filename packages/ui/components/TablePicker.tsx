@@ -6,6 +6,8 @@ import {
   Pressable,
   ScrollView,
 } from "react-native";
+import { useTranslation } from "@a3/i18n";
+import { tableTypeI18nKey, tableTypeLabel } from "@a3/utils/tableTypes";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing, radius, layout } from "../theme/spacing";
@@ -21,17 +23,19 @@ export interface TablePickerProps {
   tables: BookableTableOption[];
   selectedTableId: string | null;
   onSelectTable: (tableId: string) => void;
-  /** Override "Which table?" heading */
+  /** Override heading (defaults to sharedUi.tablePicker.title) */
   headingLabel?: string;
-  /** Override empty state message */
+  /** Override empty state (defaults to sharedUi.tablePicker.empty) */
   emptyLabel?: string;
 }
 
-function capitalizeWords(s: string): string {
-  return s
-    .split(/\s+/)
-    .map((w) => (w.length ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(" ");
+function displayTypeName(
+  raw: string,
+  t: (key: string) => string,
+): string {
+  const key = raw.trim().toLowerCase();
+  const i18nKey = tableTypeI18nKey(key);
+  return i18nKey ? t(i18nKey) : tableTypeLabel(key);
 }
 
 export function TablePicker({
@@ -39,29 +43,34 @@ export function TablePicker({
   tables,
   selectedTableId,
   onSelectTable,
-  headingLabel = "Which table?",
-  emptyLabel = "No active tables for this type. Ask the club to check table setup in Settings.",
+  headingLabel,
+  emptyLabel,
 }: TablePickerProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const title = headingLabel ?? t("sharedUi.tablePicker.title");
+  const empty = emptyLabel ?? t("sharedUi.tablePicker.empty");
+  const typeLabel = displayTypeName(tableType, t);
+
   return (
     <ScrollView
       style={styles.scroll}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.title}>{headingLabel}</Text>
+      <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>
-        {capitalizeWords(tableType)} — pick a table number
+        {t("sharedUi.tablePicker.pickTableSubtitle", { type: typeLabel })}
       </Text>
       {tables.length === 0 ? (
-        <Text style={styles.empty}>{emptyLabel}</Text>
+        <Text style={styles.empty}>{empty}</Text>
       ) : (
         <View style={styles.list}>
-          {tables.map((t) => {
-            const selected = selectedTableId === t.tableId;
+          {tables.map((tbl) => {
+            const selected = selectedTableId === tbl.tableId;
             return (
               <Pressable
-                key={t.tableId}
-                onPress={() => onSelectTable(t.tableId)}
+                key={tbl.tableId}
+                onPress={() => onSelectTable(tbl.tableId)}
                 style={({ pressed }) => [
                   styles.card,
                   selected && styles.cardSelected,
@@ -69,9 +78,9 @@ export function TablePicker({
                 ]}
               >
                 <View style={styles.cardInner}>
-                  <Text style={styles.cardTitle}>{t.label}</Text>
-                  {t.floor ? (
-                    <Text style={styles.cardSubtitle}>{t.floor}</Text>
+                  <Text style={styles.cardTitle}>{tbl.label}</Text>
+                  {tbl.floor ? (
+                    <Text style={styles.cardSubtitle}>{tbl.floor}</Text>
                   ) : null}
                 </View>
               </Pressable>

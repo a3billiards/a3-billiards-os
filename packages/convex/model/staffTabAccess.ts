@@ -18,20 +18,31 @@ export async function assertStaffTabAllowed(
   }
 }
 
+/** Chef preset: kitchen tab only — may advance orders and toggle menu availability. */
+export function isChefKitchenRole(allowedTabs: string[]): boolean {
+  return allowedTabs.length === 1 && allowedTabs[0] === "kitchen";
+}
+
 export async function resolveStaffTabAccess(
   ctx: QueryCtx,
   clubId: Id<"clubs">,
   roleId?: Id<"staffRoles">,
-): Promise<{ allowedTabs: string[]; isOwnerMode: boolean }> {
+): Promise<{ allowedTabs: string[]; isOwnerMode: boolean; isChefKitchenRole: boolean }> {
   if (!roleId) {
     return {
       allowedTabs: [...OWNER_UNRESTRICTED_TABS],
       isOwnerMode: true,
+      isChefKitchenRole: false,
     };
   }
   const role = await ctx.db.get(roleId);
   if (!role || role.clubId !== clubId) {
-    return { allowedTabs: [], isOwnerMode: false };
+    return { allowedTabs: [], isOwnerMode: false, isChefKitchenRole: false };
   }
-  return { allowedTabs: [...role.allowedTabs], isOwnerMode: false };
+  const allowedTabs = [...role.allowedTabs];
+  return {
+    allowedTabs,
+    isOwnerMode: false,
+    isChefKitchenRole: isChefKitchenRole(allowedTabs),
+  };
 }
