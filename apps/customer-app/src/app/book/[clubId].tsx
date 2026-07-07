@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -118,6 +118,7 @@ function BookClubScreenContent() {
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const slotDurationOptions = ctx?.bookingSettings.slotDurationOptions;
   const slotOptions = useMemo(
@@ -221,6 +222,8 @@ function BookClubScreenContent() {
     if (!ctx || !tableType || !selectedTableId || !dateYmd || !selectedTime || durationMin === null) {
       return;
     }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await submit({
@@ -245,6 +248,7 @@ function BookClubScreenContent() {
         bookingErrorMessage(e, ctx.bookingSettings.minAdvanceMinutes, t),
       );
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

@@ -78,6 +78,8 @@ function SlotsScreenContent() {
   const [pendingCustomerId, setPendingCustomerId] = useState<Id<"users"> | null>(null);
   const [showComplaintGate, setShowComplaintGate] = useState(false);
   const walkInModalOpenedForTableRef = useRef<string | null>(null);
+  const startingWalkInRef = useRef(false);
+  const acquiringLockRef = useRef(false);
   const [checkoutTableId, setCheckoutTableId] = useState<Id<"tables"> | null>(
     null,
   );
@@ -428,6 +430,8 @@ function SlotsScreenContent() {
         assignedPlayOpenEnded?: boolean;
       },
     ) => {
+      if (startingWalkInRef.current) return;
+      startingWalkInRef.current = true;
       setActionError(null);
       try {
         const result = await startWalkIn({
@@ -468,6 +472,8 @@ function SlotsScreenContent() {
       } catch (e) {
         setActionError(parseConvexError(e as Error).message);
         clearWalkInState();
+      } finally {
+        startingWalkInRef.current = false;
       }
     },
     [startWalkIn, clearWalkInState, queryRoleId, t],
@@ -610,6 +616,8 @@ function SlotsScreenContent() {
       setPlayMode("casual");
       setLosersPay(false);
       setGroupValidationError(null);
+      if (acquiringLockRef.current) return;
+      acquiringLockRef.current = true;
       setAcquiringLock(true);
       try {
         const { lockToken } = await acquireTableLock({
@@ -620,6 +628,7 @@ function SlotsScreenContent() {
       } catch (e) {
         setActionError(parseConvexError(e as Error).message);
       } finally {
+        acquiringLockRef.current = false;
         setAcquiringLock(false);
       }
     },

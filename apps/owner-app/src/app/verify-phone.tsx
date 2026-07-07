@@ -59,6 +59,7 @@ export default function VerifyPhoneScreen() {
   const [otpRequested, setOtpRequested] = useState(false);
 
   const inputs = useRef<(TextInput | null)[]>([]);
+  const sendingOtpRef = useRef(false);
 
   // ── Resend cooldown timer (60s between sends) ──
   useEffect(() => {
@@ -98,6 +99,8 @@ export default function VerifyPhoneScreen() {
     }
     if (authLoading) return;
     if (isAuthenticated && currentUser === undefined) return;
+    if (sendingOtpRef.current) return;
+    sendingOtpRef.current = true;
 
     setError(null);
     setMode("sending");
@@ -119,6 +122,8 @@ export default function VerifyPhoneScreen() {
         setError(appError.message);
         setMode("input");
       }
+    } finally {
+      sendingOtpRef.current = false;
     }
   }, [
     phone,

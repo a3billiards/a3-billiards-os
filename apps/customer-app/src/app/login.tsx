@@ -43,6 +43,7 @@ export default function CustomerLoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const codeRef = useRef<TextInput>(null);
+  const sendingOtpRef = useRef(false);
   const passwordRef = useRef<TextInput>(null);
   const { schedulePostLogin, isWaitingForAuth } = usePostLoginNavigation();
 
@@ -89,6 +90,8 @@ export default function CustomerLoginScreen() {
 
   const handleSendOtp = useCallback(async () => {
     if (!phoneValid || loading) return;
+    if (sendingOtpRef.current) return;
+    sendingOtpRef.current = true;
     setError(null);
     setInfo(null);
     setLoading(true);
@@ -119,6 +122,7 @@ export default function CustomerLoginScreen() {
           setError(appErr.message ?? t("auth.customer.login.couldNotSendOtp"));
       }
     } finally {
+      sendingOtpRef.current = false;
       setLoading(false);
     }
   }, [phoneValid, normalizedPhone, loading, sendLoginOtp, t]);

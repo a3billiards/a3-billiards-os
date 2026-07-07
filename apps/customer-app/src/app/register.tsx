@@ -47,6 +47,7 @@ export default function RegisterScreen() {
   const phoneRef = useRef<TextInput>(null);
   const ageRef = useRef<TextInput>(null);
   const codeRef = useRef<TextInput>(null);
+  const sendingOtpRef = useRef(false);
 
   const parsedAge = Number(age);
   const ageValid =
@@ -63,6 +64,8 @@ export default function RegisterScreen() {
 
   const handleSendOtp = useCallback(async () => {
     if (!canSendOtp) return;
+    if (sendingOtpRef.current) return;
+    sendingOtpRef.current = true;
     setError(null);
     setInfo(null);
     setLoading(true);
@@ -90,6 +93,7 @@ export default function RegisterScreen() {
           setError(appErr.message ?? t("auth.customer.register.couldNotSendOtp"));
       }
     } finally {
+      sendingOtpRef.current = false;
       setLoading(false);
     }
   }, [canSendOtp, phone, sendSignupOtp, t]);
