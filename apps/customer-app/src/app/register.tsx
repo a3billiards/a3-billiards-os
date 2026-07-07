@@ -263,14 +263,14 @@ export default function RegisterScreen() {
                   {t("auth.customer.register.consentPrefix")}{" "}
                   <Text
                     style={styles.consentLink}
-                    onPress={() => Linking.openURL(PRIVACY_URL)}
+                    onPress={() => void Linking.openURL(PRIVACY_URL).catch(() => {})}
                   >
                     {t("auth.customer.register.privacyPolicy")}
                   </Text>
                   {" "}{t("auth.customer.register.consentAnd")}{" "}
                   <Text
                     style={styles.consentLink}
-                    onPress={() => Linking.openURL(TOS_URL)}
+                    onPress={() => void Linking.openURL(TOS_URL).catch(() => {})}
                   >
                     {t("auth.customer.register.termsOfService")}
                   </Text>

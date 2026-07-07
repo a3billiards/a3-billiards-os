@@ -19,7 +19,7 @@ export function OwnerNoClubPlaceholder() {
           <Pressable
             style={({ pressed }) => [styles.button, pressed && styles.pressed]}
             onPress={() => {
-              void Linking.openURL(ONBOARDING_URL);
+              void Linking.openURL(ONBOARDING_URL).catch(() => {});
             }}
             accessibilityRole="link"
             accessibilityLabel={t("ownerApp.shell.noClub.openOnboarding")}

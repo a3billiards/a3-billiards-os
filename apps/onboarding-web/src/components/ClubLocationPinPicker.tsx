@@ -63,6 +63,7 @@ export function ClubLocationPinPicker({
   }));
   const [mapSize, setMapSize] = useState({ width: 640, height: 360 });
   const [isDragging, setIsDragging] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (focusLat == null || focusLng == null) return;
@@ -187,7 +188,14 @@ export function ClubLocationPinPicker({
   );
 
   const handleUseMyLocation = () => {
-    if (disabled || !navigator.geolocation) return;
+    if (disabled) return;
+    if (!navigator.geolocation) {
+      setLocationError(
+        "Location is not available in this browser. Click the map to place your pin.",
+      );
+      return;
+    }
+    setLocationError(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const next = {
@@ -197,7 +205,11 @@ export function ClubLocationPinPicker({
         setCenter(next);
         onChangeRef.current(next.lat, next.lng);
       },
-      undefined,
+      () => {
+        setLocationError(
+          "Could not get your location. Allow location access or click the map to place your pin.",
+        );
+      },
       { enableHighAccuracy: true, timeout: 10000 },
     );
   };
@@ -274,6 +286,11 @@ export function ClubLocationPinPicker({
       >
         Use my current location
       </button>
+      {locationError ? (
+        <p className="muted club-location-coords" role="alert">
+          {locationError}
+        </p>
+      ) : null}
     </div>
   );
 }

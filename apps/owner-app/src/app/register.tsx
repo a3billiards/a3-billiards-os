@@ -300,7 +300,7 @@ export default function OwnerRegisterScreen() {
                 {t("auth.owner.register.consentPrefix")}{" "}
                 <Text
                   style={styles.consentLink}
-                  onPress={() => Linking.openURL(PRIVACY_URL)}
+                  onPress={() => void Linking.openURL(PRIVACY_URL).catch(() => {})}
                   accessibilityRole="link"
                 >
                   {t("auth.owner.register.privacyPolicy")}
@@ -308,7 +308,7 @@ export default function OwnerRegisterScreen() {
                 {t("auth.owner.register.and")}{" "}
                 <Text
                   style={styles.consentLink}
-                  onPress={() => Linking.openURL(TOS_URL)}
+                  onPress={() => void Linking.openURL(TOS_URL).catch(() => {})}
                   accessibilityRole="link"
                 >
                   {t("auth.owner.register.termsOfService")}

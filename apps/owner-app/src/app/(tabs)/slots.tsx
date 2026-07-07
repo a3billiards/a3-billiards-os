@@ -1215,14 +1215,14 @@ function SlotsScreenContent() {
                     {t("ownerApp.slots.consentDeskPrefix")}{" "}
                     <Text
                       style={styles.linkInline}
-                      onPress={() => void Linking.openURL(TOS_URL)}
+                      onPress={() => void Linking.openURL(TOS_URL).catch(() => {})}
                     >
                       {t("ownerApp.slots.terms")}
                     </Text>{" "}
                     {t("ownerApp.slots.and")}{" "}
                     <Text
                       style={styles.linkInline}
-                      onPress={() => void Linking.openURL(PRIVACY_URL)}
+                      onPress={() => void Linking.openURL(PRIVACY_URL).catch(() => {})}
                     >
                       {t("ownerApp.slots.privacyPolicy")}
                     </Text>

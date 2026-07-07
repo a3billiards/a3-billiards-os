@@ -88,7 +88,7 @@ function FrozenScreen({ renewUrl }: { renewUrl: string }) {
           pressed && frozenStyles.ctaPressed,
         ]}
         onPress={() => {
-          void Linking.openURL(renewUrl);
+          void Linking.openURL(renewUrl).catch(() => {});
         }}
       >
         <Text style={frozenStyles.ctaText}>{t("common.subscription.renew")}</Text>
@@ -107,7 +107,7 @@ function GraceSubscriptionBanner({ renewUrl }: { renewUrl: string }) {
         <Text
           style={graceStyles.link}
           onPress={() => {
-            void Linking.openURL(renewUrl);
+            void Linking.openURL(renewUrl).catch(() => {});
           }}
         >
           {t("common.subscription.graceRenew")}

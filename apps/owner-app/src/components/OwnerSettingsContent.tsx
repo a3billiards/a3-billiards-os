@@ -747,7 +747,7 @@ export default function OwnerSettingsContent({
         <View style={styles.frozenBanner}>
           <Text style={styles.frozenText}>
             {t("ownerApp.settings.subscriptionExpired", { url: RENEW_URL })}{" "}
-            <Text style={styles.link} onPress={() => void Linking.openURL(RENEW_URL)}>
+            <Text style={styles.link} onPress={() => void Linking.openURL(RENEW_URL).catch(() => {})}>
               {RENEW_URL}
             </Text>
           </Text>
