@@ -5,6 +5,8 @@ Keys below use English fallback or German→Dutch provisional text.
 ## ar
 [ar] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
 [ar] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[ar] ownerApp.settings.content.open24h — English fallback (needs translation review)
+[ar] ownerApp.settings.content.open24hHint — English fallback (needs translation review)
 [ar] ownerApp.settings.content.supplyInterstate — English fallback (needs translation review)
 [ar] ownerApp.settings.content.supplyIntrastate — English fallback (needs translation review)
 [ar] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
@@ -27,6 +29,8 @@ Keys below use English fallback or German→Dutch provisional text.
 ## hi
 [hi] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
 [hi] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[hi] ownerApp.settings.content.open24h — English fallback (needs translation review)
+[hi] ownerApp.settings.content.open24hHint — English fallback (needs translation review)
 [hi] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
 [hi] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
 [hi] sharedUi.liveStreamCard.liveBadge — English fallback (needs translation review)
@@ -48,6 +52,8 @@ Keys below use English fallback or German→Dutch provisional text.
 ## kn
 [kn] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
 [kn] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[kn] ownerApp.settings.content.open24h — English fallback (needs translation review)
+[kn] ownerApp.settings.content.open24hHint — English fallback (needs translation review)
 [kn] ownerApp.settings.hhmmStart — English fallback (needs translation review)
 [kn] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
 [kn] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
@@ -70,6 +76,8 @@ Keys below use English fallback or German→Dutch provisional text.
 ## ml
 [ml] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
 [ml] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[ml] ownerApp.settings.content.open24h — English fallback (needs translation review)
+[ml] ownerApp.settings.content.open24hHint — English fallback (needs translation review)
 [ml] ownerApp.settings.hhmmStart — English fallback (needs translation review)
 [ml] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
 [ml] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
@@ -92,6 +100,8 @@ Keys below use English fallback or German→Dutch provisional text.
 ## te
 [te] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
 [te] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[te] ownerApp.settings.content.open24h — English fallback (needs translation review)
+[te] ownerApp.settings.content.open24hHint — English fallback (needs translation review)
 [te] ownerApp.settings.hhmmStart — English fallback (needs translation review)
 [te] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
 [te] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
@@ -114,6 +124,8 @@ Keys below use English fallback or German→Dutch provisional text.
 ## ta
 [ta] ownerApp.loyalty.programmeNamePlaceholder — English fallback (needs translation review)
 [ta] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[ta] ownerApp.settings.content.open24h — English fallback (needs translation review)
+[ta] ownerApp.settings.content.open24hHint — English fallback (needs translation review)
 [ta] ownerApp.settings.hhmmStart — English fallback (needs translation review)
 [ta] ownerApp.settings.timezonePlaceholder — English fallback (needs translation review)
 [ta] sharedUi.bookingCard.paymentDue — English fallback (needs translation review)
@@ -139,6 +151,8 @@ Keys below use English fallback or German→Dutch provisional text.
 [fr] ownerApp.settings.chefRoleName — English fallback (needs translation review)
 [fr] ownerApp.settings.content.descriptionMax — English fallback (needs translation review)
 [fr] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[fr] ownerApp.settings.content.open24h — English fallback (needs translation review)
+[fr] ownerApp.settings.content.open24hHint — English fallback (needs translation review)
 [fr] ownerApp.settings.content.photos — English fallback (needs translation review)
 [fr] ownerApp.settings.content.tableActive — English fallback (needs translation review)
 [fr] ownerApp.settings.passcode.ok — English fallback (needs translation review)
@@ -175,6 +189,8 @@ Keys below use English fallback or German→Dutch provisional text.
 [nl] ownerApp.loyalty.statusLine — English fallback (needs translation review)
 [nl] ownerApp.settings.chefRoleName — English fallback (needs translation review)
 [nl] ownerApp.settings.content.onlinePaymentHint — English fallback (needs translation review)
+[nl] ownerApp.settings.content.open24h — English fallback (needs translation review)
+[nl] ownerApp.settings.content.open24hHint — English fallback (needs translation review)
 [nl] ownerApp.settings.hhmmStart — English fallback (needs translation review)
 [nl] ownerApp.settings.labelField — English fallback (needs translation review)
 [nl] ownerApp.settings.labelPlaceholder — English fallback (needs translation review)

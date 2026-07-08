@@ -64,10 +64,14 @@ export const ownerEn = {
     addItems: "Add Items",
     addTime: "Add time",
     remaining: "{{time}} left",
+    endingSoon: "Ending soon · {{time}} left",
+    timeUp: "Time's up — add time or close the table",
     overtime: "Over by {{time}}",
     extendTitle: "Add play time",
     extendBody: "Extend this session. We'll first check it doesn't clash with an online booking.",
+    extendCurrentEnd: "Currently ends at {{time}}.",
     extendMinutes: "+{{count}} min",
+    extendUntil: "until {{time}}",
     extendConflict:
       "This table is reserved at {{time}}{{name}}. You can add up to {{max}} min, or move this group to a free table.",
     extendConflictNoRoom:

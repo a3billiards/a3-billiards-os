@@ -13,6 +13,7 @@ import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing } from "../theme/spacing";
 import { radius } from "../theme/spacing";
+import { parseConvexError } from "../errors";
 
 export interface PasscodeGateProps {
   /** Called after the 6-digit PIN verifies successfully. */
@@ -49,8 +50,19 @@ export function PasscodeGate({
       setPin("");
       onUnlock();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Invalid passcode.";
-      setError(msg.replace(/^[A-Z0-9_]+:\s*/, ""));
+      // Convex wraps thrown action errors (e.g. "[CONVEX A(...)] ... Uncaught
+      // Error: PASSCODE_001: Invalid passcode"), so a simple prefix strip won't
+      // surface a clean message. parseConvexError finds the code anywhere in the
+      // string and returns the human-readable text from ERROR_CODES.
+      const appError =
+        e instanceof Error
+          ? parseConvexError(e)
+          : { code: "UNKNOWN" as const, message: "Invalid passcode.", retryable: false };
+      setError(
+        appError.code === "PASSCODE_001"
+          ? "Incorrect passcode. Please try again."
+          : appError.message,
+      );
     } finally {
       setLoading(false);
     }

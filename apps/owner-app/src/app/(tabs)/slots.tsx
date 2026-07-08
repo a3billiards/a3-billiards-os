@@ -45,6 +45,8 @@ import { CustomerQrScannerModal } from "../../components/CustomerQrScannerModal"
 const PRIVACY_URL = "https://a3billiards.com/privacy";
 const TOS_URL = "https://a3billiards.com/terms";
 const EXTEND_OPTIONS_MIN = [15, 30, 60] as const;
+// Warn the desk that a table's assigned play time is nearly over.
+const ENDING_SOON_MS = 10 * 60_000;
 
 function SlotsScreenContent() {
   const { t } = useTranslation();
@@ -204,7 +206,9 @@ function SlotsScreenContent() {
   );
   const customerComplaints = useQuery(
     api.complaints.getCustomerActiveComplaints,
-    pendingCustomerId ? { userId: pendingCustomerId } : "skip",
+    pendingCustomerId && clubIdForLookup
+      ? { userId: pendingCustomerId, clubId: clubIdForLookup }
+      : "skip",
   );
   const snackEligibility = useQuery(
     api.snacks.getSessionSnackEligibility,
@@ -622,6 +626,19 @@ function SlotsScreenContent() {
     setShowMovePicker(false);
   }, [extendBusy]);
 
+  // Local clock label (respects club timezone + user locale) for showing the
+  // resulting end time when extending a session.
+  const formatClock = useCallback(
+    (ms: number): string =>
+      new Intl.DateTimeFormat(locale, {
+        timeZone: dashboard?.timezone,
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }).format(new Date(ms)),
+    [locale, dashboard?.timezone],
+  );
+
   const runExtend = useCallback(
     async (addMinutes: number) => {
       if (extendTableId === null || extendingRef.current) return;
@@ -884,6 +901,14 @@ function SlotsScreenContent() {
     (table) => table.currentSessionId !== undefined,
   );
   const activeSessionByTableId = dashboard.activeSessionByTableId ?? {};
+  const extendSessionMeta =
+    extendTableId !== null ? activeSessionByTableId[extendTableId] : undefined;
+  // Extensions are added on top of the later of "now" or the current planned end
+  // (mirrors ownerSessions.extendSession), so the desk sees the real finish time.
+  const extendBaseMs =
+    extendSessionMeta != null
+      ? Math.max(extendSessionMeta.plannedEndTime ?? nowMs, nowMs)
+      : nowMs;
 
   return (
     <View style={styles.screen}>
@@ -1010,17 +1035,30 @@ function SlotsScreenContent() {
                     )}
                     {session?.plannedEndTime != null ? (
                       session.plannedEndTime > nowMs ? (
-                        <Text style={styles.activeCardMeta}>
-                          {t("ownerApp.slots.remaining", {
-                            time: formatElapsed(session.plannedEndTime - nowMs),
-                          })}
-                        </Text>
+                        session.plannedEndTime - nowMs <= ENDING_SOON_MS ? (
+                          <Text style={styles.endingSoonMeta}>
+                            {t("ownerApp.slots.endingSoon", {
+                              time: formatElapsed(session.plannedEndTime - nowMs),
+                            })}
+                          </Text>
+                        ) : (
+                          <Text style={styles.activeCardMeta}>
+                            {t("ownerApp.slots.remaining", {
+                              time: formatElapsed(session.plannedEndTime - nowMs),
+                            })}
+                          </Text>
+                        )
                       ) : (
-                        <Text style={styles.overtimeMeta}>
-                          {t("ownerApp.slots.overtime", {
-                            time: formatElapsed(nowMs - session.plannedEndTime),
-                          })}
-                        </Text>
+                        <View>
+                          <Text style={styles.overtimeMeta}>
+                            {t("ownerApp.slots.overtime", {
+                              time: formatElapsed(nowMs - session.plannedEndTime),
+                            })}
+                          </Text>
+                          <Text style={styles.timeUpMeta}>
+                            {t("ownerApp.slots.timeUp")}
+                          </Text>
+                        </View>
                       )
                     ) : null}
                   </View>
@@ -2105,9 +2143,18 @@ function SlotsScreenContent() {
                         })}
                   </Text>
                 ) : (
-                  <Text style={styles.modalBody}>{t("ownerApp.slots.extendBody")}</Text>
+                  <>
+                    <Text style={styles.modalBody}>{t("ownerApp.slots.extendBody")}</Text>
+                    {extendSessionMeta?.plannedEndTime != null ? (
+                      <Text style={styles.modalHint}>
+                        {t("ownerApp.slots.extendCurrentEnd", {
+                          time: formatClock(extendSessionMeta.plannedEndTime),
+                        })}
+                      </Text>
+                    ) : null}
+                  </>
                 )}
-                <View style={styles.playDurationRow}>
+                <View style={[styles.playDurationRow, { flexWrap: "wrap" }]}>
                   {EXTEND_OPTIONS_MIN.filter(
                     (min) =>
                       !extendConflict ||
@@ -2125,6 +2172,11 @@ function SlotsScreenContent() {
                     >
                       <Text style={styles.playDurationChipText}>
                         {t("ownerApp.slots.extendMinutes", { count: min })}
+                      </Text>
+                      <Text style={styles.extendUntilText}>
+                        {t("ownerApp.slots.extendUntil", {
+                          time: formatClock(extendBaseMs + min * 60_000),
+                        })}
                       </Text>
                     </Pressable>
                   ))}
@@ -2317,6 +2369,17 @@ const styles = StyleSheet.create({
     color: colors.accent.amber,
     marginTop: spacing[0.5],
   },
+  endingSoonMeta: {
+    ...typography.bodySmall,
+    color: colors.accent.amber,
+    fontWeight: "600",
+    marginTop: spacing[0.5],
+  },
+  timeUpMeta: {
+    ...typography.caption,
+    color: colors.accent.amber,
+    marginTop: spacing[0.5],
+  },
   addSnacksBtn: {
     backgroundColor: colors.bg.tertiary,
     borderRadius: radius.md,
@@ -2426,6 +2489,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.default,
     backgroundColor: colors.bg.tertiary,
+    alignItems: "center",
   },
   playDurationChipActive: {
     borderColor: colors.accent.green,
@@ -2433,6 +2497,13 @@ const styles = StyleSheet.create({
   },
   playDurationChipText: { ...typography.caption, color: colors.text.secondary },
   playDurationChipTextActive: { color: colors.accent.green, fontWeight: "600" },
+  extendUntilText: {
+    ...typography.caption,
+    color: colors.text.tertiary,
+    fontSize: 11,
+    marginTop: spacing[0.5],
+    textAlign: "center",
+  },
   walkInLabel: {
     ...typography.caption,
     color: colors.text.secondary,
