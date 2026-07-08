@@ -934,6 +934,18 @@
         "expired": "காலாவதியானது",
         "completed": "முடிந்தது"
       },
+      "checkIn": {
+        "title": "Booking check-in",
+        "scanButton": "Scan check-in QR",
+        "scanHint": "Scan the customer's booking QR or their profile QR to verify and start.",
+        "verifyTitle": "Verify booking",
+        "verifySubtitle": "Confirm this is the customer, then start their session.",
+        "startVerified": "Verify & start session",
+        "notConfirmed": "This booking isn't confirmed yet, so it can't be started.",
+        "outsideWindow": "You can start from 15 minutes before the booked time.",
+        "paymentPending": "Customer hasn't completed online payment yet.",
+        "hasComplaints": "This customer has active complaints — review before starting."
+      },
       "noBookingsYet": "இன்னும் முன்பதிவுகள் இல்லை",
       "enableOnlineBooking": "கோரிக்கைகளைப் பெறத் தொடங்க அமைப்புகளில் ஆன்லைன் முன்பதிவை இயக்கவும்.",
       "noPending": "நிலுவையில் உள்ள முன்பதிவு கோரிக்கைகள் இல்லை",
@@ -1655,6 +1667,8 @@
       },
       "viewClubProfile": "கிளப் சுயவிவரத்தைப் பார்க்கவும் →",
       "bookingInfo": "பதிவு தகவல்",
+      "checkInQrTitle": "Check-in QR",
+      "checkInQrHint": "Show this to the club at check-in to verify your booking and start your session.",
       "tableType": "மேசை வகை",
       "date": "தேதி",
       "time": "நேரம்",

@@ -12,6 +12,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import QRCode from "react-native-qrcode-svg";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
@@ -304,6 +305,21 @@ export default function BookingDetailScreen() {
             <Row label={t("customerApp.bookingDetail.reason")} value={detail.rejectionReason} />
           ) : null}
         </View>
+
+        {detail.status === "confirmed" ? (
+          <View style={styles.qrCard}>
+            <Text style={styles.qrTitle}>{t("customerApp.bookingDetail.checkInQrTitle")}</Text>
+            <Text style={styles.qrHint}>{t("customerApp.bookingDetail.checkInQrHint")}</Text>
+            <View style={styles.qrWrap}>
+              <QRCode
+                value={`a3booking:${detail.bookingId}`}
+                size={190}
+                backgroundColor={colors.bg.secondary}
+                color={colors.text.primary}
+              />
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
@@ -418,6 +434,31 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   infoTitle: { ...typography.heading3, color: colors.text.primary, marginBottom: spacing[2] },
+  qrCard: {
+    borderRadius: glass.cardRadiusSmall,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    backgroundColor: glass.cardBg,
+    padding: spacing[5],
+    gap: spacing[2],
+    alignItems: "center",
+  },
+  qrTitle: {
+    ...typography.heading4,
+    color: colors.text.primary,
+    textAlign: "center",
+  },
+  qrHint: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing[2],
+  },
+  qrWrap: {
+    padding: spacing[3],
+    borderRadius: radius.md,
+    backgroundColor: colors.bg.secondary,
+  },
   row: { flexDirection: "row", justifyContent: "space-between", gap: spacing[3] },
   rowLabel: { ...typography.body, color: colors.text.secondary },
   rowValue: {

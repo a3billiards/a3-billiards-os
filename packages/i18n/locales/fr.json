@@ -934,6 +934,18 @@
         "expired": "Expirées",
         "completed": "Terminées"
       },
+      "checkIn": {
+        "title": "Booking check-in",
+        "scanButton": "Scan check-in QR",
+        "scanHint": "Scan the customer's booking QR or their profile QR to verify and start.",
+        "verifyTitle": "Verify booking",
+        "verifySubtitle": "Confirm this is the customer, then start their session.",
+        "startVerified": "Verify & start session",
+        "notConfirmed": "This booking isn't confirmed yet, so it can't be started.",
+        "outsideWindow": "You can start from 15 minutes before the booked time.",
+        "paymentPending": "Customer hasn't completed online payment yet.",
+        "hasComplaints": "This customer has active complaints — review before starting."
+      },
       "noBookingsYet": "Aucune réservation pour l'instant",
       "enableOnlineBooking": "Activez la réservation en ligne dans les Paramètres pour commencer à recevoir des demandes.",
       "noPending": "Aucune demande de réservation en attente",
@@ -1655,6 +1667,8 @@
       },
       "viewClubProfile": "Voir le profil du club →",
       "bookingInfo": "Informations de réservation",
+      "checkInQrTitle": "Check-in QR",
+      "checkInQrHint": "Show this to the club at check-in to verify your booking and start your session.",
       "tableType": "Type de table",
       "date": "Date",
       "time": "Heure",

@@ -934,6 +934,18 @@
         "expired": "ಅವಧಿ ಮುಗಿದ",
         "completed": "ಪೂರ್ಣಗೊಂಡಿದೆ"
       },
+      "checkIn": {
+        "title": "Booking check-in",
+        "scanButton": "Scan check-in QR",
+        "scanHint": "Scan the customer's booking QR or their profile QR to verify and start.",
+        "verifyTitle": "Verify booking",
+        "verifySubtitle": "Confirm this is the customer, then start their session.",
+        "startVerified": "Verify & start session",
+        "notConfirmed": "This booking isn't confirmed yet, so it can't be started.",
+        "outsideWindow": "You can start from 15 minutes before the booked time.",
+        "paymentPending": "Customer hasn't completed online payment yet.",
+        "hasComplaints": "This customer has active complaints — review before starting."
+      },
       "noBookingsYet": "ಇನ್ನೂ ಯಾವುದೇ ಬುಕಿಂಗ್ ಇಲ್ಲ",
       "enableOnlineBooking": "ವಿನಂತಿಗಳನ್ನು ಸ್ವೀಕರಿಸಲು ಪ್ರಾರಂಭಿಸಲು ಸೆಟ್ಟಿಂಗ್ಸ್‌ನಲ್ಲಿ ಆನ್‌ಲೈನ್ ಬುಕಿಂಗ್ ಸಕ್ರಿಯಗೊಳಿಸಿ.",
       "noPending": "ಯಾವುದೇ ಬಾಕಿ ಬುಕಿಂಗ್ ವಿನಂತಿಗಳಿಲ್ಲ",
@@ -1655,6 +1667,8 @@
       },
       "viewClubProfile": "ಕ್ಲಬ್ ಪ್ರೊಫೈಲ್ ನೋಡಿ →",
       "bookingInfo": "ಬುಕ್ಕಿಂಗ್ ಮಾಹಿತಿ",
+      "checkInQrTitle": "Check-in QR",
+      "checkInQrHint": "Show this to the club at check-in to verify your booking and start your session.",
       "tableType": "ಮೇಜು ಪ್ರಕಾರ",
       "date": "ದಿನಾಂಕ",
       "time": "ಸಮಯ",

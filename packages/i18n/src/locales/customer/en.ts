@@ -491,6 +491,8 @@ export const customerEn = {
     },
     viewClubProfile: "View Club Profile →",
     bookingInfo: "Booking Information",
+    checkInQrTitle: "Check-in QR",
+    checkInQrHint: "Show this to the club at check-in to verify your booking and start your session.",
     tableType: "Table Type",
     date: "Date",
     time: "Time",

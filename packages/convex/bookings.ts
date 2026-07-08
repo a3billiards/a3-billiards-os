@@ -21,6 +21,7 @@ import {
   requireViewer,
 } from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
+import { assertStaffTabAllowed } from "./model/staffTabAccess";
 import {
   addCalendarDaysYmd,
   computeBookingUnixTime,
@@ -30,7 +31,15 @@ import {
   zonedWallTimeToUtcMs,
 } from "@a3/utils/timezone";
 import { validateBookableWithinOperating } from "@a3/utils/availability";
+import { parseGenericE164OrThrow } from "./model/phoneRegistration";
 import { countActiveComplaintsForUser } from "./complaints";
+import {
+  assertIsoDateYmd,
+  assertHhmmTime,
+  assertOptionalTrimmedLength,
+  assertTableTypeLabel,
+  MAX_BOOKING_NOTES_LEN,
+} from "./model/inputValidation";
 
 function normalizeTableType(value: string | undefined): string {
   return (value ?? "").trim().toLowerCase();
@@ -348,14 +357,37 @@ export const submitBooking = mutation({
       throw new Error("AUTH_004: Phone not verified");
     }
 
+    const requestedDate = assertIsoDateYmd(args.requestedDate, "Booking date");
+    const requestedStartTime = assertHhmmTime(
+      args.requestedStartTime,
+      "Start time",
+    );
+    const requestedTypeNormalized = assertTableTypeLabel(args.tableType);
+    const notesTrimmed = assertOptionalTrimmedLength(
+      args.notes,
+      MAX_BOOKING_NOTES_LEN,
+      "Notes",
+    );
+    if (
+      args.couponCode !== undefined &&
+      args.couponCode.trim().length > 0
+    ) {
+      throw new Error("BOOKING_008: Coupon codes are not supported");
+    }
+    if (
+      !Number.isInteger(args.requestedDurationMin) ||
+      args.requestedDurationMin <= 0
+    ) {
+      throw new Error("BOOKING_008: Invalid slot duration");
+    }
+
     const club = await ctx.db.get(args.clubId);
     if (!club) throw new Error("DATA_003: Club not found");
 
     const now = Date.now();
-    const requestedTypeNormalized = normalizeTableType(args.tableType);
     const requestedStartMs = zonedWallTimeToUtcMs(
-      args.requestedDate,
-      args.requestedStartTime,
+      requestedDate,
+      requestedStartTime,
       club.timezone,
     );
     const requestedEndMs =
@@ -390,7 +422,7 @@ export const submitBooking = mutation({
       club.bookingSettings.maxAdvanceDays,
       club.timezone,
     );
-    if (args.requestedDate < todayYmd || args.requestedDate > lastAllowedYmd) {
+    if (requestedDate < todayYmd || requestedDate > lastAllowedYmd) {
       throw new Error("BOOKING_008: Outside bookable window");
     }
 
@@ -400,7 +432,7 @@ export const submitBooking = mutation({
       throw new Error("BOOKING_008: Outside bookable hours");
     }
     const dayOfWeek = dayOfWeekInTimeZone(requestedStartMs, club.timezone);
-    const startMin = parseHHMM(args.requestedStartTime);
+    const startMin = parseHHMM(requestedStartTime);
     const openMin = parseHHMM(bookableHours.open);
     const closeMin = parseHHMM(bookableHours.close);
     const dayAllowed = bookableHours.daysOfWeek.includes(dayOfWeek);
@@ -427,11 +459,6 @@ export const submitBooking = mutation({
       )
     ) {
       throw new Error("BOOKING_008: Invalid slot duration");
-    }
-
-    const notesTrimmed = args.notes?.trim();
-    if (notesTrimmed !== undefined && notesTrimmed.length > 200) {
-      throw new Error("BOOKING_008: Notes too long");
     }
 
     // 8 — BOOKING_001
@@ -526,8 +553,8 @@ export const submitBooking = mutation({
       clubId: args.clubId,
       customerId: customer.userId,
       tableType: requestedTypeNormalized,
-      requestedDate: args.requestedDate,
-      requestedStartTime: args.requestedStartTime,
+      requestedDate,
+      requestedStartTime,
       requestedDurationMin: args.requestedDurationMin,
       status: "pending_approval",
       rejectionReason: undefined,
@@ -563,8 +590,8 @@ export const submitBooking = mutation({
       estimatedCost,
       currency: club.currency,
       notes: notesTrimmed || undefined,
-      requestedDate: args.requestedDate,
-      requestedStartTime: args.requestedStartTime,
+      requestedDate,
+      requestedStartTime,
       requestedDurationMin: args.requestedDurationMin,
       createdAt: nowMs,
       updatedAt: nowMs,
@@ -951,6 +978,7 @@ export const approveBooking = mutation({
     if (!booking || booking.clubId !== owner.clubId) {
       throw new Error("DATA_003: Booking not found");
     }
+    await assertStaffTabAllowed(ctx, booking.clubId, "bookings", args.roleId);
     assertBookingTransition(booking.status, ["pending_approval"]);
 
     const clubDoc = await ctx.db.get(booking.clubId);
@@ -1074,6 +1102,7 @@ export const rejectBooking = mutation({
     if (!booking || booking.clubId !== owner.clubId) {
       throw new Error("DATA_003: Booking not found");
     }
+    await assertStaffTabAllowed(ctx, booking.clubId, "bookings", roleId);
     const club = await ctx.db.get(booking.clubId);
     if (!club) throw new Error("DATA_003: Club not found");
     if (club.subscriptionStatus === "frozen") {
@@ -1256,6 +1285,7 @@ export const clubCancelBooking = mutation({
     if (!booking || booking.clubId !== owner.clubId) {
       throw new Error("DATA_003: Booking not found");
     }
+    await assertStaffTabAllowed(ctx, booking.clubId, "bookings", roleId);
     const club = await ctx.db.get(booking.clubId);
     if (!club) throw new Error("DATA_003: Club not found");
     if (club.subscriptionStatus === "frozen") {
@@ -1317,6 +1347,7 @@ export const startSessionFromBooking = mutation({
     if (!booking || booking.clubId !== owner.clubId) {
       throw new Error("DATA_003: Booking not found");
     }
+    await assertStaffTabAllowed(ctx, booking.clubId, "bookings", roleId);
     assertBookingTransition(booking.status, ["confirmed"]);
 
     const club = await ctx.db.get(booking.clubId);
@@ -1665,6 +1696,134 @@ export const listUpcomingBookings = query({
     );
     const nextCursor = cursor + page.length < sorted.length ? cursor + page.length : null;
     return { items, nextCursor };
+  },
+});
+
+/**
+ * Booking check-in: resolve a scanned/pasted QR payload to the customer's
+ * confirmed booking(s) at THIS club so the owner can verify identity before
+ * starting the session. Read-only — starting the session still goes through
+ * `startSessionFromBooking`, which enforces payment/complaint/time-window gates.
+ *
+ * Accepts two payloads:
+ *  - `a3booking:<bookingId>` — the booking-specific QR shown on the customer's
+ *    confirmed booking screen. Verified to belong to the caller's club.
+ *  - `a3customer:<userId>` or a raw E.164 phone — the customer's profile QR /
+ *    phone. Resolves to that customer's confirmed bookings for today at this club.
+ */
+export const resolveBookingCheckIn = query({
+  args: {
+    clubId: v.id("clubs"),
+    payload: v.string(),
+  },
+  handler: async (ctx, { clubId, payload }) => {
+    const owner = requireOwner(await requireViewer(ctx));
+    if (owner.clubId !== clubId) throw new Error("PERM_001: Owner only");
+    const club = await ctx.db.get(clubId);
+    if (!club) throw new Error("DATA_003: Club not found");
+
+    const buildMatch = async (b: Doc<"bookings">) => {
+      const user = await ctx.db.get(b.customerId);
+      const tableId = b.confirmedTableId ?? b.requestedTableId;
+      const table = tableId ? await ctx.db.get(tableId) : null;
+      const complaintDocs = await Promise.all(
+        (user?.complaints ?? []).map((id) => ctx.db.get(id)),
+      );
+      const complaints = complaintDocs
+        .filter((c): c is NonNullable<typeof c> => c !== null && c.removedAt === undefined)
+        .map((c) => c.type);
+      return {
+        bookingId: b._id,
+        customerId: b.customerId,
+        customerName: user?.name ?? "Unknown",
+        customerPhone: user?.phone ?? null,
+        tableType: b.tableType,
+        requestedDate: b.requestedDate,
+        requestedStartTime: b.requestedStartTime,
+        requestedDurationMin: b.requestedDurationMin,
+        confirmedTableId: b.confirmedTableId ?? undefined,
+        confirmedTableLabel: table?.label ?? null,
+        status: b.status,
+        onlinePaymentStatus: b.onlinePaymentStatus ?? null,
+        estimatedCost: b.estimatedCost,
+        currency: b.currency,
+        complaints,
+      };
+    };
+
+    const trimmed = payload.trim();
+
+    // Booking-specific QR → the exact booking (any status; UI gates "start").
+    const bookingPrefix = "a3booking:";
+    if (trimmed.startsWith(bookingPrefix)) {
+      const id = trimmed.slice(bookingPrefix.length).trim() as Id<"bookings">;
+      let booking: Doc<"bookings"> | null = null;
+      try {
+        booking = await ctx.db.get(id);
+      } catch {
+        booking = null;
+      }
+      if (!booking || booking.clubId !== clubId) {
+        return { ok: false as const, message: "This booking QR isn't for your club." };
+      }
+      return { ok: true as const, matches: [await buildMatch(booking)] };
+    }
+
+    // Otherwise resolve the customer (profile QR or phone), then their bookings.
+    let customerId: Id<"users"> | null = null;
+    const customerPrefix = "a3customer:";
+    if (trimmed.startsWith(customerPrefix)) {
+      const uid = trimmed.slice(customerPrefix.length).trim() as Id<"users">;
+      let user: Doc<"users"> | null = null;
+      try {
+        user = await ctx.db.get(uid);
+      } catch {
+        user = null;
+      }
+      if (!user || user.role !== "customer" || !user.phoneVerified) {
+        return { ok: false as const, message: "Invalid customer QR code." };
+      }
+      customerId = user._id;
+    } else {
+      try {
+        const normalized = parseGenericE164OrThrow(trimmed);
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_phone", (q) => q.eq("phone", normalized))
+          .first();
+        if (!user || user.role !== "customer" || !user.phoneVerified) {
+          return { ok: false as const, message: "No verified customer for this QR." };
+        }
+        customerId = user._id;
+      } catch {
+        return { ok: false as const, message: "Unrecognized QR code." };
+      }
+    }
+
+    const today = dateYmdInTimeZone(Date.now(), club.timezone);
+    const confirmed = (
+      await ctx.db
+        .query("bookings")
+        .withIndex("by_status", (q) =>
+          q.eq("clubId", clubId).eq("status", "confirmed"),
+        )
+        .collect()
+    ).filter((b) => b.customerId === customerId && b.requestedDate >= today);
+
+    if (confirmed.length === 0) {
+      return {
+        ok: false as const,
+        message: "No confirmed booking found for this customer.",
+      };
+    }
+
+    const sorted = confirmed.sort((a, b) =>
+      a.requestedDate === b.requestedDate
+        ? a.requestedStartTime.localeCompare(b.requestedStartTime)
+        : a.requestedDate.localeCompare(b.requestedDate),
+    );
+    const matches = await Promise.all(sorted.map(buildMatch));
+    return { ok: true as const, matches };
   },
 });
 

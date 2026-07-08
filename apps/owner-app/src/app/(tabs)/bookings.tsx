@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -26,9 +26,36 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../../lib/StaffRoleContext";
 import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
 import { TabAccessDenied } from "../../components/TabAccessDenied";
+import { CustomerQrScannerModal } from "../../components/CustomerQrScannerModal";
 import { ownerTabBarTotalInset } from "../../theme/ownerShell";
 
 type Segment = "pending" | "upcoming" | "history";
+
+type CheckInMatch = {
+  bookingId: Id<"bookings">;
+  customerId: Id<"users">;
+  customerName: string;
+  customerPhone: string | null;
+  tableType: string;
+  requestedDate: string;
+  requestedStartTime: string;
+  requestedDurationMin: number;
+  confirmedTableId: Id<"tables"> | undefined;
+  confirmedTableLabel: string | null;
+  status: string;
+  onlinePaymentStatus: string | null;
+  estimatedCost: number | undefined;
+  currency: string;
+  complaints: string[];
+};
+
+function to12h(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map((x) => Number(x));
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
 
 const FIGMA_BOOKINGS = {
   segmentRadius: 24,
@@ -118,7 +145,9 @@ function BookingsTabContent() {
 
   const complaintGateDetails = useQuery(
     api.complaints.getCustomerActiveComplaints,
-    complaintGateBooking ? { userId: complaintGateBooking.customerId } : "skip",
+    complaintGateBooking && clubId
+      ? { userId: complaintGateBooking.customerId, clubId }
+      : "skip",
   );
 
   const complaintBannerRows = useMemo(() => {
@@ -154,6 +183,64 @@ function BookingsTabContent() {
   const rejectBooking = useMutation(api.bookings.rejectBooking);
   const cancelByClub = useMutation(api.bookings.clubCancelBooking);
   const startSession = useMutation(api.bookings.startSessionFromBooking);
+
+  // Booking check-in QR: scan a customer's booking QR or profile QR, verify it
+  // resolves to a confirmed booking at this club, then start via startSession.
+  const [showCheckInScanner, setShowCheckInScanner] = useState(false);
+  const [checkInQuery, setCheckInQuery] = useState<string | null>(null);
+  const [checkInLoading, setCheckInLoading] = useState(false);
+  const [checkInMatches, setCheckInMatches] = useState<CheckInMatch[] | null>(null);
+
+  const checkInResolve = useQuery(
+    api.bookings.resolveBookingCheckIn,
+    clubId && checkInQuery ? { clubId, payload: checkInQuery } : "skip",
+  );
+
+  useEffect(() => {
+    if (!checkInQuery || checkInResolve === undefined) return;
+    setCheckInLoading(false);
+    setCheckInQuery(null);
+    if (checkInResolve.ok) {
+      setCheckInMatches(checkInResolve.matches as CheckInMatch[]);
+    } else {
+      Alert.alert(
+        t("ownerApp.bookings.checkIn.title"),
+        checkInResolve.message,
+      );
+    }
+  }, [checkInResolve, checkInQuery, t]);
+
+  const startFromMatch = (m: CheckInMatch) => {
+    if (m.status !== "confirmed") {
+      Alert.alert(t("ownerApp.bookings.checkIn.title"), t("ownerApp.bookings.checkIn.notConfirmed"));
+      return;
+    }
+    setCheckInMatches(null);
+    if ((m.complaints?.length ?? 0) > 0) {
+      setComplaintGateBooking({
+        bookingId: m.bookingId,
+        customerId: m.customerId,
+        customerName: m.customerName,
+        confirmedTableId: m.confirmedTableId,
+      });
+      return;
+    }
+    void (async () => {
+      try {
+        setInFlight(m.bookingId);
+        await startSession({
+          bookingId: m.bookingId,
+          tableId: m.confirmedTableId,
+          roleId: queryRoleId,
+        });
+        Alert.alert(t("ownerApp.bookings.success"), t("ownerApp.bookings.startSuccess"));
+      } catch (e) {
+        Alert.alert(t("ownerApp.bookings.startFailed"), parseConvexError(e as Error).message);
+      } finally {
+        setInFlight(null);
+      }
+    })();
+  };
 
   const clubTimezone = dashboard?.timezone ?? "Asia/Kolkata";
   const timezone = dashboard ? timeZoneAbbreviation(clubTimezone) : "";
@@ -430,6 +517,22 @@ function BookingsTabContent() {
         ))}
       </View>
 
+      {segment === "upcoming" ? (
+        <View style={styles.checkInBar}>
+          <Pressable
+            style={styles.checkInScanBtn}
+            onPress={() => setShowCheckInScanner(true)}
+          >
+            <Text style={styles.checkInScanBtnText}>
+              {t("ownerApp.bookings.checkIn.scanButton")}
+            </Text>
+          </Pressable>
+          <Text style={styles.checkInBarHint}>
+            {t("ownerApp.bookings.checkIn.scanHint")}
+          </Text>
+        </View>
+      ) : null}
+
       {segment === "history" ? (
         <View style={styles.historyFilters}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -580,6 +683,80 @@ function BookingsTabContent() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={checkInMatches !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t("ownerApp.bookings.checkIn.verifyTitle")}</Text>
+            <Text style={styles.checkInSubtitle}>{t("ownerApp.bookings.checkIn.verifySubtitle")}</Text>
+            <ScrollView style={{ maxHeight: 380 }}>
+              {(checkInMatches ?? []).map((m) => {
+                const startable = m.status === "confirmed";
+                const inWindow = canStartNow(m, clubTimezone);
+                const needsPay =
+                  (m.estimatedCost ?? 0) > 0 && m.onlinePaymentStatus !== "paid";
+                const canStart = startable && inWindow && !needsPay;
+                return (
+                  <View key={m.bookingId} style={styles.checkInMatch}>
+                    <Text style={styles.checkInName}>{m.customerName}</Text>
+                    {m.customerPhone ? (
+                      <Text style={styles.checkInMeta}>{m.customerPhone}</Text>
+                    ) : null}
+                    <Text style={styles.checkInMeta}>
+                      {m.tableType} · {to12h(m.requestedStartTime)} · {m.requestedDate}
+                    </Text>
+                    <Text style={styles.checkInMeta}>
+                      {m.confirmedTableLabel ?? t("ownerApp.bookings.tableToAssign")}
+                    </Text>
+                    {!startable ? (
+                      <Text style={styles.checkInWarn}>{t("ownerApp.bookings.checkIn.notConfirmed")}</Text>
+                    ) : needsPay ? (
+                      <Text style={styles.checkInWarn}>{t("ownerApp.bookings.checkIn.paymentPending")}</Text>
+                    ) : !inWindow ? (
+                      <Text style={styles.checkInWarn}>{t("ownerApp.bookings.checkIn.outsideWindow")}</Text>
+                    ) : null}
+                    {m.complaints.length > 0 ? (
+                      <Text style={styles.checkInWarn}>{t("ownerApp.bookings.checkIn.hasComplaints")}</Text>
+                    ) : null}
+                    <Pressable
+                      style={[
+                        styles.primaryBtn,
+                        (!canStart || inFlight === m.bookingId) && { opacity: 0.5 },
+                      ]}
+                      disabled={!canStart || inFlight === m.bookingId}
+                      onPress={() => startFromMatch(m)}
+                    >
+                      <Text style={styles.primaryBtnText}>
+                        {t("ownerApp.bookings.checkIn.startVerified")}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <Pressable style={styles.secondaryBtn} onPress={() => setCheckInMatches(null)}>
+              <Text style={styles.secondaryBtnText}>{t("common.close")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={checkInLoading} transparent animationType="fade">
+        <View style={[styles.modalBackdrop, styles.complaintGateBackdrop]}>
+          <ActivityIndicator size="large" color={glass.ctaBg} />
+        </View>
+      </Modal>
+
+      <CustomerQrScannerModal
+        visible={showCheckInScanner}
+        onClose={() => setShowCheckInScanner(false)}
+        onScan={(payload) => {
+          const trimmed = payload.trim();
+          if (!trimmed) return;
+          setCheckInLoading(true);
+          setCheckInQuery(trimmed);
+        }}
+      />
     </View>
     </GlassPageBackground>
   );
@@ -758,6 +935,40 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: I18nManager.isRTL ? "left" : "right",
   },
+  checkInBar: {
+    paddingHorizontal: SCREEN_PAD,
+    marginBottom: spacing[3],
+    gap: spacing[1],
+  },
+  checkInScanBtn: {
+    minHeight: layout.touchTarget,
+    borderRadius: radius.md,
+    backgroundColor: glass.ctaBg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkInScanBtnText: { ...typography.button, color: glass.ctaText ?? "#000000" },
+  checkInBarHint: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  checkInSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
+  },
+  checkInMatch: {
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: spacing[3],
+    marginBottom: spacing[2],
+    gap: spacing[1],
+  },
+  checkInName: { ...typography.heading4, color: colors.text.primary },
+  checkInMeta: { ...typography.bodySmall, color: colors.text.secondary },
+  checkInWarn: { ...typography.caption, color: colors.accent.amber },
 });
 
 export default function BookingsTab() {

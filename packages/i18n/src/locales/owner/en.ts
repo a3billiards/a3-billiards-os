@@ -629,6 +629,18 @@ export const ownerEn = {
       expired: "Expired",
       completed: "Completed",
     },
+    checkIn: {
+      title: "Booking check-in",
+      scanButton: "Scan check-in QR",
+      scanHint: "Scan the customer's booking QR or their profile QR to verify and start.",
+      verifyTitle: "Verify booking",
+      verifySubtitle: "Confirm this is the customer, then start their session.",
+      startVerified: "Verify & start session",
+      notConfirmed: "This booking isn't confirmed yet, so it can't be started.",
+      outsideWindow: "You can start from 15 minutes before the booked time.",
+      paymentPending: "Customer hasn't completed online payment yet.",
+      hasComplaints: "This customer has active complaints — review before starting.",
+    },
   },
   snacks: {
     loading: "Loading snack menu...",

@@ -934,6 +934,18 @@
         "expired": "منتهية",
         "completed": "مكتملة"
       },
+      "checkIn": {
+        "title": "Booking check-in",
+        "scanButton": "Scan check-in QR",
+        "scanHint": "Scan the customer's booking QR or their profile QR to verify and start.",
+        "verifyTitle": "Verify booking",
+        "verifySubtitle": "Confirm this is the customer, then start their session.",
+        "startVerified": "Verify & start session",
+        "notConfirmed": "This booking isn't confirmed yet, so it can't be started.",
+        "outsideWindow": "You can start from 15 minutes before the booked time.",
+        "paymentPending": "Customer hasn't completed online payment yet.",
+        "hasComplaints": "This customer has active complaints — review before starting."
+      },
       "noBookingsYet": "لا توجد حجوزات بعد",
       "enableOnlineBooking": "فعّل الحجز عبر الإنترنت في الإعدادات لبدء تلقي الطلبات.",
       "noPending": "لا توجد طلبات حجز معلّقة",
@@ -1655,6 +1667,8 @@
       },
       "viewClubProfile": "عرض ملف النادي →",
       "bookingInfo": "معلومات الحجز",
+      "checkInQrTitle": "Check-in QR",
+      "checkInQrHint": "Show this to the club at check-in to verify your booking and start your session.",
       "tableType": "نوع الطاولة",
       "date": "التاريخ",
       "time": "الوقت",
