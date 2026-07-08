@@ -69,6 +69,23 @@ export function isSimpleSameDayHoursWindow(open: string, close: string): boolean
   return hhmmToMinutes(close) >= hhmmToMinutes(open);
 }
 
+/** Open == close is the canonical "open 24 hours" window (full day, every selected day). */
+export function isTwentyFourHourWindow(open: string, close: string): boolean {
+  return hhmmToMinutes(open) === hhmmToMinutes(close);
+}
+
+/**
+ * A close time only a little BEFORE the open time (overnight with a tiny closed gap)
+ * is almost always an AM/PM typo — a real 24h club should use the 24-hour option.
+ */
+export const MIN_OVERNIGHT_CLOSED_GAP_MIN = 120;
+
+export function isSuspiciousOvernightWindow(open: string, close: string): boolean {
+  const o = hhmmToMinutes(open);
+  const c = hhmmToMinutes(close);
+  return o > c && o - c < MIN_OVERNIGHT_CLOSED_GAP_MIN;
+}
+
 const DAY_LABELS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 function formatDaysList(days: number[]): string {
@@ -94,6 +111,19 @@ export function validateBookableWithinOperating(
         message: `Bookable days must be a subset of operating days. ${DAY_LABELS_SHORT[d] ?? d} is not in your operating schedule (${formatDaysList(operating.daysOfWeek)}).`,
       };
     }
+  }
+  const operating24h = isTwentyFourHourWindow(operating.open, operating.close);
+  const bookable24h = isTwentyFourHourWindow(bookable.open, bookable.close);
+  if (operating24h) {
+    // A 24h club can offer any bookable window (day subset already validated above).
+    return { ok: true };
+  }
+  if (bookable24h) {
+    return {
+      ok: false,
+      message:
+        "Bookable hours can't be 24 hours unless operating hours are set to Open 24 hours.",
+    };
   }
   if (
     isSimpleSameDayHoursWindow(operating.open, operating.close) &&
@@ -121,7 +151,11 @@ export function withinBookableWallClock(
   closeMin: number,
 ): boolean {
   const endMin = startMin + durationMin;
-  if (openMin <= closeMin) {
+  if (openMin === closeMin) {
+    // Open 24 hours: any start within the day is bookable (end may spill into next day).
+    return startMin >= 0 && startMin < 1440;
+  }
+  if (openMin < closeMin) {
     return startMin >= openMin && endMin <= closeMin;
   }
   if (startMin >= openMin) {
@@ -141,7 +175,14 @@ export function enumerateBookableSlotStarts(
   step = 30,
 ): number[] {
   const out: number[] = [];
-  if (openMin <= closeMin) {
+  if (openMin === closeMin) {
+    // Open 24 hours: slots span the whole day.
+    for (let t = 0; t < 1440; t += step) {
+      out.push(t);
+    }
+    return out;
+  }
+  if (openMin < closeMin) {
     for (let t = openMin; t + durationMin <= closeMin; t += step) {
       out.push(t);
     }

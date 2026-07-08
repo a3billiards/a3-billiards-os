@@ -109,6 +109,7 @@ export const getSlotDashboard = query({
       losersPay: boolean;
       assignedPlayDurationMin: number | null;
       assignedPlayOpenEnded: boolean;
+      plannedEndTime: number | null;
     };
 
     const activeSessionByTableId: Record<string, ActiveSessionMeta> = {};
@@ -147,6 +148,7 @@ export const getSlotDashboard = query({
         losersPay: s.losersPay === true,
         assignedPlayDurationMin: s.assignedPlayDurationMin ?? null,
         assignedPlayOpenEnded: s.assignedPlayOpenEnded === true,
+        plannedEndTime: s.plannedEndTime ?? null,
       };
     }
 

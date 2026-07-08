@@ -907,23 +907,49 @@ export default function OwnerSettingsContent({
               </Pressable>
 
               <Text style={styles.label}>{t("ownerApp.settings.content.operatingHours")}</Text>
-              <View style={styles.rowInput}>
-                <HhMmTimeField
-                  label={t("ownerApp.settings.content.opens")}
-                  value={openTime}
-                  onChange={(t) => setOpenTime(normalizeHhmmInput(t))}
+              <View style={styles.rowBetween}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>
+                    {t("ownerApp.settings.content.open24h")}
+                  </Text>
+                  <Text style={styles.tableMeta}>
+                    {t("ownerApp.settings.content.open24hHint")}
+                  </Text>
+                </View>
+                <Switch
+                  value={openTime === closeTime}
                   disabled={frozen}
-                />
-                <Text style={{ color: colors.text.secondary, alignSelf: "flex-end", paddingBottom: spacing[3] }}>
-                  {t("ownerApp.settings.content.timeTo")}
-                </Text>
-                <HhMmTimeField
-                  label={t("ownerApp.settings.content.closes")}
-                  value={closeTime}
-                  onChange={(t) => setCloseTime(normalizeHhmmInput(t))}
-                  disabled={frozen}
+                  onValueChange={(on) => {
+                    if (on) {
+                      setOpenTime("00:00");
+                      setCloseTime("00:00");
+                    } else {
+                      setOpenTime("09:00");
+                      setCloseTime("23:00");
+                    }
+                  }}
+                  trackColor={{ false: colors.bg.tertiary, true: colors.accent.green }}
                 />
               </View>
+              {openTime !== closeTime ? (
+                <View style={styles.rowInput}>
+                  <HhMmTimeField
+                    label={t("ownerApp.settings.content.opens")}
+                    value={openTime}
+                    onChange={(t) => setOpenTime(normalizeHhmmInput(t))}
+                    disabled={frozen}
+                  />
+                  <Text style={{ color: colors.text.secondary, alignSelf: "flex-end", paddingBottom: spacing[3] }}>
+                    {t("ownerApp.settings.content.timeTo")}
+                  </Text>
+                  <HhMmTimeField
+                    label={t("ownerApp.settings.content.closes")}
+                    value={closeTime}
+                    onChange={(t) => setCloseTime(normalizeHhmmInput(t))}
+                    disabled={frozen}
+                  />
+                </View>
+              ) : null}
               <View style={styles.chipWrap}>
                 {[1, 2, 3, 4, 5, 6, 0].map((d) => (
                   <Pressable

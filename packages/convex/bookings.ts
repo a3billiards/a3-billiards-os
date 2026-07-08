@@ -60,7 +60,7 @@ function formatHHMM(min: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/** Bookable wall clock in club TZ; supports overnight windows (open > close). */
+/** Bookable wall clock in club TZ; supports overnight windows (open > close) and 24h (open == close). */
 function withinBookableWallClock(
   startMin: number,
   durationMin: number,
@@ -68,7 +68,11 @@ function withinBookableWallClock(
   closeMin: number,
 ): boolean {
   const endMin = startMin + durationMin;
-  if (openMin <= closeMin) {
+  if (openMin === closeMin) {
+    // Open 24 hours: any start within the day is bookable.
+    return startMin >= 0 && startMin < 1440;
+  }
+  if (openMin < closeMin) {
     return startMin >= openMin && endMin <= closeMin;
   }
   if (startMin >= openMin) {
@@ -87,7 +91,14 @@ function enumerateSlotStartMinutes(
   step: number,
 ): number[] {
   const out: number[] = [];
-  if (openMin <= closeMin) {
+  if (openMin === closeMin) {
+    // Open 24 hours: slots span the whole day.
+    for (let t = 0; t < 1440; t += step) {
+      out.push(t);
+    }
+    return out;
+  }
+  if (openMin < closeMin) {
     for (let t = openMin; t + durationMin <= closeMin; t += step) {
       out.push(t);
     }
@@ -164,9 +175,21 @@ async function loadActiveSessionWindowsForTables(
     if (table.currentSessionId === undefined) continue;
     const session = await ctx.db.get(table.currentSessionId);
     if (!session || session.status !== "active") continue;
+    // A timed session holds the table only until its planned end. If a guest overstays,
+    // keep holding until "now" so the physically-occupied table isn't offered right now,
+    // while still freeing distant future slots for online bookings. Legacy/open-ended
+    // sessions (no plannedEndTime) fall back to blocking the whole day.
+    let endMs: number;
+    if (session.endTime !== undefined) {
+      endMs = session.endTime;
+    } else if (session.plannedEndTime !== undefined) {
+      endMs = Math.max(session.plannedEndTime, Date.now());
+    } else {
+      endMs = Number.POSITIVE_INFINITY;
+    }
     map.set(table._id, {
       startMs: session.startTime,
-      endMs: session.endTime ?? Number.POSITIVE_INFINITY,
+      endMs,
     });
   }
   return map;
@@ -1358,6 +1381,11 @@ export const startSessionFromBooking = mutation({
       booking.tableType,
     );
 
+    const bookingSessionDurationMin = Math.max(
+      1,
+      booking.confirmedDurationMin ?? booking.requestedDurationMin,
+    );
+
     const sessionId = await ctx.db.insert("sessions", {
       tableId: targetTableId,
       clubId: booking.clubId,
@@ -1378,7 +1406,10 @@ export const startSessionFromBooking = mutation({
       paymentStatus: "pending",
       status: "active",
       cancellationReason: undefined,
-      timerAlertMinutes: undefined,
+      assignedPlayDurationMin: bookingSessionDurationMin,
+      // Booking-started session holds the table only for the booked duration.
+      plannedEndTime: now + bookingSessionDurationMin * 60_000,
+      timerAlertMinutes: bookingSessionDurationMin,
       timerAlertFiredAt: undefined,
       creditResolvedAt: undefined,
       creditResolvedMethod: undefined,
@@ -1750,6 +1781,14 @@ function assertBookableHoursShape(h: {
 }): void {
   if (!/^\d{2}:\d{2}$/.test(h.open) || !/^\d{2}:\d{2}$/.test(h.close)) {
     throw new Error("DATA_002: Bookable hours must use HH:MM");
+  }
+  const openMin = hhmmToMinutes(h.open);
+  const closeMin = hhmmToMinutes(h.close);
+  // open == close is a valid 24h window; a close only minutes before open is a typo.
+  if (openMin > closeMin && openMin - closeMin < 120) {
+    throw new Error(
+      "DATA_002: Close time is only minutes before open time. For a 24/7 window set open and close to the same time; otherwise check AM/PM.",
+    );
   }
   if (h.daysOfWeek.length === 0) {
     throw new Error("DATA_002: Select at least one day for bookable hours");

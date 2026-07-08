@@ -5,7 +5,7 @@
  */
 
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireOwnerWithClub, requireViewer } from "./model/viewer";
@@ -14,6 +14,8 @@ import { computeBookingUnixTime, dateYmdInTimeZone } from "@a3/utils/timezone";
 import { countActiveComplaintsForUser } from "./complaints";
 import { computeBill, clampDiscountPercent } from "@a3/utils/billing";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
+import { bookingWindowMs } from "./model/bookingDuration";
+import { normalizeTableTypeId } from "@a3/utils/tableTypes";
 
 const sessionParticipantSideArg = v.union(
   v.literal("sideA"),
@@ -537,6 +539,12 @@ export const startWalkInSession = mutation({
       cancellationReason: undefined,
       assignedPlayDurationMin: playOpenEnded ? undefined : playDurationMin,
       assignedPlayOpenEnded: playOpenEnded ? true : undefined,
+      // Scheduling hold so future online slots free up once the assigned time passes.
+      // Open-ended sessions keep the table held until checkout (undefined here).
+      plannedEndTime:
+        playOpenEnded || playDurationMin === undefined
+          ? undefined
+          : now + playDurationMin * 60_000,
       timerAlertMinutes: playOpenEnded ? undefined : playDurationMin,
       timerAlertFiredAt: undefined,
       creditResolvedAt: undefined,
@@ -899,5 +907,213 @@ export const checkoutTableSession = mutation({
       currency: session.currency,
       paymentStatus,
     };
+  },
+});
+
+/**
+ * Earliest confirmed/pending online booking on `table` that overlaps [windowStartMs, windowEndMs).
+ * Checks each calendar day the window touches (handles windows crossing midnight).
+ */
+async function findEarliestBookingConflictOnTable(
+  ctx: MutationCtx,
+  club: Doc<"clubs">,
+  table: Doc<"tables">,
+  windowStartMs: number,
+  windowEndMs: number,
+): Promise<{ startMs: number; customerName: string } | null> {
+  const tz = club.timezone;
+  const dates = new Set<string>([
+    dateYmdInTimeZone(windowStartMs, tz),
+    dateYmdInTimeZone(windowEndMs, tz),
+  ]);
+  let earliest: { startMs: number; customerName: string } | null = null;
+  for (const ymd of dates) {
+    const dayBookings = await ctx.db
+      .query("bookings")
+      .withIndex("by_club_date", (q) =>
+        q.eq("clubId", club._id).eq("requestedDate", ymd),
+      )
+      .collect();
+    for (const b of dayBookings) {
+      if (b.status !== "confirmed" && b.status !== "pending_approval") continue;
+      if (!bookingAppliesToTable(b, table)) continue;
+      const { startMs, endMs } = bookingWindowMs(b, tz, club.minBillMinutes);
+      const overlaps = windowStartMs < endMs && startMs < windowEndMs;
+      if (!overlaps) continue;
+      if (earliest === null || startMs < earliest.startMs) {
+        const customer = await ctx.db.get(b.customerId);
+        earliest = { startMs, customerName: customer?.name ?? "Customer" };
+      }
+    }
+  }
+  return earliest;
+}
+
+/**
+ * Add play time to the active session on a table.
+ * Rejects (without changing anything) if the added time collides with an online booking,
+ * returning how much time is free so the desk can add less or move the group.
+ */
+export const extendSession = mutation({
+  args: {
+    tableId: v.id("tables"),
+    addMinutes: v.number(),
+    roleId: v.optional(v.id("staffRoles")),
+  },
+  handler: async (ctx, { tableId, addMinutes, roleId }) => {
+    const viewer = await requireViewer(ctx);
+    const owner = requireOwnerWithClub(viewer);
+    const club = await ctx.db.get(owner.clubId);
+    if (!club) throw new Error("DATA_003: Club not found");
+    assertClubSubscriptionWritable(club);
+    await assertSlotsTabPermission(ctx, owner.clubId, roleId);
+
+    if (!Number.isFinite(addMinutes) || addMinutes <= 0 || addMinutes > 600) {
+      throw new Error("DATA_002: Choose between 1 and 600 minutes to add");
+    }
+
+    const table = await ctx.db.get(tableId);
+    if (!table || table.clubId !== owner.clubId) {
+      throw new Error("DATA_003: Table not found");
+    }
+    if (table.currentSessionId === undefined) {
+      throw new Error("SESSION_004: No active session on this table");
+    }
+    const session = await ctx.db.get(table.currentSessionId);
+    if (!session || session.clubId !== owner.clubId || session.status !== "active") {
+      throw new Error("SESSION_004: Session is not active");
+    }
+
+    const now = Date.now();
+    // Anchor the extension at the later of "now" and the current planned end so an
+    // overstaying guest's added time starts from now, not from a past planned end.
+    const base = Math.max(session.plannedEndTime ?? now, now);
+    const newEnd = base + addMinutes * 60_000;
+
+    const conflict = await findEarliestBookingConflictOnTable(
+      ctx,
+      club,
+      table,
+      base,
+      newEnd,
+    );
+    if (conflict) {
+      const maxMs = conflict.startMs - base;
+      return {
+        ok: false as const,
+        reason: "RESERVED" as const,
+        conflictStartMs: conflict.startMs,
+        conflictCustomerName: conflict.customerName,
+        maxExtendMinutes: Math.max(0, Math.floor(maxMs / 60_000)),
+      };
+    }
+
+    const newDurationMin = Math.max(
+      1,
+      Math.ceil((newEnd - session.startTime) / 60_000),
+    );
+    await ctx.db.patch(session._id, {
+      plannedEndTime: newEnd,
+      assignedPlayDurationMin: newDurationMin,
+      assignedPlayOpenEnded: undefined,
+      timerAlertMinutes: newDurationMin,
+      timerAlertFiredAt: undefined,
+      updatedAt: now,
+    });
+
+    return { ok: true as const, newPlannedEndTime: newEnd };
+  },
+});
+
+/**
+ * Move the active session from one table to a free table of the same type.
+ * Validates the target is free (no live session) and has no online booking clashing
+ * with the remaining planned window. Billing/rate are locked on the session and unchanged.
+ */
+export const moveSession = mutation({
+  args: {
+    fromTableId: v.id("tables"),
+    toTableId: v.id("tables"),
+    roleId: v.optional(v.id("staffRoles")),
+  },
+  handler: async (ctx, { fromTableId, toTableId, roleId }) => {
+    const viewer = await requireViewer(ctx);
+    const owner = requireOwnerWithClub(viewer);
+    const club = await ctx.db.get(owner.clubId);
+    if (!club) throw new Error("DATA_003: Club not found");
+    assertClubSubscriptionWritable(club);
+    await assertSlotsTabPermission(ctx, owner.clubId, roleId);
+
+    if (fromTableId === toTableId) {
+      throw new Error("DATA_001: Pick a different table to move to");
+    }
+
+    const fromTable = await ctx.db.get(fromTableId);
+    if (!fromTable || fromTable.clubId !== owner.clubId) {
+      throw new Error("DATA_003: Table not found");
+    }
+    if (fromTable.currentSessionId === undefined) {
+      throw new Error("SESSION_004: No active session on this table");
+    }
+    const session = await ctx.db.get(fromTable.currentSessionId);
+    if (!session || session.clubId !== owner.clubId || session.status !== "active") {
+      throw new Error("SESSION_004: Session is not active");
+    }
+
+    const toTable = await ctx.db.get(toTableId);
+    if (!toTable || toTable.clubId !== owner.clubId) {
+      throw new Error("DATA_003: Target table not found");
+    }
+    if (!toTable.isActive) {
+      throw new Error("SESSION_003: Target table is inactive");
+    }
+    if (toTable.currentSessionId !== undefined) {
+      throw new Error("SESSION_001: Target table is already occupied");
+    }
+    if (
+      normalizeTableTypeId(toTable.tableType ?? "") !==
+      normalizeTableTypeId(fromTable.tableType ?? "")
+    ) {
+      throw new Error("SESSION_007: Move to a table of the same type");
+    }
+
+    const now = Date.now();
+    const windowEnd = Math.max(
+      session.plannedEndTime ?? now + club.minBillMinutes * 60_000,
+      now + 1,
+    );
+    const conflict = await findEarliestBookingConflictOnTable(
+      ctx,
+      club,
+      toTable,
+      now,
+      windowEnd,
+    );
+    if (conflict) {
+      return {
+        ok: false as const,
+        reason: "RESERVED" as const,
+        conflictStartMs: conflict.startMs,
+        conflictCustomerName: conflict.customerName,
+      };
+    }
+
+    await ctx.db.patch(session._id, { tableId: toTableId, updatedAt: now });
+    await ctx.db.patch(fromTableId, {
+      currentSessionId: undefined,
+      tableLock: undefined,
+      tableLockExpiry: undefined,
+    });
+    await ctx.db.patch(toTableId, { currentSessionId: session._id });
+
+    const log = await ctx.db
+      .query("sessionLogs")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
+      .first();
+    if (log !== null) {
+      await ctx.db.patch(log._id, { tableLabel: toTable.label, updatedAt: now });
+    }
+
+    return { ok: true as const, toTableLabel: toTable.label };
   },
 });

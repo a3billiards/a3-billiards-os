@@ -9,7 +9,10 @@ import {
 } from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
 import { assertValidClubPhotoStorage } from "./model/storageUploadValidation";
-import { validateBookableWithinOperating } from "@a3/utils/availability";
+import {
+  isSuspiciousOvernightWindow,
+  validateBookableWithinOperating,
+} from "@a3/utils/availability";
 
 const operatingHoursValidator = v.object({
   open: v.string(),
@@ -196,6 +199,13 @@ export const updateOperatingHours = mutation({
 
     assertHHMM("Open time", operatingHours.open);
     assertHHMM("Close time", operatingHours.close);
+    // open == close means "Open 24 hours"; a close only minutes before open is an AM/PM typo.
+    if (isSuspiciousOvernightWindow(operatingHours.open, operatingHours.close)) {
+      throw new Error(
+        "CLUB_004: Close time is only minutes before open time, creating a ~24-hour window. " +
+          "For a 24/7 club use \"Open 24 hours\"; otherwise check AM/PM.",
+      );
+    }
     if (operatingHours.daysOfWeek.length === 0) {
       throw new Error("DATA_002: Select at least one day");
     }

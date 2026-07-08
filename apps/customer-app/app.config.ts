@@ -41,6 +41,7 @@ export default () => {
 
   const android: Record<string, unknown> = {
     package: "com.a3billiards.customerapp",
+    versionCode: 2,
     predictiveBackGestureEnabled: false,
     softwareKeyboardLayoutMode: "pan",
   };
@@ -102,7 +103,7 @@ export default () => {
   return {
     name: "A3 Billiards",
     slug: "a3-billiards-customer",
-    version: "1.0.0",
+    version: "1.0.1",
     orientation: "portrait",
     scheme: "a3customer",
     userInterfaceStyle: "automatic",

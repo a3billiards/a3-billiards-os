@@ -137,6 +137,7 @@ export default () => {
 
   const android: Record<string, unknown> = {
     package: "com.a3billiards.ownerapp",
+    versionCode: 3,
     edgeToEdgeEnabled: false,
     predictiveBackGestureEnabled: false,
     softwareKeyboardLayoutMode: "pan",
@@ -161,7 +162,7 @@ export default () => {
   return {
     name: "A3 Billiards Owner",
     slug: "a3-billiards-owner",
-    version: "1.0.0",
+    version: "1.0.2",
     orientation: "portrait",
     scheme: "a3owner",
     userInterfaceStyle: "automatic",

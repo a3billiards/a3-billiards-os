@@ -11,6 +11,7 @@
 import type * as admin from "../admin.js";
 import type * as adminAuth from "../adminAuth.js";
 import type * as auth from "../auth.js";
+import type * as authAttemptLimit from "../authAttemptLimit.js";
 import type * as bookingPayments from "../bookingPayments.js";
 import type * as bookings from "../bookings.js";
 import type * as clubDiscovery from "../clubDiscovery.js";
@@ -38,6 +39,7 @@ import type * as livestreamActions from "../livestreamActions.js";
 import type * as livestreamWebhook from "../livestreamWebhook.js";
 import type * as mfa from "../mfa.js";
 import type * as mfaActions from "../mfaActions.js";
+import type * as model_authAttemptLimit from "../model/authAttemptLimit.js";
 import type * as model_bookingDuration from "../model/bookingDuration.js";
 import type * as model_clubSubscription from "../model/clubSubscription.js";
 import type * as model_convexSiteOrigin from "../model/convexSiteOrigin.js";
@@ -54,6 +56,7 @@ import type * as model_rateLimiter from "../model/rateLimiter.js";
 import type * as model_sessionRate from "../model/sessionRate.js";
 import type * as model_sessionSnackRules from "../model/sessionSnackRules.js";
 import type * as model_staffTabAccess from "../model/staffTabAccess.js";
+import type * as model_storageUploadValidation from "../model/storageUploadValidation.js";
 import type * as model_transactionalEmailHtml from "../model/transactionalEmailHtml.js";
 import type * as model_viewer from "../model/viewer.js";
 import type * as notifications from "../notifications.js";
@@ -102,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   adminAuth: typeof adminAuth;
   auth: typeof auth;
+  authAttemptLimit: typeof authAttemptLimit;
   bookingPayments: typeof bookingPayments;
   bookings: typeof bookings;
   clubDiscovery: typeof clubDiscovery;
@@ -129,6 +133,7 @@ declare const fullApi: ApiFromModules<{
   livestreamWebhook: typeof livestreamWebhook;
   mfa: typeof mfa;
   mfaActions: typeof mfaActions;
+  "model/authAttemptLimit": typeof model_authAttemptLimit;
   "model/bookingDuration": typeof model_bookingDuration;
   "model/clubSubscription": typeof model_clubSubscription;
   "model/convexSiteOrigin": typeof model_convexSiteOrigin;
@@ -145,6 +150,7 @@ declare const fullApi: ApiFromModules<{
   "model/sessionRate": typeof model_sessionRate;
   "model/sessionSnackRules": typeof model_sessionSnackRules;
   "model/staffTabAccess": typeof model_staffTabAccess;
+  "model/storageUploadValidation": typeof model_storageUploadValidation;
   "model/transactionalEmailHtml": typeof model_transactionalEmailHtml;
   "model/viewer": typeof model_viewer;
   notifications: typeof notifications;

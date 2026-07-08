@@ -771,6 +771,9 @@ export default defineSchema({
                                                   // Null for normal cancellations by staff. Max 300 chars for admin force-end.
     assignedPlayDurationMin: v.optional(v.number()), // Owner-assigned expected play time at walk-in start.
     assignedPlayOpenEnded: v.optional(v.boolean()), // True when play time is open-ended (no fixed duration).
+    plannedEndTime: v.optional(v.number()),       // Unix ms. startTime + assigned duration. A scheduling hold (frees
+                                                  // future slots for online bookings once passed), NOT a billing cap.
+                                                  // Undefined = legacy/open-ended session (holds table until checkout).
     timerAlertMinutes: v.optional(v.number()),    // FCM alert fires when elapsed ≥ this value. Updatable mid-session.
     timerAlertFiredAt: v.optional(v.number()),    // Unix ms. Prevents duplicate alerts on app restart.
                                                   // Updating timerAlertMinutes resets this (clears it) so alert can refire.

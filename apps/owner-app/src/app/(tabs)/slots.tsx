@@ -44,6 +44,7 @@ import { CustomerQrScannerModal } from "../../components/CustomerQrScannerModal"
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
 const TOS_URL = "https://a3billiards.com/terms";
+const EXTEND_OPTIONS_MIN = [15, 30, 60] as const;
 
 function SlotsScreenContent() {
   const { t } = useTranslation();
@@ -88,6 +89,17 @@ function SlotsScreenContent() {
   const [discountInput, setDiscountInput] = useState("");
   const [debouncedDiscountInput, setDebouncedDiscountInput] = useState("");
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  const [extendTableId, setExtendTableId] = useState<Id<"tables"> | null>(null);
+  const [extendBusy, setExtendBusy] = useState(false);
+  const [extendConflict, setExtendConflict] = useState<{
+    time: string;
+    name: string;
+    maxExtendMinutes: number;
+  } | null>(null);
+  const [showMovePicker, setShowMovePicker] = useState(false);
+  const [moveBusy, setMoveBusy] = useState(false);
+  const extendingRef = useRef(false);
+  const movingRef = useRef(false);
 
   /** Pool-side new customer: name, age, +91 phone, WhatsApp OTP, consent. */
   const [deskName, setDeskName] = useState("");
@@ -217,6 +229,8 @@ function SlotsScreenContent() {
   const releaseTableLock = useMutation(api.ownerSessions.releaseTableLock);
   const startWalkIn = useMutation(api.ownerSessions.startWalkInSession);
   const checkoutTableSession = useMutation(api.ownerSessions.checkoutTableSession);
+  const extendSession = useMutation(api.ownerSessions.extendSession);
+  const moveSession = useMutation(api.ownerSessions.moveSession);
 
   useEffect(() => {
     if (!showWalkInStartModal || !walkInTableId || !walkInLockToken) return;
@@ -601,6 +615,107 @@ function SlotsScreenContent() {
     ],
   );
 
+  const closeExtendModal = useCallback(() => {
+    if (extendBusy) return;
+    setExtendTableId(null);
+    setExtendConflict(null);
+    setShowMovePicker(false);
+  }, [extendBusy]);
+
+  const runExtend = useCallback(
+    async (addMinutes: number) => {
+      if (extendTableId === null || extendingRef.current) return;
+      extendingRef.current = true;
+      setExtendBusy(true);
+      setActionError(null);
+      try {
+        const res = await extendSession({
+          tableId: extendTableId,
+          addMinutes,
+          roleId: queryRoleId,
+        });
+        if (res.ok) {
+          setExtendConflict(null);
+          setExtendTableId(null);
+          setShowMovePicker(false);
+        } else {
+          const time = new Intl.DateTimeFormat(locale, {
+            timeZone: dashboard?.timezone,
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          }).format(new Date(res.conflictStartMs));
+          setExtendConflict({
+            time,
+            name: res.conflictCustomerName,
+            maxExtendMinutes: res.maxExtendMinutes,
+          });
+        }
+      } catch (e) {
+        setActionError(parseConvexError(e as Error).message);
+        setExtendTableId(null);
+      } finally {
+        extendingRef.current = false;
+        setExtendBusy(false);
+      }
+    },
+    [extendTableId, extendSession, queryRoleId, locale, dashboard?.timezone],
+  );
+
+  const freeTablesForMove = useMemo(() => {
+    if (!dashboard || extendTableId === null) return [];
+    const source = dashboard.tables.find((tb) => tb._id === extendTableId);
+    if (!source) return [];
+    return dashboard.tables.filter(
+      (tb) =>
+        tb._id !== extendTableId &&
+        tb.isActive &&
+        tb.currentSessionId === undefined &&
+        tb.tableType === source.tableType,
+    );
+  }, [dashboard, extendTableId]);
+
+  const runMove = useCallback(
+    async (toTableId: Id<"tables">) => {
+      if (extendTableId === null || movingRef.current) return;
+      movingRef.current = true;
+      setMoveBusy(true);
+      setActionError(null);
+      try {
+        const res = await moveSession({
+          fromTableId: extendTableId,
+          toTableId,
+          roleId: queryRoleId,
+        });
+        if (res.ok) {
+          setShowMovePicker(false);
+          setExtendConflict(null);
+          setExtendTableId(null);
+        } else {
+          const time = new Intl.DateTimeFormat(locale, {
+            timeZone: dashboard?.timezone,
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          }).format(new Date(res.conflictStartMs));
+          Alert.alert(
+            t("ownerApp.slots.moveTable"),
+            t("ownerApp.slots.extendConflictNoRoom", {
+              time,
+              name: ` (${res.conflictCustomerName})`,
+            }),
+          );
+        }
+      } catch (e) {
+        setActionError(parseConvexError(e as Error).message);
+      } finally {
+        movingRef.current = false;
+        setMoveBusy(false);
+      }
+    },
+    [extendTableId, moveSession, queryRoleId, locale, dashboard?.timezone, t],
+  );
+
   const handleTablePress = useCallback(
     async (tableId: string) => {
       if (!dashboard) return;
@@ -703,19 +818,6 @@ function SlotsScreenContent() {
               </Pressable>
             );
           })}
-          <Pressable
-            style={[styles.playDurationChip, walkInPlayOpenEnded && styles.playDurationChipActive]}
-            onPress={() => setWalkInPlayOpenEnded(true)}
-          >
-            <Text
-              style={[
-                styles.playDurationChipText,
-                walkInPlayOpenEnded && styles.playDurationChipTextActive,
-              ]}
-            >
-              {t("common.slotDurationChips.open")}
-            </Text>
-          </Pressable>
         </View>
       </ScrollView>
     </View>
@@ -906,6 +1008,21 @@ function SlotsScreenContent() {
                         {t("ownerApp.slots.sessionInProgress")}
                       </Text>
                     )}
+                    {session?.plannedEndTime != null ? (
+                      session.plannedEndTime > nowMs ? (
+                        <Text style={styles.activeCardMeta}>
+                          {t("ownerApp.slots.remaining", {
+                            time: formatElapsed(session.plannedEndTime - nowMs),
+                          })}
+                        </Text>
+                      ) : (
+                        <Text style={styles.overtimeMeta}>
+                          {t("ownerApp.slots.overtime", {
+                            time: formatElapsed(nowMs - session.plannedEndTime),
+                          })}
+                        </Text>
+                      )
+                    ) : null}
                   </View>
                   <View style={styles.activeCardActions}>
                     <Pressable
@@ -918,6 +1035,20 @@ function SlotsScreenContent() {
                       }
                     >
                       <Text style={styles.closeTableBtnText}>{t("ownerApp.slots.closeTable")}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.addSnacksBtn,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => {
+                        setActionError(null);
+                        setExtendConflict(null);
+                        setShowMovePicker(false);
+                        setExtendTableId(table._id as Id<"tables">);
+                      }}
+                    >
+                      <Text style={styles.addSnacksBtnText}>{t("ownerApp.slots.addTime")}</Text>
                     </Pressable>
                     <Pressable
                       style={({ pressed }) => [
@@ -1907,6 +2038,128 @@ function SlotsScreenContent() {
           </View>
         </View>
       </Modal>
+      <Modal
+        visible={extendTableId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeExtendModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            {showMovePicker ? (
+              <>
+                <Text style={styles.modalTitle}>{t("ownerApp.slots.moveTitle")}</Text>
+                <ScrollView
+                  style={{ maxHeight: 320 }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {freeTablesForMove.length === 0 ? (
+                    <Text style={styles.walkInErr}>
+                      {t("ownerApp.slots.noFreeTables")}
+                    </Text>
+                  ) : (
+                    freeTablesForMove.map((tb) => (
+                      <Pressable
+                        key={tb._id}
+                        style={({ pressed }) => [
+                          styles.foundCard,
+                          pressed && styles.pressed,
+                          moveBusy && { opacity: 0.5 },
+                          { marginBottom: spacing[2] },
+                        ]}
+                        disabled={moveBusy}
+                        onPress={() => void runMove(tb._id as Id<"tables">)}
+                      >
+                        <Text style={styles.foundName}>{tb.label}</Text>
+                      </Pressable>
+                    ))
+                  )}
+                </ScrollView>
+                <View style={styles.modalActions}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.modalBtnSecondary,
+                      pressed && styles.pressed,
+                    ]}
+                    disabled={moveBusy}
+                    onPress={() => setShowMovePicker(false)}
+                  >
+                    <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.slots.back")}</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalTitle}>{t("ownerApp.slots.extendTitle")}</Text>
+                {extendConflict ? (
+                  <Text style={styles.modalBody}>
+                    {extendConflict.maxExtendMinutes > 0
+                      ? t("ownerApp.slots.extendConflict", {
+                          time: extendConflict.time,
+                          name: ` (${extendConflict.name})`,
+                          max: extendConflict.maxExtendMinutes,
+                        })
+                      : t("ownerApp.slots.extendConflictNoRoom", {
+                          time: extendConflict.time,
+                          name: ` (${extendConflict.name})`,
+                        })}
+                  </Text>
+                ) : (
+                  <Text style={styles.modalBody}>{t("ownerApp.slots.extendBody")}</Text>
+                )}
+                <View style={styles.playDurationRow}>
+                  {EXTEND_OPTIONS_MIN.filter(
+                    (min) =>
+                      !extendConflict ||
+                      extendConflict.maxExtendMinutes >= min,
+                  ).map((min) => (
+                    <Pressable
+                      key={min}
+                      style={({ pressed }) => [
+                        styles.playDurationChip,
+                        pressed && styles.pressed,
+                        extendBusy && { opacity: 0.5 },
+                      ]}
+                      disabled={extendBusy}
+                      onPress={() => void runExtend(min)}
+                    >
+                      <Text style={styles.playDurationChipText}>
+                        {t("ownerApp.slots.extendMinutes", { count: min })}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={[styles.modalActions, { marginTop: spacing[4] }]}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.modalBtnPrimary,
+                      pressed && styles.pressed,
+                      (moveBusy || freeTablesForMove.length === 0) && { opacity: 0.5 },
+                    ]}
+                    disabled={moveBusy || freeTablesForMove.length === 0}
+                    onPress={() => setShowMovePicker(true)}
+                  >
+                    <Text style={styles.modalBtnPrimaryText}>
+                      {t("ownerApp.slots.moveTable")}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.modalBtnSecondary,
+                      pressed && styles.pressed,
+                    ]}
+                    disabled={extendBusy}
+                    onPress={closeExtendModal}
+                  >
+                    <Text style={styles.modalBtnSecondaryText}>{t("ownerApp.slots.cancel")}</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <CustomerQrScannerModal
         visible={showQrScanner}
         onClose={() => setShowQrScanner(false)}
@@ -2057,6 +2310,11 @@ const styles = StyleSheet.create({
   activeCardMeta: {
     ...typography.bodySmall,
     color: colors.text.secondary,
+    marginTop: spacing[0.5],
+  },
+  overtimeMeta: {
+    ...typography.bodySmall,
+    color: colors.accent.amber,
     marginTop: spacing[0.5],
   },
   addSnacksBtn: {
