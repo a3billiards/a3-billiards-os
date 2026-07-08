@@ -208,6 +208,7 @@ function AdminAuthShellInner(): React.JSX.Element {
         }}
       >
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="revenue" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="live" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="user/[userId]" />
         <Stack.Screen name="login" options={{ animation: "fade" }} />

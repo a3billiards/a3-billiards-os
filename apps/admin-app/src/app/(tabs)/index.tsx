@@ -316,7 +316,11 @@ function DashboardScreenContent(): React.JSX.Element {
                   />
                 </View>
 
-                <LiquidGlassCard style={styles.revenueCard} padding={24}>
+                <LiquidGlassCard
+                  style={styles.revenueCard}
+                  padding={24}
+                  onPress={() => router.push("/revenue")}
+                >
                   <Text style={styles.revenueLabel}>{t("adminApp.dashboard.platformRevenue")}</Text>
                   <Text style={styles.revenueValue}>₹{formatInt(dash.revenue.allTime)}</Text>
                   <View style={styles.revenueRow}>
@@ -332,6 +336,12 @@ function DashboardScreenContent(): React.JSX.Element {
                     </Text>
                   </View>
                   <DecorativeRevenueChart />
+                  <View style={styles.revenueCta}>
+                    <Text style={styles.revenueCtaText}>
+                      {t("adminApp.dashboard.viewDailyRevenue")}
+                    </Text>
+                    <MaterialIcons name="chevron-right" size={18} color={glass.accentBlue} />
+                  </View>
                 </LiquidGlassCard>
               </>
             )}
@@ -503,6 +513,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: glass.trendPositive,
     fontWeight: "600",
+  },
+  revenueCta: {
+    marginTop: spacing[4],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[1],
+  },
+  revenueCtaText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: glass.accentBlue,
   },
   chartWrap: { marginTop: spacing[4] },
   chartLabelsRow: {

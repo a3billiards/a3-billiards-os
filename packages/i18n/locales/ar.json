@@ -2041,8 +2041,21 @@
       "pendingBookings": "الحجوزات المعلقة",
       "platformRevenue": "إيرادات المنصة (مباشر)",
       "todayRevenue": "اليوم ₹{{amount}}",
+      "viewDailyRevenue": "View daily revenue",
       "loadError": "فشل تحميل بيانات اللوحة. اسحب للتحديث.",
       "retry": "إعادة المحاولة"
+    },
+    "revenue": {
+      "title": "Daily Revenue",
+      "subtitle": "Platform earnings by day",
+      "back": "Back",
+      "rangeDays": "{{count}} days",
+      "totalRevenue": "Total Revenue",
+      "sessionsInRange": "{{count}} paid sessions",
+      "sessionsCount": "{{count}} sessions",
+      "rangeSummary": "{{from}} – {{to}}",
+      "noRevenue": "No paid sessions in this range yet.",
+      "timezoneNote": "Revenue is grouped by day in IST (Asia/Kolkata)."
     },
     "users": {
       "title": "المستخدمون",

@@ -2038,8 +2038,21 @@
       "pendingBookings": "Pending Bookings",
       "platformRevenue": "Platform Revenue (Live)",
       "todayRevenue": "Today ₹{{amount}}",
+      "viewDailyRevenue": "View daily revenue",
       "loadError": "Failed to load dashboard data. Pull to refresh.",
       "retry": "Retry"
+    },
+    "revenue": {
+      "title": "Daily Revenue",
+      "subtitle": "Platform earnings by day",
+      "back": "Back",
+      "rangeDays": "{{count}} days",
+      "totalRevenue": "Total Revenue",
+      "sessionsInRange": "{{count}} paid sessions",
+      "sessionsCount": "{{count}} sessions",
+      "rangeSummary": "{{from}} – {{to}}",
+      "noRevenue": "No paid sessions in this range yet.",
+      "timezoneNote": "Revenue is grouped by day in IST (Asia/Kolkata)."
     },
     "users": {
       "title": "Users",

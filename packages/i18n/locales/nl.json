@@ -2041,8 +2041,21 @@
       "pendingBookings": "Openstaande boekingen",
       "platformRevenue": "Platformomzet (live)",
       "todayRevenue": "Vandaag ₹{{amount}}",
+      "viewDailyRevenue": "View daily revenue",
       "loadError": "Kon dashboardgegevens niet laden. Trek om te vernieuwen.",
       "retry": "Opnieuw proberen"
+    },
+    "revenue": {
+      "title": "Daily Revenue",
+      "subtitle": "Platform earnings by day",
+      "back": "Back",
+      "rangeDays": "{{count}} days",
+      "totalRevenue": "Total Revenue",
+      "sessionsInRange": "{{count}} paid sessions",
+      "sessionsCount": "{{count}} sessions",
+      "rangeSummary": "{{from}} – {{to}}",
+      "noRevenue": "No paid sessions in this range yet.",
+      "timezoneNote": "Revenue is grouped by day in IST (Asia/Kolkata)."
     },
     "users": {
       "title": "Gebruikers",

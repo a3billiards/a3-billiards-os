@@ -292,6 +292,7 @@ function buildEnBundle(): JsonObject {
     ),
     adminApp: {
       dashboard: adminEn.dashboard,
+      revenue: adminEn.revenue,
       users: adminEn.users,
       roles: adminEn.roles,
       complaints: adminEn.complaints,
@@ -379,6 +380,8 @@ function translateBundle(
     ),
     adminApp: {
       dashboard: admin.dashboard,
+      revenue: (admin as { revenue?: JsonObject }).revenue ??
+        (enBundle.adminApp as JsonObject)?.revenue,
       users: admin.users,
       roles: admin.roles,
       complaints: admin.complaints,

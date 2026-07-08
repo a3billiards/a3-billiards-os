@@ -2041,8 +2041,21 @@
       "pendingBookings": "ಬಾಕಿ ಬುಕಿಂಗ್‌ಗಳು",
       "platformRevenue": "ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ ಆದಾಯ (ಲೈವ್)",
       "todayRevenue": "ಇಂದು ₹{{amount}}",
+      "viewDailyRevenue": "View daily revenue",
       "loadError": "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ ಡೇಟಾ ಲೋಡ್ ವಿಫಲ. ರಿಫ್ರೆಶ್ ಮಾಡಿ.",
       "retry": "ಮರುಪ್ರಯತ್ನ"
+    },
+    "revenue": {
+      "title": "Daily Revenue",
+      "subtitle": "Platform earnings by day",
+      "back": "Back",
+      "rangeDays": "{{count}} days",
+      "totalRevenue": "Total Revenue",
+      "sessionsInRange": "{{count}} paid sessions",
+      "sessionsCount": "{{count}} sessions",
+      "rangeSummary": "{{from}} – {{to}}",
+      "noRevenue": "No paid sessions in this range yet.",
+      "timezoneNote": "Revenue is grouped by day in IST (Asia/Kolkata)."
     },
     "users": {
       "title": "ಬಳಕೆದಾರರು",

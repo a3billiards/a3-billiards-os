@@ -2041,8 +2041,21 @@
       "pendingBookings": "நிலுவையில் உள்ள முன்பதிவுகள்",
       "platformRevenue": "தள வருவாய் (நேரலை)",
       "todayRevenue": "இன்று ₹{{amount}}",
+      "viewDailyRevenue": "View daily revenue",
       "loadError": "டாஷ்போர்டு தரவை ஏற்ற முடியவில்லை. புதுப்பிக்க கீழே இழுக்கவும்.",
       "retry": "மீண்டும் முயற்சி"
+    },
+    "revenue": {
+      "title": "Daily Revenue",
+      "subtitle": "Platform earnings by day",
+      "back": "Back",
+      "rangeDays": "{{count}} days",
+      "totalRevenue": "Total Revenue",
+      "sessionsInRange": "{{count}} paid sessions",
+      "sessionsCount": "{{count}} sessions",
+      "rangeSummary": "{{from}} – {{to}}",
+      "noRevenue": "No paid sessions in this range yet.",
+      "timezoneNote": "Revenue is grouped by day in IST (Asia/Kolkata)."
     },
     "users": {
       "title": "பயனர்கள்",

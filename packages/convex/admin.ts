@@ -2,6 +2,15 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { requireAdminWithMfa } from "./model/viewer";
+import { compareYmd, dateYmdInTimeZone, fillDateGaps } from "@a3/utils/timezone";
+
+/**
+ * Platform-level revenue is reported in a single fixed timezone (IST) so a
+ * session ending near midnight is attributed to one consistent calendar day
+ * across all clubs, rather than shifting per club timezone.
+ */
+const PLATFORM_TIMEZONE = "Asia/Kolkata";
+const MAX_REVENUE_RANGE_DAYS = 92;
 
 function startOfTodayUtcMs(now: number): number {
   const d = new Date(now);
@@ -102,6 +111,90 @@ export const getAdminDashboard = query({
       pendingBookings: pendingBookings.length,
       activeLiveStreams: activeLiveStreams.length,
       fetchedAt,
+    };
+  },
+});
+
+/**
+ * Platform revenue per calendar day (IST) for the admin app. Sums paid, completed
+ * cross-club session bills from `sessionLogs` — the same source as the dashboard
+ * all-time / today totals, just grouped by day. Guest sessions are not written to
+ * `sessionLogs`, so (as on the dashboard) they are not included here.
+ *
+ * `dateFrom`/`dateTo` are `YYYY-MM-DD` in IST, inclusive. Range is capped so the
+ * scan stays bounded.
+ */
+export const getAdminPlatformRevenueByDay = query({
+  args: {
+    dateFrom: v.string(),
+    dateTo: v.string(),
+  },
+  handler: async (ctx, { dateFrom, dateTo }) => {
+    await requireAdminWithMfa(ctx);
+
+    const empty = {
+      days: [] as { date: string; revenue: number; sessionCount: number }[],
+      totalRevenue: 0,
+      totalSessions: 0,
+      currency: "INR",
+      timeZone: PLATFORM_TIMEZONE,
+    };
+
+    if (compareYmd(dateFrom, dateTo) > 0) return empty;
+
+    // Guard against unbounded ranges (paise/rupee scan over all clubs).
+    let span = 1;
+    let cursorDate = dateFrom;
+    while (compareYmd(cursorDate, dateTo) < 0 && span <= MAX_REVENUE_RANGE_DAYS) {
+      const next = new Date(`${cursorDate}T00:00:00Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      cursorDate = next.toISOString().slice(0, 10);
+      span += 1;
+    }
+    if (span > MAX_REVENUE_RANGE_DAYS) {
+      throw new Error(
+        `DATA_002: Date range too large (max ${MAX_REVENUE_RANGE_DAYS} days)`,
+      );
+    }
+
+    const paidCompletedRows = await ctx.db
+      .query("sessionLogs")
+      .withIndex("by_status_payment", (q) =>
+        q.eq("status", "completed").eq("paymentStatus", "paid"),
+      )
+      .collect();
+
+    const byDay = new Map<string, { revenue: number; sessionCount: number }>();
+    for (const row of paidCompletedRows) {
+      const ms = row.endTime ?? row.startTime;
+      const date = dateYmdInTimeZone(ms, PLATFORM_TIMEZONE);
+      if (compareYmd(date, dateFrom) < 0 || compareYmd(date, dateTo) > 0) continue;
+      const cur = byDay.get(date) ?? { revenue: 0, sessionCount: 0 };
+      cur.revenue += row.billTotal ?? 0;
+      cur.sessionCount += 1;
+      byDay.set(date, cur);
+    }
+
+    const sparse = [...byDay.entries()].map(([date, r]) => ({
+      date,
+      revenue: r.revenue,
+      sessionCount: r.sessionCount,
+    }));
+    const days = fillDateGaps(sparse, dateFrom, dateTo, PLATFORM_TIMEZONE);
+
+    let totalRevenue = 0;
+    let totalSessions = 0;
+    for (const d of days) {
+      totalRevenue += d.revenue;
+      totalSessions += d.sessionCount;
+    }
+
+    return {
+      days,
+      totalRevenue,
+      totalSessions,
+      currency: "INR",
+      timeZone: PLATFORM_TIMEZONE,
     };
   },
 });

@@ -2041,8 +2041,21 @@
       "pendingBookings": "Réservations en attente",
       "platformRevenue": "Revenus plateforme (en direct)",
       "todayRevenue": "Aujourd'hui ₹{{amount}}",
+      "viewDailyRevenue": "View daily revenue",
       "loadError": "Échec du chargement du tableau de bord. Tirez pour actualiser.",
       "retry": "Réessayer"
+    },
+    "revenue": {
+      "title": "Daily Revenue",
+      "subtitle": "Platform earnings by day",
+      "back": "Back",
+      "rangeDays": "{{count}} days",
+      "totalRevenue": "Total Revenue",
+      "sessionsInRange": "{{count}} paid sessions",
+      "sessionsCount": "{{count}} sessions",
+      "rangeSummary": "{{from}} – {{to}}",
+      "noRevenue": "No paid sessions in this range yet.",
+      "timezoneNote": "Revenue is grouped by day in IST (Asia/Kolkata)."
     },
     "users": {
       "title": "Utilisateurs",
