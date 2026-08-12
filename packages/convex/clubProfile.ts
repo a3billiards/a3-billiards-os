@@ -13,6 +13,10 @@ import {
   isSuspiciousOvernightWindow,
   validateBookableWithinOperating,
 } from "@a3/utils/availability";
+import {
+  assertOptionalTrimmedLength,
+  MAX_DESCRIPTION_LEN,
+} from "./model/inputValidation";
 
 const operatingHoursValidator = v.object({
   open: v.string(),
@@ -88,10 +92,10 @@ export const updateClubDescription = mutation({
     const club = await ctx.db.get(clubId);
     if (!club) throw new Error("DATA_003: Club not found");
     assertClubSubscriptionWritable(club);
-    if (description.length > 500) {
-      throw new Error("DATA_002: Description must be 500 characters or less");
-    }
-    await ctx.db.patch(clubId, { description });
+    const safeDescription =
+      assertOptionalTrimmedLength(description, MAX_DESCRIPTION_LEN, "Description") ??
+      "";
+    await ctx.db.patch(clubId, { description: safeDescription });
     return { success: true as const };
   },
 });

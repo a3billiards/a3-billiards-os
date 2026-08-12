@@ -13,6 +13,7 @@ import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { assertStrongPasswordOrThrow } from "./model/passwordPolicy";
 import { convexSiteOrigin } from "./model/convexSiteOrigin";
+import { assertEmailNormalized } from "./model/inputValidation";
 
 const PASSWORD_PROVIDER = "password" as const;
 
@@ -42,9 +43,10 @@ function buildResetLink(rawToken: string): string {
 export const requestReset = action({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
+    const normalizedEmail = assertEmailNormalized(email);
     const profile = await ctx.runQuery(
       internal.passwordReset.getUserForPasswordReset,
-      { email },
+      { email: normalizedEmail },
     );
 
     if (profile === null) {

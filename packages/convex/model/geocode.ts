@@ -1,5 +1,7 @@
 /** Shared address → WGS84 helpers for onboarding and discovery. */
 
+import { assertTrimmedLength, MAX_ADDRESS_LEN } from "./inputValidation";
+
 export function isValidGeocodeLocation(location: {
   lat: number;
   lng: number;
@@ -80,10 +82,12 @@ export async function geocodeAddress(address: string): Promise<{
   lng: number;
   provider: "nominatim" | "google";
 }> {
-  const trimmed = address.trim();
-  if (trimmed.length < 5) {
-    throw new Error("DATA_001: Address is too short to geocode");
-  }
+  const trimmed = assertTrimmedLength(
+    "Address",
+    address,
+    5,
+    MAX_ADDRESS_LEN,
+  );
 
   const nominatim = await geocodeWithNominatim(trimmed);
   if (nominatim && isValidGeocodeLocation(nominatim)) {

@@ -9,7 +9,9 @@
     "test": "turbo test",
     "patch:expo-ngrok": "node scripts/patch-expo-ngrok.cjs",
     "sync:build-folder": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-to-build-folder.ps1",
-    "build:preview-apks": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-all-preview-apks.ps1"
+    "build:preview-apks": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-all-preview-apks.ps1",
+    "deploy:onboarding-web": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-onboarding-web.ps1",
+    "check:secrets": "node scripts/check-tracked-secrets.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

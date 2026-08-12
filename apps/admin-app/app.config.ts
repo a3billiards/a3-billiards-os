@@ -43,7 +43,7 @@ export default () => {
   return {
     name: "A3 Billiards Admin",
     slug: "a3-billiards-admin",
-    version: "1.0.1",
+    version: "1.0.2",
     orientation: "portrait",
     scheme: "a3admin",
     userInterfaceStyle: "automatic",
@@ -65,7 +65,7 @@ export default () => {
     },
     android: {
       package: "com.a3billiards.adminapp",
-      versionCode: 2,
+      versionCode: 3,
       edgeToEdgeEnabled: false,
       predictiveBackGestureEnabled: false,
       softwareKeyboardLayoutMode: "pan",

@@ -512,6 +512,21 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
 
+  // ── rateLimits ─────────────────────────────────────────────────────────────
+  // Generic fixed-window rate-limit counters for endpoints that have no natural
+  // domain table to count from (e.g. geocoding, registration, support requests).
+  // One row per key; the window resets once windowStartMs + windowMs has passed.
+  // Key format: "<action>:<scope>:<id>" e.g. "geocode:user:<userId>",
+  //   "register:email:<email>", "support:user:<userId>".
+  // Cleaned up daily via internal.rateLimit.cleanupExpiredRateLimits.
+  rateLimits: defineTable({
+    key: v.string(),
+    windowStartMs: v.number(),                    // Unix ms when the current window opened.
+    count: v.number(),                            // Requests recorded in the current window.
+    expiresAt: v.number(),                        // Unix ms — windowStartMs + windowMs; used for cleanup.
+  }).index("by_key", ["key"])
+    .index("by_expiresAt", ["expiresAt"]),
+
   // ── sessionLogs ────────────────────────────────────────────────────────────
   // Lightweight cross-club session references. Central DB.
   // Powers customer session history across all clubs without exposing club billing data.

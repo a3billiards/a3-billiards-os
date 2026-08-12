@@ -19,7 +19,15 @@ import {
   parseGenericE164OrThrow,
   throwIfPhoneUnavailableForNewAccount,
 } from "./model/phoneRegistration";
+import {
+  assertAgeYears,
+  assertDevicePushToken,
+  assertEmailNormalized,
+  assertTrimmedLength,
+  MAX_NAME_LEN,
+} from "./model/inputValidation";
 import { requireAdminWithMfa, requireCustomer, requireOwner, requireViewer } from "./model/viewer";
+import { ownerCanViewCustomer } from "./model/customerClubAccess";
 
 const PASSWORD_PROVIDER = "password" as const;
 
@@ -32,8 +40,12 @@ function throwErr(message: string): never {
 }
 
 function isValidEmailFormat(email: string): boolean {
-  const t = email.trim();
-  return t.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
+  try {
+    assertEmailNormalized(email);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function requireAdminViewer(ctx: QueryCtx | MutationCtx) {
@@ -54,36 +66,6 @@ export function sanitizeUser(user: Doc<"users"> | null): PublicUser | null {
     ...rest
   } = user;
   return rest;
-}
-
-async function ownerCanViewCustomer(
-  ctx: QueryCtx | MutationCtx,
-  clubId: Id<"clubs">,
-  targetUserId: Id<"users">,
-): Promise<boolean> {
-  const sessionLink = await ctx.db
-    .query("sessionLogs")
-    .withIndex("by_customer_club", (q) =>
-      q.eq("customerId", targetUserId).eq("clubId", clubId),
-    )
-    .first();
-  if (sessionLink) return true;
-
-  const booking = await ctx.db
-    .query("bookingLogs")
-    .withIndex("by_customer", (q) => q.eq("customerId", targetUserId))
-    .filter((q) => q.eq(q.field("clubId"), clubId))
-    .first();
-  if (booking) return true;
-
-  const complaint = await ctx.db
-    .query("complaints")
-    .withIndex("by_reportedByClubId", (q) =>
-      q.eq("reportedByClubId", clubId),
-    )
-    .filter((q) => q.eq(q.field("userId"), targetUserId))
-    .first();
-  return complaint !== null;
 }
 
 async function syncPasswordProviderAccountId(
@@ -200,18 +182,13 @@ export const updateCustomerProfile = mutation({
     const patch: Partial<Doc<"users">> = {};
 
     if (name !== undefined) {
-      const t = name.trim();
-      if (t.length < 2 || t.length > 100) {
-        throwErr("Name must be between 2 and 100 characters.");
-      }
-      patch.name = t;
+      patch.name = assertTrimmedLength("Name", name, 2, MAX_NAME_LEN, {
+        normalizeWs: true,
+      });
     }
 
     if (age !== undefined) {
-      if (!Number.isInteger(age) || age < 18) {
-        throwErr("AUTH_007: You must be 18 or older.");
-      }
-      patch.age = age;
+      patch.age = assertAgeYears(age);
     }
 
     if (email !== undefined) {
@@ -223,10 +200,7 @@ export const updateCustomerProfile = mutation({
       if (googleLinked && hasCapturedEmail) {
         throwErr("Email cannot be changed for Google Sign-In accounts.");
       }
-      const normalized = email.trim().toLowerCase();
-      if (!isValidEmailFormat(normalized)) {
-        throwErr("DATA_001: Invalid email format");
-      }
+      const normalized = assertEmailNormalized(email);
       const dup = await ctx.db
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", normalized))
@@ -258,12 +232,11 @@ export const createUser = mutation({
     const userId = await getAuthUserId(ctx);
     if (userId === null) throwErr("AUTH_001: Not authenticated");
     if (!consentGiven) throwErr("AUTH_005: Consent not given");
-    if (age < 18) throwErr("AUTH_007: Must be 18 or older");
+    assertAgeYears(age);
 
-    const trimmed = name.trim();
-    if (trimmed.length < 2 || trimmed.length > 100) {
-      throwErr("Name must be between 2 and 100 characters.");
-    }
+    const trimmed = assertTrimmedLength("Name", name, 2, MAX_NAME_LEN, {
+      normalizeWs: true,
+    });
 
     const existing = await ctx.db.get(userId);
     if (!existing) {
@@ -278,7 +251,7 @@ export const createUser = mutation({
     const now = Date.now();
     await ctx.db.patch(userId, {
       name: trimmed,
-      age,
+      age: assertAgeYears(age),
       consentGiven: true,
       consentGivenAt: now,
     });
@@ -298,7 +271,10 @@ export const updateUser = mutation({
     const viewer = await requireViewer(ctx);
     const targetId = argUserId ?? viewer.userId;
 
-    if (viewer.role !== "admin" && viewer.userId !== targetId) {
+    if (viewer.role === "admin" && targetId !== viewer.userId) {
+      // Admin editing another user requires MFA (same bar as freeze/audit mutations).
+      await requireAdminViewer(ctx);
+    } else if (viewer.role !== "admin" && viewer.userId !== targetId) {
       throwErr("PERM_001: Cannot update another user");
     }
 
@@ -316,15 +292,13 @@ export const updateUser = mutation({
     const patch: Partial<Doc<"users">> = {};
 
     if (name !== undefined) {
-      const t = name.trim();
-      if (t.length < 2 || t.length > 100) {
-        throwErr("Name must be between 2 and 100 characters.");
-      }
-      patch.name = t;
+      patch.name = assertTrimmedLength("Name", name, 2, MAX_NAME_LEN, {
+        normalizeWs: true,
+      });
     }
 
     if (email !== undefined) {
-      const normalized = email.trim().toLowerCase();
+      const normalized = assertEmailNormalized(email);
       const dup = await ctx.db
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", normalized))
@@ -528,13 +502,16 @@ export const saveFcmToken = mutation({
     if (!userId) return;
     const user = await ctx.db.get(userId);
     if (!user) return;
+    const safeToken = assertDevicePushToken(token);
     const existing = user.fcmTokens ?? [];
     if (remove) {
-      if (!existing.includes(token)) return;
-      await ctx.db.patch(userId, { fcmTokens: existing.filter((t) => t !== token) });
+      if (!existing.includes(safeToken)) return;
+      await ctx.db.patch(userId, {
+        fcmTokens: existing.filter((t) => t !== safeToken),
+      });
     } else {
-      if (existing.includes(token)) return;
-      await ctx.db.patch(userId, { fcmTokens: [...existing, token] });
+      if (existing.includes(safeToken)) return;
+      await ctx.db.patch(userId, { fcmTokens: [...existing, safeToken] });
     }
   },
 });
@@ -885,27 +862,23 @@ export const adminEditUser = mutation({
     const newSnap: Record<string, string> = {};
 
     if (name !== undefined) {
-      const t = name.trim();
-      if (t.length < 2 || t.length > 100) {
-        throwErr("DATA_001: Name must be 2–100 characters");
-      }
+      const t = assertTrimmedLength("Name", name, 2, MAX_NAME_LEN, {
+        normalizeWs: true,
+      });
       patch.name = t;
       prevSnap.name = target.name;
       newSnap.name = t;
     }
 
     if (age !== undefined) {
-      if (age < 18) throwErr("AUTH_007: Must be 18 or older");
-      patch.age = age;
+      const validAge = assertAgeYears(age);
+      patch.age = validAge;
       prevSnap.age = String(target.age);
-      newSnap.age = String(age);
+      newSnap.age = String(validAge);
     }
 
     if (email !== undefined) {
-      const normalized = email.trim().toLowerCase();
-      if (!isValidEmailFormat(normalized)) {
-        throwErr("DATA_001: Invalid email format");
-      }
+      const normalized = assertEmailNormalized(email);
       const dup = await ctx.db
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", normalized))

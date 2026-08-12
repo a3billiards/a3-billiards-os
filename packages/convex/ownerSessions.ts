@@ -16,6 +16,12 @@ import { computeBill, clampDiscountPercent } from "@a3/utils/billing";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
 import { bookingWindowMs } from "./model/bookingDuration";
 import { normalizeTableTypeId } from "@a3/utils/tableTypes";
+import {
+  assertGuestDisplayName,
+  assertLockToken,
+  assertPlayerDisplayName,
+  assertPlayerKey,
+} from "./model/inputValidation";
 
 const sessionParticipantSideArg = v.union(
   v.literal("sideA"),
@@ -91,8 +97,8 @@ async function validateAndNormalizeParticipants(
     const seenKeys = new Set<string>();
     const seenCustomerIds = new Set<string>();
     for (const p of participants) {
-      const key = p.key.trim();
-      const name = p.displayName.trim();
+      const key = assertPlayerKey(p.key);
+      const name = assertPlayerDisplayName(p.displayName);
       if (!key || !name) {
         throw new Error("DATA_001: Each player needs a name");
       }
@@ -100,6 +106,8 @@ async function validateAndNormalizeParticipants(
         throw new Error("DATA_001: Duplicate player on this table");
       }
       seenKeys.add(key);
+      p.key = key;
+      p.displayName = name;
       if (p.isGuest && p.customerId !== undefined) {
         throw new Error("DATA_001: Guest players cannot have a customer id");
       }
@@ -376,7 +384,7 @@ export const startWalkInSession = mutation({
   handler: async (ctx, args) => {
     const {
       tableId,
-      lockToken,
+      lockToken: rawLockToken,
       guestName,
       forceStartDespiteConflict,
       customerId,
@@ -388,6 +396,7 @@ export const startWalkInSession = mutation({
       assignedPlayDurationMin,
       assignedPlayOpenEnded,
     } = args;
+    const lockToken = assertLockToken(rawLockToken);
     const viewer = await requireViewer(ctx);
     const owner = requireOwnerWithClub(viewer);
     const club = await ctx.db.get(owner.clubId);
@@ -397,6 +406,8 @@ export const startWalkInSession = mutation({
     if (club.subscriptionStatus === "frozen") {
       throw new Error("SUBSCRIPTION_003: Club account is frozen");
     }
+
+    await assertSlotsTabPermission(ctx, owner.clubId, roleId);
 
     const table = await ctx.db.get(tableId);
     if (!table || table.clubId !== owner.clubId) {
@@ -513,8 +524,7 @@ export const startWalkInSession = mutation({
       sessionGuestAge = customer.age;
       sessionIsGuest = false;
     } else {
-      const name = (guestName ?? "Walk-in").trim() || "Walk-in";
-      sessionGuestName = name;
+      sessionGuestName = assertGuestDisplayName(guestName);
     }
 
     const sessionId = await ctx.db.insert("sessions", {

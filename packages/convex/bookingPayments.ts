@@ -15,24 +15,11 @@ import {
   internalQuery,
 } from "./_generated/server";
 import { convexSiteOrigin } from "./model/convexSiteOrigin";
-
-function base64EncodeUtf8(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
-}
-
-function razorpayAuthHeader(): string {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keyId || !keySecret) {
-    throw new Error("DATA_001: Razorpay is not configured");
-  }
-  return `Basic ${base64EncodeUtf8(`${keyId}:${keySecret}`)}`;
-}
+import {
+  razorpayBasicAuthHeader,
+  razorpayKeyId,
+  summarizeProviderHttpError,
+} from "./model/envSecrets";
 
 function amountToPaise(amount: number, currency: string): number {
   // INR and most major currencies use 2 decimal subunits.
@@ -191,11 +178,8 @@ export const createBookingPaymentOrder = action({
     const userId = await getAuthUserId(ctx);
     if (userId === null) throw new Error("AUTH_001: Not authenticated");
 
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-    if (!keyId || !keySecret) {
-      throw new Error("DATA_001: Razorpay is not configured");
-    }
+    const keyId = razorpayKeyId();
+    const auth = razorpayBasicAuthHeader();
 
     const row = await ctx.runQuery(internal.bookingPayments.getBookingForPayment, {
       bookingId,
@@ -218,7 +202,6 @@ export const createBookingPaymentOrder = action({
 
     const amountPaise = amountToPaise(cost, booking.currency);
     const receipt = `bk_${String(bookingId).slice(-10)}_${Date.now()}`.slice(0, 40);
-    const auth = razorpayAuthHeader();
 
     const orderBody = {
       amount: amountPaise,
@@ -242,7 +225,7 @@ export const createBookingPaymentOrder = action({
     });
     const raw = await res.text();
     if (!res.ok) {
-      console.error("Razorpay booking order error:", raw);
+      console.error(summarizeProviderHttpError(raw, "Razorpay booking order"));
       throw new Error("PAYMENT_003: Could not start payment — try again later");
     }
     const json = JSON.parse(raw) as { id?: string };
@@ -293,7 +276,7 @@ export const refundBookingPayment = internalAction({
   },
   handler: async (ctx, { bookingId, paymentId, amountPaise }) => {
     try {
-      const auth = razorpayAuthHeader();
+      const auth = razorpayBasicAuthHeader();
       const res = await fetch(
         `https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`,
         {
@@ -310,7 +293,7 @@ export const refundBookingPayment = internalAction({
       );
       const raw = await res.text();
       if (!res.ok) {
-        console.error("Razorpay refund error:", raw);
+        console.error(summarizeProviderHttpError(raw, "Razorpay refund"));
         await ctx.runMutation(internal.bookingPayments.markBookingRefunded, {
           bookingId,
           paymentId,
@@ -340,11 +323,13 @@ export const refundBookingPayment = internalAction({
   },
 });
 
+import { optionalServerEnv } from "./model/envSecrets";
+
 /** Public action: whether Razorpay keys are present (for UI / test mode messaging). */
 export const getRazorpayPublicConfig = action({
   args: {},
   handler: async () => {
-    const keyId = process.env.RAZORPAY_KEY_ID ?? "";
+    const keyId = optionalServerEnv("RAZORPAY_KEY_ID") ?? "";
     return {
       configured: keyId.length > 0,
       keyId: keyId.length > 0 ? keyId : null,

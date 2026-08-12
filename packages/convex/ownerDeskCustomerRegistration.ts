@@ -12,6 +12,11 @@ import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 import { dispatchWhatsAppOtp } from "./model/otp";
 import { parseGenericE164OrThrow, throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
+import {
+  assertAgeYears,
+  assertTrimmedLength,
+  MAX_NAME_LEN,
+} from "./model/inputValidation";
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
 const OTP_RATE_LIMIT_WINDOW_MS = Number(
@@ -147,12 +152,17 @@ export const ownerCompleteDeskCustomerRegistration = action({
       throw new Error(otpResult.error);
     }
 
+    const trimmedName = assertTrimmedLength("Name", args.name, 2, MAX_NAME_LEN, {
+      normalizeWs: true,
+    });
+    const validAge = assertAgeYears(args.age);
+
     return await ctx.runMutation(
       internal.ownerDeskCustomerMutations.insertDeskRegisteredCustomer,
       {
         phone: normalized,
-        name: args.name,
-        age: args.age,
+        name: trimmedName,
+        age: validAge,
         consentGiven: args.consentGiven,
       },
     );

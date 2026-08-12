@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { parseGenericE164OrThrow, throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
+import {
+  assertAgeYears,
+  assertTrimmedLength,
+  MAX_NAME_LEN,
+} from "./model/inputValidation";
 
 export const assertOwnerHasClub = internalQuery({
   args: { userId: v.id("users") },
@@ -34,13 +39,10 @@ export const insertDeskRegisteredCustomer = internalMutation({
     if (!consentGiven) {
       throw new Error("AUTH_005: Consent not given");
     }
-    if (age < 18) {
-      throw new Error("AUTH_007: Must be 18 or older");
-    }
-    const trimmed = name.trim();
-    if (trimmed.length === 0) {
-      throw new Error("DATA_001: Name is required");
-    }
+    const validAge = assertAgeYears(age);
+    const trimmed = assertTrimmedLength("Name", name, 2, MAX_NAME_LEN, {
+      normalizeWs: true,
+    });
 
     const normalized = parseGenericE164OrThrow(phone);
     const existing = await ctx.db
@@ -52,7 +54,7 @@ export const insertDeskRegisteredCustomer = internalMutation({
     const now = Date.now();
     const userId = await ctx.db.insert("users", {
       name: trimmed,
-      age,
+      age: validAge,
       phone: normalized,
       role: "customer",
       customerRegisteredVia: "desk",

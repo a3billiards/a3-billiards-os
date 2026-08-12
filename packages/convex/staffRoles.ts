@@ -9,6 +9,10 @@ import type { MutationCtx } from "./_generated/server";
 import { assertMutationClubScope, requireOwner, requireViewer } from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
 import { resolveStaffTabAccess } from "./model/staffTabAccess";
+import {
+  assertTrimmedLength,
+  MAX_ROLE_NAME_LEN,
+} from "./model/inputValidation";
 
 const TAB_VALUES = [
   "slots",
@@ -79,8 +83,9 @@ export const createRole = mutation({
   },
   handler: async (ctx, args) => {
     await requireOwnerClubWritable(ctx, args.clubId);
-    const n = args.name.trim();
-    if (n.length === 0) throw new Error("DATA_002: Role name is required");
+    const n = assertTrimmedLength("Role name", args.name, 1, MAX_ROLE_NAME_LEN, {
+      normalizeWs: true,
+    });
     assertAllowedTabs(args.allowedTabs);
     if (
       args.allowedTableIds !== undefined &&
@@ -138,9 +143,13 @@ export const updateRole = mutation({
 
     const patch: Partial<Doc<"staffRoles">> = {};
     if (args.name !== undefined) {
-      const n = args.name.trim();
-      if (n.length === 0) throw new Error("DATA_002: Role name is required");
-      patch.name = n;
+      patch.name = assertTrimmedLength(
+        "Role name",
+        args.name,
+        1,
+        MAX_ROLE_NAME_LEN,
+        { normalizeWs: true },
+      );
     }
     if (args.allowedTabs !== undefined) {
       assertAllowedTabs(args.allowedTabs);

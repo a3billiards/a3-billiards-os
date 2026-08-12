@@ -9,7 +9,8 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation, query } from "./_generated/server";
-import { requireViewer } from "./model/viewer";
+import { requireAdminWithMfa, requireViewer } from "./model/viewer";
+import { requireServerEnv } from "./model/envSecrets";
 
 /** HMAC-SHA256 hex digest; matches Node `createHmac("sha256", secret).update(body).digest("hex")`. */
 async function hmacSha256Hex(secret: string, message: string): Promise<string> {
@@ -32,12 +33,7 @@ export const handleWebhook = internalAction({
     signature: v.string(),
   },
   handler: async (ctx, { rawBody, signature }) => {
-    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    if (!secret || secret.length === 0) {
-      throw new Error(
-        "DATA_001: RAZORPAY_WEBHOOK_SECRET is missing — cannot verify webhook signature",
-      );
-    }
+    const secret = requireServerEnv("RAZORPAY_WEBHOOK_SECRET");
 
     const expected = await hmacSha256Hex(secret, rawBody);
     if (expected !== signature) {
@@ -295,7 +291,7 @@ export const getPaymentHistory = query({
   handler: async (ctx, { ownerId }) => {
     const viewer = await requireViewer(ctx);
     if (viewer.role === "admin") {
-      // admin may load any owner's receipts
+      await requireAdminWithMfa(ctx);
     } else if (viewer.role === "owner" && viewer.userId === ownerId) {
       // owner may load own receipts only
     } else {

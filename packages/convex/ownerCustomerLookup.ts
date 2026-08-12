@@ -1,5 +1,9 @@
 /**
  * Owner desk: find registered customers for walk-in / slot allotment.
+ *
+ * Platform-wide customer search is intentional (desk must find first-time visitors
+ * who registered on the app). Access control: authenticated owner + clubId scope
+ * check only; see ACCESS_CONTROL_MATRIX "users (desk lookup)".
  */
 
 import { v } from "convex/values";

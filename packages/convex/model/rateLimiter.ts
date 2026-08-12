@@ -2,11 +2,80 @@
  * Rate limits:
  * - OTP `sendOtp`: sliding 60-minute window, max 5 dispatches / phone (see convex/otp.ts) → OTP_003.
  * - MFA generation: sliding window, max 5 / normalized email / rolling hour → RATE_001.
+ * - Generic fixed-window limiter (`enforceFixedWindowLimit`) for endpoints without a
+ *   natural domain table to count from (geocoding, registration, support) → RATE_001.
+ *
+ * NOTE ON IP-BASED LIMITING: Convex function calls (queries/mutations/actions) do not
+ * expose the client IP; only HTTP actions receive request headers, and Convex does not
+ * populate a trustworthy client IP there. We therefore rate-limit by the strongest
+ * available identity — authenticated userId, or the natural resource key (email/phone) —
+ * which is the OWASP-recommended approach for authenticated/business endpoints.
  */
 
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 const HOUR_MS = 3_600_000;
+
+// Defaults for the generic fixed-window limiter. Callers may override per endpoint.
+export const GEOCODE_LIMIT_PER_HOUR = 30;
+export const OWNER_REGISTER_LIMIT_PER_HOUR = 5;
+export const SUPPORT_REQUEST_LIMIT_PER_HOUR = 10;
+
+/**
+ * Generic fixed-window rate limiter backed by the `rateLimits` table (one row per key).
+ * Throws RATE_001 with a human-readable retry hint once `limit` is reached inside the
+ * current window. Safe to call from any mutation; actions should call it via the
+ * `internal.rateLimit.consumeFixedWindow` wrapper.
+ *
+ * Fixed-window is used (rather than storing one row per hit) so each key stays a single
+ * bounded row — this itself is a resilience measure against table bloat / abuse.
+ */
+export async function enforceFixedWindowLimit(
+  ctx: MutationCtx,
+  key: string,
+  limit: number,
+  windowMs: number = HOUR_MS,
+  now: number = Date.now(),
+): Promise<void> {
+  const row = await ctx.db
+    .query("rateLimits")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique();
+
+  // No row yet, or the previous window has fully elapsed → start a fresh window.
+  if (!row || now >= row.windowStartMs + windowMs) {
+    if (row) {
+      await ctx.db.patch(row._id, {
+        windowStartMs: now,
+        count: 1,
+        expiresAt: now + windowMs,
+      });
+    } else {
+      await ctx.db.insert("rateLimits", {
+        key,
+        windowStartMs: now,
+        count: 1,
+        expiresAt: now + windowMs,
+      });
+    }
+    return;
+  }
+
+  if (row.count >= limit) {
+    const retryMin = Math.max(
+      1,
+      Math.ceil((row.windowStartMs + windowMs - now) / 60_000),
+    );
+    throw new Error(
+      `RATE_001: Too many requests. Please wait ${retryMin} minute(s) and try again.`,
+    );
+  }
+
+  await ctx.db.patch(row._id, {
+    count: row.count + 1,
+    expiresAt: now + windowMs,
+  });
+}
 
 /** Max WhatsApp OTP dispatches per phone per UTC hour (fixed window). */
 export const OTP_SEND_LIMIT_PER_UTC_HOUR = 5;

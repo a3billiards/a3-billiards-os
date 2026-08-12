@@ -2,24 +2,23 @@ import { SUPPORT_CATEGORIES, type SupportCategory } from "@a3/utils/supportConta
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getViewer, requireAdminWithMfa, requireViewer } from "./model/viewer";
-
-const MAX_SUBJECT = 120;
-const MAX_MESSAGE = 2000;
+import {
+  enforceFixedWindowLimit,
+  SUPPORT_REQUEST_LIMIT_PER_HOUR,
+} from "./model/rateLimiter";
+import {
+  assertTrimmedLength,
+  assertOptionalTrimmedLength,
+  MAX_SUPPORT_MESSAGE_LEN,
+  MAX_SUPPORT_SUBJECT_LEN,
+} from "./model/inputValidation";
 
 function trimSubject(s: string): string {
-  const t = s.trim();
-  if (t.length < 3 || t.length > MAX_SUBJECT) {
-    throw new Error("SUPPORT_001: Subject must be 3–120 characters");
-  }
-  return t;
+  return assertTrimmedLength("Subject", s, 3, MAX_SUPPORT_SUBJECT_LEN);
 }
 
 function trimMessage(s: string): string {
-  const t = s.trim();
-  if (t.length < 10 || t.length > MAX_MESSAGE) {
-    throw new Error("SUPPORT_002: Message must be 10–2000 characters");
-  }
-  return t;
+  return assertTrimmedLength("Message", s, 10, MAX_SUPPORT_MESSAGE_LEN);
 }
 
 function normalizeCategory(raw: string): SupportCategory {
@@ -52,6 +51,13 @@ export const submitSupportRequest = mutation({
     if (!viewer.userId) throw new Error("AUTH_001: Not authenticated");
     const user = await ctx.db.get(viewer.userId);
     if (!user) throw new Error("DATA_003: User not found");
+
+    // Cap support submissions per user per hour to prevent DB/inbox flooding.
+    await enforceFixedWindowLimit(
+      ctx,
+      `support:user:${String(viewer.userId)}`,
+      SUPPORT_REQUEST_LIMIT_PER_HOUR,
+    );
 
     if (audience === "customer" && user.role !== "customer") {
       throw new Error("PERM_001: Invalid audience for this account");
@@ -169,7 +175,10 @@ export const adminUpdateSupportRequest = mutation({
 
     const now = Date.now();
     const notes =
-      adminNotes !== undefined ? adminNotes.trim().slice(0, 2000) : row.adminNotes;
+      adminNotes !== undefined
+        ? assertOptionalTrimmedLength(adminNotes, 2000, "Admin notes") ??
+          undefined
+        : row.adminNotes;
 
     await ctx.db.patch(requestId, {
       status,

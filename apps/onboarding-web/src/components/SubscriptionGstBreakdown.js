@@ -1,0 +1,6 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { formatInrFromPaise } from "@a3/utils/subscriptionInvoiceGst";
+export function SubscriptionGstBreakdown({ gst, currency = "INR", compact = false, }) {
+    const halfRate = gst.gstRatePercent / 2;
+    return (_jsx("table", { className: "legal-table", style: { marginTop: compact ? 8 : 12 }, children: _jsxs("tbody", { children: [_jsxs("tr", { children: [_jsx("th", { children: "Taxable value" }), _jsxs("td", { children: [formatInrFromPaise(gst.taxablePaise), " ", currency] })] }), gst.splitMode === "cgst_sgst" ? (_jsxs(_Fragment, { children: [_jsxs("tr", { children: [_jsxs("th", { children: ["CGST @ ", halfRate, "%"] }), _jsxs("td", { children: [formatInrFromPaise(gst.cgstPaise), " ", currency] })] }), _jsxs("tr", { children: [_jsxs("th", { children: ["SGST @ ", halfRate, "%"] }), _jsxs("td", { children: [formatInrFromPaise(gst.sgstPaise), " ", currency] })] })] })) : (_jsxs("tr", { children: [_jsxs("th", { children: ["IGST @ ", gst.gstRatePercent, "%"] }), _jsxs("td", { children: [formatInrFromPaise(gst.igstPaise), " ", currency] })] })), _jsxs("tr", { children: [_jsx("th", { children: "Total (incl. GST)" }), _jsx("td", { children: _jsxs("strong", { children: [formatInrFromPaise(gst.totalPaise), " ", currency] }) })] })] }) }));
+}

@@ -12,8 +12,9 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { OwnerViewer } from "./model/viewer";
-import { requireAdminWithMfa, requireCustomer, requireOwner, requireViewer } from "./model/viewer";
+import { requireAdminWithMfa, requireCustomer, requireOwner, requireOwnerWithClub, requireViewer } from "./model/viewer";
 import { parseGenericE164OrThrow } from "./model/phoneRegistration";
+import { assertTrimmedLength } from "./model/inputValidation";
 
 export type complaintType =
   | "violent_behaviour"
@@ -419,9 +420,15 @@ export const getClubComplaints = query({
 });
 
 export const getCustomerActiveComplaints = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    requireOwner(await requireViewer(ctx));
+  args: {
+    userId: v.id("users"),
+    clubId: v.id("clubs"),
+  },
+  handler: async (ctx, { userId, clubId }) => {
+    const owner = requireOwnerWithClub(await requireViewer(ctx));
+    if (owner.clubId !== clubId) {
+      throw new Error("PERM_001: Cannot access another club's data");
+    }
     const rows = await ctx.db
       .query("complaints")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
@@ -430,13 +437,16 @@ export const getCustomerActiveComplaints = query({
     const complaints = await Promise.all(
       active.map(async (c) => {
         const club = await ctx.db.get(c.reportedByClubId);
+        const ownClub = c.reportedByClubId === clubId;
         return {
           _id: c._id,
           type: c.type as complaintType,
           typeLabel: typeLabel(c.type),
-          description: c.description,
+          // IDOR: only this club's filed complaints include full description.
+          description: ownClub ? c.description : "",
           clubName: club?.name ?? "[Deleted Club]",
           createdAt: c.createdAt,
+          reportedByOwnClub: ownClub,
         };
       }),
     );
@@ -598,13 +608,7 @@ export const fileComplaint = mutation({
       throw new Error("Complaints can only be filed against customer accounts.");
     }
 
-    const desc = args.description.trim();
-    if (desc.length === 0) {
-      throw new Error("Description is required.");
-    }
-    if (desc.length > 4000) {
-      throw new Error("Description must be at most 4000 characters.");
-    }
+    const desc = assertTrimmedLength("Description", args.description, 1, 4000);
 
     if (args.sessionId !== undefined) {
       const session = await ctx.db.get(args.sessionId);

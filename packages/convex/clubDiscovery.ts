@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { requireCustomer, requireViewer } from "./model/viewer";
 import { haversineKm } from "@a3/utils/geo";
+import { assertSearchText } from "./model/inputValidation";
 
 function capitalizeTableType(raw: string): string {
   return raw
@@ -42,7 +43,7 @@ export const searchClubs = query({
     const radius = args.radiusKm ?? 50;
     const rawLimit = Math.min(Math.max(args.limit ?? 20, 1), 50);
     const cursor = args.cursor ?? 0;
-    const trimmed = args.searchText?.trim();
+    const trimmed = assertSearchText(args.searchText);
     const hasSearch = Boolean(trimmed && trimmed.length > 0);
     const hasGps =
       args.userLat !== undefined &&

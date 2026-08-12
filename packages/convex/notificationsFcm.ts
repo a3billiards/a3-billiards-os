@@ -28,14 +28,13 @@ import {
 // Ensure a3billiards.com is verified in your Resend dashboard before deployment.
 const RESEND_FROM = "A3 Billiards OS <noreply@a3billiards.com>";
 
-function requireEnv(name: string): string {
-  const val = process.env[name];
-  if (!val) throw new Error(`DATA_001: Missing ${name}`);
-  return val;
-}
+import {
+  requireServerEnv,
+  summarizeProviderHttpError,
+} from "./model/envSecrets";
 
 function parseServiceAccount(): ServiceAccount {
-  const raw = requireEnv("FIREBASE_SERVICE_ACCOUNT_JSON");
+  const raw = requireServerEnv("FIREBASE_SERVICE_ACCOUNT_JSON");
   try {
     return JSON.parse(raw) as ServiceAccount;
   } catch {
@@ -139,14 +138,14 @@ async function sendEmail({ to, subject, html, text, attachments }: SendEmailOpts
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${requireEnv("RESEND_API_KEY")}`,
+      Authorization: `Bearer ${requireServerEnv("RESEND_API_KEY")}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Resend error: ${err}`);
+    throw new Error(summarizeProviderHttpError(err, "Resend"));
   }
   return (await res.json()) as unknown;
 }

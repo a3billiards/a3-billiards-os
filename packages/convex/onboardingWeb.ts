@@ -7,6 +7,15 @@ import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { parseGenericE164OrThrow } from "./model/phoneRegistration";
+import {
+  assertAgeYears,
+  assertEmailNormalized,
+  assertFiniteInRange,
+  assertIsoCurrency,
+  assertTrimmedLength,
+  MAX_ADDRESS_LEN,
+  MAX_NAME_LEN,
+} from "./model/inputValidation";
 import { listOnboardingPlansFromEnv } from "./onboardingPlanPricing";
 import {
   getPlatformInvoiceConfig as readPlatformInvoiceConfig,
@@ -57,28 +66,20 @@ export const saveClubDraft = mutation({
       throw new Error("CLUB_002: Club already exists for this account");
     }
 
-    const name = clubName.trim();
-    const addr = address.trim();
-    if (name.length < 2 || name.length > 120) {
-      throw new Error("DATA_001: Club name must be 2–120 characters");
-    }
-    if (addr.length < 5 || addr.length > 500) {
-      throw new Error("DATA_001: Address must be 5–500 characters");
-    }
-    if (baseRatePerMin <= 0 || baseRatePerMin > 1_000_000) {
-      throw new Error("DATA_001: Table rate must be positive");
-    }
-    if (minBillMinutes < 1 || minBillMinutes > 24 * 60) {
-      throw new Error("DATA_001: Minimum bill minutes must be between 1 and 1440");
-    }
-    const tz = timezone.trim();
-    if (tz.length < 3 || tz.length > 80) {
-      throw new Error("DATA_001: Invalid timezone");
-    }
-    const cur = currency.trim().toUpperCase();
-    if (cur.length !== 3) {
-      throw new Error("DATA_001: Currency must be a 3-letter ISO code");
-    }
+    const name = assertTrimmedLength("Club name", clubName, 2, 120, {
+      normalizeWs: true,
+    });
+    const addr = assertTrimmedLength("Address", address, 5, MAX_ADDRESS_LEN);
+    const rate = assertFiniteInRange("Table rate", baseRatePerMin, 0.01, 1_000_000);
+    const minM = assertFiniteInRange(
+      "Minimum bill minutes",
+      minBillMinutes,
+      1,
+      24 * 60,
+      true,
+    );
+    const tz = assertTrimmedLength("Timezone", timezone, 3, 80);
+    const cur = assertIsoCurrency(currency);
     if (!isValidGeocodeLocation(location)) {
       throw new Error(
         "DATA_001: Club location is missing. Pin your club on the map on the club step before continuing.",
@@ -97,8 +98,8 @@ export const saveClubDraft = mutation({
         address: addr,
         location,
         currency: cur,
-        baseRatePerMin,
-        minBillMinutes,
+        baseRatePerMin: rate,
+        minBillMinutes: minM,
         timezone: tz,
         updatedAt: now,
       });
@@ -111,8 +112,8 @@ export const saveClubDraft = mutation({
       address: addr,
       location,
       currency: cur,
-      baseRatePerMin,
-      minBillMinutes,
+      baseRatePerMin: rate,
+      minBillMinutes: minM,
       timezone: tz,
       updatedAt: now,
     });
@@ -220,17 +221,11 @@ export const insertOwnerAccountForWeb = internalMutation({
     { email, passwordHash, name, age, phone, consentGiven },
   ) => {
     if (!consentGiven) throw new Error("AUTH_005: Consent not given");
-    if (age < 18) throw new Error("AUTH_007: Must be 18 or older");
-
-    const normalized = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
-      throw new Error("DATA_001: Invalid email address");
-    }
-
-    const trimmedName = name.trim();
-    if (trimmedName.length < 2 || trimmedName.length > 100) {
-      throw new Error("DATA_001: Name must be 2–100 characters");
-    }
+    const normalized = assertEmailNormalized(email);
+    const validAge = assertAgeYears(age);
+    const trimmedName = assertTrimmedLength("Name", name, 2, MAX_NAME_LEN, {
+      normalizeWs: true,
+    });
 
     const dupEmail = await ctx.db
       .query("users")
@@ -286,7 +281,7 @@ export const insertOwnerAccountForWeb = internalMutation({
         phone: normalizedPhone,
         phoneVerified: false,
         name: trimmedName,
-        age,
+        age: validAge,
         isFrozen: false,
         settingsPasscodeSet: false,
         consentGiven: true,
@@ -313,7 +308,7 @@ export const insertOwnerAccountForWeb = internalMutation({
       phone: normalizedPhone,
       phoneVerified: false,
       name: trimmedName,
-      age,
+      age: validAge,
       role: "owner",
       isFrozen: false,
       settingsPasscodeSet: false,

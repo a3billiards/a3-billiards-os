@@ -9,6 +9,11 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
+import {
+  assertNoControlChars,
+  MAX_BROADCAST_BODY_LEN,
+  MAX_BROADCAST_TITLE_LEN,
+} from "./model/inputValidation";
 
 const targetTypeV = v.union(
   v.literal("all"),
@@ -45,17 +50,23 @@ export const sendAdminBroadcast = action({
 
     const title = args.title.trim();
     const body = args.body.trim();
+    assertNoControlChars("Title", title);
+    assertNoControlChars("Message", body);
     if (title.length === 0) {
       throw new Error("DATA_001: Title is required");
     }
     if (body.length === 0) {
       throw new Error("DATA_001: Message is required");
     }
-    if (title.length > 100) {
-      throw new Error("DATA_001: Title must be at most 100 characters");
+    if (title.length > MAX_BROADCAST_TITLE_LEN) {
+      throw new Error(
+        `DATA_001: Title must be at most ${MAX_BROADCAST_TITLE_LEN} characters`,
+      );
     }
-    if (body.length > 500) {
-      throw new Error("DATA_001: Message must be at most 500 characters");
+    if (body.length > MAX_BROADCAST_BODY_LEN) {
+      throw new Error(
+        `DATA_001: Message must be at most ${MAX_BROADCAST_BODY_LEN} characters`,
+      );
     }
 
     if (args.targetType === "role") {

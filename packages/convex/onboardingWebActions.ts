@@ -14,10 +14,28 @@ import { listOnboardingPlansFromEnv } from "./onboardingPlanPricing";
 import { geocodeAddress } from "./model/geocode";
 import { assertStrongPasswordOrThrow } from "./model/passwordPolicy";
 import {
+  GEOCODE_LIMIT_PER_HOUR,
+  OWNER_REGISTER_LIMIT_PER_HOUR,
+} from "./model/rateLimiter";
+import {
+  assertAgeYears,
+  assertEmailNormalized,
+  assertTrimmedLength,
+  MAX_NAME_LEN,
+} from "./model/inputValidation";
+import {
+  razorpayBasicAuthHeader,
+  razorpayKeyId,
+  summarizeProviderHttpError,
+} from "./model/envSecrets";
+import { parseGenericE164OrThrow } from "./model/phoneRegistration";
+import {
   gstBreakdownForTaxableAmount,
   platformGstin,
   platformLegalName,
 } from "./model/platformGst";
+
+const HOUR_MS = 3_600_000;
 
 async function assertFlowEligibility(
   ctx: any,
@@ -64,22 +82,42 @@ export const registerOwnerAccount = action({
     if (!consentGiven) {
       throw new Error("AUTH_005: Consent not given");
     }
+
+    const normalizedEmail = assertEmailNormalized(email);
+    const trimmedName = assertTrimmedLength("Name", name, 2, MAX_NAME_LEN, {
+      normalizeWs: true,
+    });
+    const validAge = assertAgeYears(age);
+    let normalizedPhone: string | undefined;
+    if (phone !== undefined && phone.trim().length > 0) {
+      normalizedPhone = parseGenericE164OrThrow(phone);
+    }
+
+    // Rate limit signups per email BEFORE the expensive Scrypt hash so an attacker
+    // cannot burn CPU or spam verification emails by replaying registration.
+    const emailKey = `register:email:${normalizedEmail}`;
+    await ctx.runMutation(internal.rateLimit.consumeFixedWindow, {
+      key: emailKey,
+      limit: OWNER_REGISTER_LIMIT_PER_HOUR,
+      windowMs: HOUR_MS,
+    });
+
     assertStrongPasswordOrThrow(password);
     const passwordHash = await new Scrypt().hash(password);
     const { userId } = await ctx.runMutation(
       internal.onboardingWeb.insertOwnerAccountForWeb,
       {
-        email,
+        email: normalizedEmail,
         passwordHash,
-        name,
-        age,
-        phone,
+        name: trimmedName,
+        age: validAge,
+        phone: normalizedPhone,
         consentGiven,
       },
     );
 
     await ctx.runAction(api.ownerEmailVerificationActions.sendOwnerEmailVerificationCode, {
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
     });
 
     return { userId: String(userId), verificationSent: true as const };
@@ -88,7 +126,18 @@ export const registerOwnerAccount = action({
 
 export const geocodeClubAddress = action({
   args: { address: v.string() },
-  handler: async (_ctx, { address }) => {
+  handler: async (ctx, { address }) => {
+    // Geocoding hits a paid Google API. It is only ever invoked from the authenticated
+    // step-2 onboarding screen, so require auth (prevents anonymous cost abuse) and cap
+    // per-user calls to a sensible hourly budget.
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("AUTH_001: Not authenticated");
+    await ctx.runMutation(internal.rateLimit.consumeFixedWindow, {
+      key: `geocode:user:${String(userId)}`,
+      limit: GEOCODE_LIMIT_PER_HOUR,
+      windowMs: HOUR_MS,
+    });
+
     const { lat, lng } = await geocodeAddress(address);
     return { lat, lng };
   },
@@ -107,11 +156,8 @@ export const createRazorpayOrder = action({
     const plan = plans.find((p) => p.id === planId);
     if (!plan) throw new Error("DATA_001: Unknown subscription plan");
 
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-    if (!keyId || !keySecret) {
-      throw new Error("DATA_001: Razorpay is not configured");
-    }
+    const keyId = razorpayKeyId();
+    const authHeader = razorpayBasicAuthHeader();
 
     await assertFlowEligibility(ctx, userId, flow);
 
@@ -119,7 +165,6 @@ export const createRazorpayOrder = action({
     const supplierGstin = platformGstin();
 
     const receipt = `a3_${flow}_${String(userId).slice(-8)}_${Date.now()}`;
-    const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
 
     const orderBody = {
       amount: gst.totalPaise,
@@ -142,7 +187,7 @@ export const createRazorpayOrder = action({
     const res = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
       headers: {
-        Authorization: `Basic ${auth}`,
+        Authorization: authHeader,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(orderBody),
@@ -150,7 +195,7 @@ export const createRazorpayOrder = action({
 
     const raw = await res.text();
     if (!res.ok) {
-      console.error("Razorpay order error:", raw);
+      console.error(summarizeProviderHttpError(raw, "Razorpay onboarding order"));
       throw new Error("PAYMENT_003: Could not start payment — try again later");
     }
 

@@ -1,6 +1,6 @@
 {
-  "email": "mmthajuddin@gmail.com",
-  "password": "12345678",
-  "name": "thaju",
+  "email": "admin@test.local",
+  "password": "testpass12",
+  "name": "Test Admin",
   "isSuperAdmin": true
 }

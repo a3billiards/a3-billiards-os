@@ -3,15 +3,20 @@ import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireOwner, requireViewer } from "./model/viewer";
+import {
+  assertTrimmedLength,
+  assertFiniteInRange,
+  MAX_SNACK_NAME_LEN,
+} from "./model/inputValidation";
 
 function normalizeSnackName(name: string): string {
-  return name.trim().replace(/\s+/g, " ");
+  return assertTrimmedLength("Snack name", name, 1, MAX_SNACK_NAME_LEN, {
+    normalizeWs: true,
+  });
 }
 
 function ensurePositivePrice(price: number): void {
-  if (!Number.isFinite(price) || price <= 0) {
-    throw new Error("DATA_002: Snack price must be a positive number");
-  }
+  assertFiniteInRange("Snack price", price, 0.01, 1_000_000);
 }
 
 function ensurePositiveQty(qty: number): void {

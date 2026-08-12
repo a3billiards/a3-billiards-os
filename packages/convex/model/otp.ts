@@ -1,6 +1,8 @@
 // packages/convex/model/otp.ts
 // Called from within Convex actions only — never from mutations
 
+import { requireServerEnv } from "./envSecrets";
+
 function graphRecipientDigits(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 8) {
@@ -92,11 +94,8 @@ export async function dispatchWhatsAppOtp(
     parameters: [{ type: "text" as const, text: code }],
   };
 
-  const phoneId = process.env.WHATSAPP_PHONE_ID;
-  const token = process.env.WHATSAPP_API_TOKEN;
-  if (!phoneId || !token) {
-    throw new Error("OTP_004: WhatsApp is not configured (missing env)");
-  }
+  const phoneId = requireServerEnv("WHATSAPP_PHONE_ID");
+  const token = requireServerEnv("WHATSAPP_API_TOKEN");
 
   type WaComponent =
     | typeof bodyComponent

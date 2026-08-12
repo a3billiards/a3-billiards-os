@@ -6,6 +6,8 @@
  * - Customer: scoped to own userId; club reads only via getClubForViewer (public rules).
  *
  * Call requireViewer() at the top of every mutation, then assert scope helpers as needed.
+ *
+ * Policy reference: `model/accessControlMatrix.ts`
  */
 
 import { getAuthUserId } from "@convex-dev/auth/server";

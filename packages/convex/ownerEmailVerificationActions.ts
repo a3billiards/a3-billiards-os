@@ -5,21 +5,15 @@ import { randomInt } from "crypto";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
+import { assertEmailNormalized } from "./model/inputValidation";
 
 const BCRYPT_ROUNDS = 10;
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
 
 /** Called after owner registration or from the resend button. */
 export const sendOwnerEmailVerificationCode = action({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
-    const emailNormalized = normalizeEmail(email);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalized)) {
-      throw new Error("DATA_001: Invalid email address");
-    }
+    const emailNormalized = assertEmailNormalized(email);
 
     const profile = await ctx.runQuery(
       internal.ownerEmailVerification.getOwnerPasswordAccountByEmail,
@@ -61,7 +55,7 @@ export const verifyOwnerEmailCode = action({
     code: v.string(),
   },
   handler: async (ctx, { email, code }) => {
-    const emailNormalized = normalizeEmail(email);
+    const emailNormalized = assertEmailNormalized(email);
     const normalizedCode = code.replace(/\s/g, "");
     if (!/^\d{6}$/.test(normalizedCode)) {
       throw new Error("AUTH_009: Verification code invalid or expired");

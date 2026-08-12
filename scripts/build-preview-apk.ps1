@@ -62,6 +62,19 @@ Remove-Item Env:GRADLE_OPTS -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $env:GRADLE_USER_HOME, $env:TEMP, $DistDir | Out-Null
 
 Write-Host "Running expo prebuild (android, clean)..."
+if (Test-Path (Join-Path $AndroidDir "gradlew.bat")) {
+  Write-Host "Stopping Gradle daemons before prebuild..."
+  Push-Location $AndroidDir
+  try {
+    .\gradlew.bat --stop 2>$null
+  } catch {
+    # ignore
+  } finally {
+    Pop-Location
+  }
+  Start-Sleep -Seconds 3
+}
+
 Push-Location $AppDir
 try {
   npx expo prebuild --platform android --clean
@@ -71,18 +84,6 @@ try {
 
 if (-not (Test-Path $AndroidDir)) {
   throw "Android folder not found after prebuild: $AndroidDir"
-}
-
-if (Test-Path (Join-Path $AndroidDir "gradlew.bat")) {
-  Write-Host "Stopping Gradle daemons..."
-  Push-Location $AndroidDir
-  try {
-    .\gradlew.bat --stop 2>$null
-  } catch {
-    # ignore
-  } finally {
-    Pop-Location
-  }
 }
 
 $localCxx = @(

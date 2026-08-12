@@ -2,6 +2,10 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { OWNER_UNRESTRICTED_TABS } from "./passcodePermissions";
 
+/**
+ * Enforce staff role tab allow-list. When `roleId` is omitted the caller is in
+ * owner mode (full tabs per ACCESS_CONTROL_MATRIX) — passcode is client-gated only.
+ */
 export async function assertStaffTabAllowed(
   ctx: QueryCtx | MutationCtx,
   clubId: Id<"clubs">,
