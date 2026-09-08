@@ -11,6 +11,7 @@
     "sync:build-folder": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-to-build-folder.ps1",
     "build:preview-apks": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-all-preview-apks.ps1",
     "deploy:onboarding-web": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-onboarding-web.ps1",
+    "tuya:test-switch": "node scripts/tuya-test-switch.mjs",
     "check:secrets": "node scripts/check-tracked-secrets.mjs"
   },
   "devDependencies": {
@@ -26,7 +27,8 @@
       "amazon-ivs-react-native-broadcast"
     ],
     "overrides": {
-      "nodemailer": "link:packages/nodemailer-stub"
+      "nodemailer": "link:packages/nodemailer-stub",
+      "convex": "1.34.1"
     }
   },
   "engines": {
