@@ -1,10 +1,30 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useConvexAuth } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 
 export default function Layout() {
   const { isAuthenticated } = useConvexAuth();
   const { signOut } = useAuthActions();
+  const { pathname } = useLocation();
+  const isLanding = pathname === "/";
+  const isAuthShell =
+    isLanding ||
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname === "/verify-email" ||
+    pathname === "/deletion-cancelled" ||
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/invoice/") ||
+    pathname === "/renew" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname === "/dpdp";
+
+  if (isAuthShell) {
+    return <Outlet />;
+  }
 
   return (
     <div className="layout">
@@ -13,7 +33,7 @@ export default function Layout() {
           A3 Billiards OS
         </Link>
         <nav className="nav-links" aria-label="Main">
-          <Link to="/register">Register</Link>
+          {!isAuthenticated ? <Link to="/register">Register</Link> : null}
           {!isAuthenticated ? <Link to="/login">Login</Link> : null}
           {isAuthenticated ? (
             <>

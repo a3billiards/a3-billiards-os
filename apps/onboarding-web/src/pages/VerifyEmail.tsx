@@ -71,69 +71,108 @@ export default function VerifyEmail() {
   }, [email, code, verifyEmailCode, nav]);
 
   return (
-    <div className="card">
-      <h1>Verify email</h1>
-      <p className="muted">
-        Owners must verify email before signing in. Enter the 6-digit code from your inbox.
-      </p>
-      {error ? <div className="error-banner">{error}</div> : null}
-      {info ? <div className="success-banner">{info}</div> : null}
-      <label htmlFor="verifyEmail">Email</label>
-      <input
-        id="verifyEmail"
-        type="email"
-        autoComplete="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        disabled={busy}
-      />
-      {!codeSent ? (
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={busy || email.trim().length === 0}
-          onClick={() => void handleSendCode()}
-        >
-          {busy ? "Sending…" : "Send code"}
-        </button>
-      ) : (
-        <>
-          <label htmlFor="verifyCode">Verification code</label>
+    <div className="auth-page auth-page-login auth-page-forgot">
+      <div className="auth-stage" aria-hidden="true">
+        <img
+          className="auth-stage-art"
+          src="/images/auth-hero.png"
+          alt=""
+          draggable={false}
+        />
+        <div className="auth-stage-shade" />
+      </div>
+
+      <div className="auth-card">
+        <Link to="/" className="auth-card-brand">
+          <span className="auth-card-brand-a3">A3</span>
+          <span className="auth-card-brand-rest">BILLIARDS OS</span>
+        </Link>
+
+        <h1 className="auth-card-title">Verify email</h1>
+        <p className="auth-card-subtitle">
+          Owners must verify email before signing in. Enter the 6-digit code from
+          your inbox.
+        </p>
+
+        {error ? <div className="auth-error">{error}</div> : null}
+        {info ? <div className="auth-success">{info}</div> : null}
+
+        <label className="auth-field">
+          <span className="auth-field-label">Email</span>
           <input
-            id="verifyCode"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            id="verifyEmail"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@club.com"
             disabled={busy}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && code.length === 6) void handleVerify();
-            }}
           />
-          <div className="inline-actions">
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={busy || code.length !== 6}
-              onClick={() => void handleVerify()}
-            >
-              {busy ? "Verifying…" : "Verify"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={busy}
-              onClick={() => void handleSendCode()}
-            >
-              Resend
-            </button>
-          </div>
-        </>
-      )}
-      <p className="muted" style={{ marginTop: 12 }}>
-        <Link to="/login">Back to login</Link>
-      </p>
+        </label>
+
+        {!codeSent ? (
+          <button
+            type="button"
+            className="auth-submit"
+            disabled={busy || email.trim().length === 0}
+            onClick={() => void handleSendCode()}
+          >
+            <span className="auth-submit-label">
+              {busy ? "Sending…" : "Send code"}
+            </span>
+            <span className="auth-submit-fill" aria-hidden="true" />
+          </button>
+        ) : (
+          <>
+            <label className="auth-field">
+              <span className="auth-field-label">Verification code</span>
+              <input
+                id="verifyCode"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={(e) =>
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+                placeholder="6-digit code"
+                disabled={busy}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && code.length === 6) void handleVerify();
+                }}
+              />
+            </label>
+
+            <div className="auth-inline-actions">
+              <button
+                type="button"
+                className="auth-submit"
+                disabled={busy || code.length !== 6}
+                onClick={() => void handleVerify()}
+              >
+                <span className="auth-submit-label">
+                  {busy ? "Verifying…" : "Verify"}
+                </span>
+                <span className="auth-submit-fill" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="auth-ghost-btn"
+                disabled={busy}
+                onClick={() => void handleSendCode()}
+              >
+                Resend
+              </button>
+            </div>
+          </>
+        )}
+
+        <p className="auth-footer">
+          <Link to="/login" className="auth-footer-strong">
+            Back to login
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

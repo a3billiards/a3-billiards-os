@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ClipboardEvent, CSSProperties, KeyboardEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -66,7 +67,19 @@ function loadRazorpayScript(): Promise<void> {
 
 type Step = 1 | 2 | 3 | 4;
 
-type RegistrationPhase = "account" | "verify-email";
+type RegistrationPhase = "account" | "verify-email" | "email-verified";
+
+const OTP_LENGTH = 6;
+
+function maskEmail(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  const at = trimmed.indexOf("@");
+  if (at <= 0) return trimmed;
+  const user = trimmed.slice(0, at);
+  const domain = trimmed.slice(at + 1);
+  const visible = user.slice(0, Math.min(2, user.length));
+  return `${visible}${"•".repeat(Math.max(1, user.length - visible.length))}@${domain}`;
+}
 
 type SubscriptionPlanRow = {
   id: "monthly" | "yearly";
@@ -95,6 +108,42 @@ type SubscriptionPlanRow = {
 
 const PHONE_COUNTRY_CODE = "+91";
 
+function RegisterSecurityNote({ boxed = false }: { boxed?: boolean }) {
+  return (
+    <div className={`register-hero-security${boxed ? " is-boxed" : ""}`}>
+      <span className="register-hero-security-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+          <path
+            d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <rect
+            x="9.2"
+            y="10.2"
+            width="5.6"
+            height="4.4"
+            rx="1"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+          <path
+            d="M12 10.2V9a1.4 1.4 0 0 1 2.8 0v1.2"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      </span>
+      <div className="register-hero-security-copy">
+        <p className="register-hero-security-title">Your data is secure with us.</p>
+        <p className="register-hero-security-sub">We never share your information.</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Register() {
   const [searchParams] = useSearchParams();
   const nav = useNavigate();
@@ -121,6 +170,8 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
   const [phoneCountryCode] = useState(PHONE_COUNTRY_CODE);
@@ -142,7 +193,12 @@ export default function Register() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [mapFocusLat, setMapFocusLat] = useState<number | null>(null);
   const [mapFocusLng, setMapFocusLng] = useState<number | null>(null);
+  const [mapFocusToken, setMapFocusToken] = useState(0);
   const [geocoding, setGeocoding] = useState(false);
+  const [otpFocusIndex, setOtpFocusIndex] = useState(0);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const otpAutoSubmitRef = useRef<string | null>(null);
+  const otpBoxesRef = useRef<HTMLDivElement | null>(null);
   const canUseProtectedOnboarding =
     !authLoading &&
     isAuthenticated &&
@@ -164,10 +220,27 @@ export default function Register() {
       return;
     }
 
-    if (postSignInPending) setPostSignInPending(false);
+    // After OTP verify + sign-in: show success UI; wait for Continue.
+    if (postSignInPending || registrationPhase === "verify-email") {
+      setPostSignInPending(false);
+      setRegistrationPhase("email-verified");
+      setStep(1);
+      return;
+    }
+
+    if (registrationPhase === "email-verified") {
+      return;
+    }
+
     setRegistrationPhase("account");
     setStep(2);
-  }, [authLoading, isAuthenticated, status, postSignInPending]);
+  }, [
+    authLoading,
+    isAuthenticated,
+    status,
+    postSignInPending,
+    registrationPhase,
+  ]);
 
   useEffect(() => {
     const plan = searchParams.get("plan");
@@ -293,11 +366,114 @@ export default function Register() {
       captureEvent("onboarding_owner_email_verified");
       setPostSignInPending(true);
     } catch (e) {
-      setError(parseConvexError(e as Error).message);
+      otpAutoSubmitRef.current = null;
+      const message =
+        e instanceof Error
+          ? parseConvexError(e).message
+          : "Invalid verification code. Please try again.";
+      setError(message || "Invalid verification code. Please try again.");
+      setVerificationCode("");
+      setOtpFocusIndex(0);
+      queueMicrotask(() => otpRefs.current[0]?.focus());
     } finally {
       setBusy(false);
     }
-  }, [verificationCode, email, password, verifyEmailCode, signIn]);
+  }, [
+    busy,
+    postSignInPending,
+    verificationCode,
+    email,
+    password,
+    verifyEmailCode,
+    signIn,
+  ]);
+
+  useEffect(() => {
+    if (registrationPhase !== "verify-email") return;
+    const id = window.setTimeout(() => {
+      const idx = Math.min(verificationCode.length, OTP_LENGTH - 1);
+      otpRefs.current[idx]?.focus();
+      setOtpFocusIndex(idx);
+    }, 40);
+    return () => window.clearTimeout(id);
+    // Only when entering the OTP phase
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registrationPhase]);
+
+  const setOtpDigit = useCallback((index: number, raw: string) => {
+    const digit = raw.replace(/\D/g, "").slice(-1);
+    setVerificationCode((prev) => {
+      const before = prev.slice(0, index);
+      const after = prev.slice(index + 1);
+      return `${before}${digit}${after}`.replace(/\D/g, "").slice(0, OTP_LENGTH);
+    });
+    if (digit && index < OTP_LENGTH - 1) {
+      otpRefs.current[index + 1]?.focus();
+      setOtpFocusIndex(index + 1);
+    }
+  }, []);
+
+  const handleOtpKeyDown = useCallback(
+    (index: number, e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        setVerificationCode((prev) => {
+          const chars = prev.split("");
+          if (chars[index]) {
+            chars[index] = "";
+            return chars.join("");
+          }
+          if (index > 0) {
+            chars[index - 1] = "";
+            queueMicrotask(() => {
+              otpRefs.current[index - 1]?.focus();
+              setOtpFocusIndex(index - 1);
+            });
+            return chars.join("");
+          }
+          return prev;
+        });
+        return;
+      }
+      if (e.key === "ArrowLeft" && index > 0) {
+        otpRefs.current[index - 1]?.focus();
+        setOtpFocusIndex(index - 1);
+      }
+      if (e.key === "ArrowRight" && index < OTP_LENGTH - 1) {
+        otpRefs.current[index + 1]?.focus();
+        setOtpFocusIndex(index + 1);
+      }
+    },
+    [],
+  );
+
+  const handleOtpPaste = useCallback(
+    (e: ClipboardEvent<HTMLInputElement>) => {
+      e.preventDefault();
+      const pasted = e.clipboardData
+        .getData("text")
+        .replace(/\D/g, "")
+        .slice(0, OTP_LENGTH);
+      if (!pasted) return;
+      setVerificationCode(pasted);
+      const focusAt = Math.min(pasted.length, OTP_LENGTH - 1);
+      otpRefs.current[focusAt]?.focus();
+      setOtpFocusIndex(focusAt);
+    },
+    [],
+  );
+
+  const continueAfterEmailVerified = useCallback(() => {
+    setError(null);
+    setRegistrationPhase("account");
+    setStep(2);
+  }, []);
+
+  // Keep the glowing active box aligned with the next empty digit.
+  const otpActiveIndex =
+    verificationCode.length >= OTP_LENGTH
+      ? OTP_LENGTH - 1
+      : Math.max(0, Math.min(otpFocusIndex, verificationCode.length));
 
   const handleResendVerification = useCallback(async () => {
     if (resendCooldown > 0 || busy) return;
@@ -329,10 +505,18 @@ export default function Register() {
     setGeocoding(true);
     try {
       const result = await geocodeClubAddress({ address: address.trim() });
+      if (
+        !Number.isFinite(result.lat) ||
+        !Number.isFinite(result.lng)
+      ) {
+        setError("Could not locate that address on the map. Try a fuller address.");
+        return;
+      }
       setLat(result.lat);
       setLng(result.lng);
       setMapFocusLat(result.lat);
       setMapFocusLng(result.lng);
+      setMapFocusToken((token) => token + 1);
     } catch (e) {
       setError(parseConvexError(e as Error).message);
     } finally {
@@ -449,96 +633,367 @@ export default function Register() {
 
   if (authLoading || status === undefined) {
     return (
-      <div className="card">
-        <p className="muted">Loading…</p>
+      <div className="auth-page auth-page-register">
+        <div className="auth-stage" aria-hidden="true">
+          <img
+            className="auth-stage-art"
+            src="/images/auth-hero.png"
+            alt=""
+            draggable={false}
+          />
+          <div className="auth-stage-shade" />
+        </div>
+        <div className="auth-register-scroll">
+          <div className="auth-card auth-card-wide">
+            <p className="muted" style={{ margin: 0 }}>
+              Loading…
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="card">
-      <h1>Club onboarding</h1>
-      <p className="muted">
-        Create your owner account, add your club, then complete subscription payment.
-      </p>
-
-      <div className="steps" aria-label="Onboarding progress">
-        {(
-          [
-            { n: 1 as Step, label: "1 · Account" },
-            { n: 2 as Step, label: "2 · Club" },
-            { n: 3 as Step, label: "3 · Pay" },
-            { n: 4 as Step, label: "4 · Done" },
-          ] as const
-        ).map(({ n, label }) => {
-          const completed = step > n;
-          const active = step >= n;
-          return (
-            <button
-              key={n}
-              type="button"
-              className={`step-pill step-pill-button ${active ? "active" : ""}`}
-              disabled={!completed}
-              onClick={() => goToEarlierStep(n)}
-              aria-current={step === n ? "step" : undefined}
-            >
-              {label}
-            </button>
-          );
-        })}
+    <div className="auth-page auth-page-register">
+      <div className="auth-stage" aria-hidden="true">
+        <img
+          className="auth-stage-art"
+          src="/images/auth-hero.png"
+          alt=""
+          draggable={false}
+        />
+        <div className="auth-stage-shade" />
       </div>
+      <div className="auth-register-scroll">
+      <div className="auth-card auth-card-wide">
+      {registrationPhase !== "verify-email" &&
+      registrationPhase !== "email-verified" &&
+      step !== 2 &&
+      step !== 3 ? (
+        <header className="register-hero">
+          <div className="register-hero-copy">
+            <Link to="/" className="register-hero-brand">
+              <img
+                className="register-hero-mark"
+                src="/images/small-logo.png"
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+              />
+              <span className="register-hero-brand-text">A3 BILLIARDS OS</span>
+            </Link>
+            <h1 className="register-hero-title">Create account</h1>
+            <p className="register-hero-subtitle">
+              Owner account, club details, then subscription — same flow as before.
+            </p>
 
-      {error ? <div className="error-banner">{error}</div> : null}
+            <nav className="register-stepper" aria-label="Onboarding progress">
+              {(
+                [
+                  { n: 1 as Step, label: "Account" },
+                  { n: 2 as Step, label: "Club" },
+                  { n: 3 as Step, label: "Pay" },
+                  { n: 4 as Step, label: "Done" },
+                ] as const
+              ).map(({ n, label }, index, list) => {
+                const completed = step > n;
+                const current = step === n;
+                return (
+                  <div key={n} className="register-stepper-item">
+                    {index > 0 ? (
+                      <span
+                        className={`register-stepper-line ${step >= n ? "is-filled" : ""}`}
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      className={[
+                        "register-stepper-btn",
+                        current ? "is-current" : "",
+                        completed ? "is-completed" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      disabled={!completed}
+                      onClick={() => goToEarlierStep(n)}
+                      aria-current={current ? "step" : undefined}
+                      aria-label={`${label} (step ${n} of ${list.length})`}
+                    >
+                      <span className="register-stepper-circle">{n}</span>
+                      <span className="register-stepper-label">{label}</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </nav>
+
+            <RegisterSecurityNote />
+          </div>
+
+          <div className="register-hero-art" aria-hidden="true">
+            <video
+              className="register-hero-video"
+              src="/videos/eightball-smoke.mp4"
+              poster="/images/auth-hero.png"
+              autoPlay
+              muted
+              loop
+              playsInline
+            />
+            <div className="register-hero-art-fade" />
+          </div>
+        </header>
+      ) : registrationPhase === "verify-email" ||
+        registrationPhase === "email-verified" ? (
+        <Link to="/" className="auth-card-brand">
+          <span className="auth-card-brand-a3">A3</span>
+          <span className="auth-card-brand-rest">BILLIARDS OS</span>
+        </Link>
+      ) : null}
+
+      {step === 1 && registrationPhase === "verify-email" && (
+        <div className="otp-panel otp-panel-enter">
+          <p className="otp-kicker">OTP Verification</p>
+          <p className="otp-subtitle">
+            Enter the {OTP_LENGTH}-digit code we sent to{" "}
+            <strong>{maskEmail(email)}</strong>.
+          </p>
+
+          {error ? <div className="auth-error">{error}</div> : null}
+
+          <div
+            className="otp-boxes"
+            ref={otpBoxesRef}
+            role="group"
+            aria-label="Email verification code"
+          >
+            <span
+              className={[
+                "otp-traveling-glow",
+                verificationCode.length === OTP_LENGTH ? "is-complete" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-hidden="true"
+              style={
+                {
+                  "--otp-i": otpActiveIndex,
+                } as CSSProperties
+              }
+            />
+            {Array.from({ length: OTP_LENGTH }, (_, index) => {
+              const value = verificationCode[index] ?? "";
+              const active = otpActiveIndex === index && !busy && !postSignInPending;
+              return (
+                <div
+                  key={index}
+                  className={[
+                    "otp-box",
+                    active ? "is-active" : "",
+                    value ? "is-filled" : "",
+                    verificationCode.length === OTP_LENGTH ? "is-complete" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <input
+                    ref={(el) => {
+                      otpRefs.current[index] = el;
+                    }}
+                    className="otp-box-input"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete={index === 0 ? "one-time-code" : "off"}
+                    maxLength={1}
+                    value={value}
+                    disabled={busy || postSignInPending}
+                    aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
+                    onFocus={() => setOtpFocusIndex(index)}
+                    onChange={(e) => setOtpDigit(index, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                    onPaste={handleOtpPaste}
+                  />
+                  {value ? (
+                    <span className="otp-digit" aria-hidden="true">
+                      {value}
+                    </span>
+                  ) : active ? (
+                    <span className="otp-caret" aria-hidden="true" />
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary otp-continue"
+            disabled={
+              busy || postSignInPending || verificationCode.length !== OTP_LENGTH
+            }
+            onClick={() => void handleVerifyEmail()}
+          >
+            <span className="auth-submit-fill" aria-hidden="true" />
+            <span className="auth-fill-label">
+              {busy || postSignInPending ? "Verifying…" : "Continue"}
+            </span>
+          </button>
+
+          <div className="otp-actions">
+            <button
+              type="button"
+              className="btn btn-secondary otp-action-btn otp-resend-btn"
+              disabled={busy || resendCooldown > 0 || postSignInPending}
+              onClick={() => void handleResendVerification()}
+            >
+              <span>Resend code</span>
+              {resendCooldown > 0 ? (
+                <span className="otp-resend-timer" aria-live="polite">
+                  {resendCooldown}s
+                </span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary otp-action-btn"
+              disabled={busy || postSignInPending}
+              onClick={() => {
+                setError(null);
+                setVerificationCode("");
+                otpAutoSubmitRef.current = null;
+                setRegistrationPhase("account");
+              }}
+            >
+              Back to account details
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 1 && registrationPhase === "email-verified" && (
+        <div className="otp-panel otp-panel-success otp-panel-enter">
+          <p className="otp-kicker">OTP Verification</p>
+          <h2 className="otp-title">Email verified</h2>
+          <p className="otp-subtitle">You&apos;re signed in on this device.</p>
+
+          <div className="otp-success-mark" aria-hidden="true">
+            <span className="otp-success-glow" />
+            <span className="otp-success-box">
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <path
+                  d="M9 18.5 15.2 24.5 27 11.5"
+                  stroke="#22c55e"
+                  strokeWidth="3.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary otp-continue"
+            onClick={continueAfterEmailVerified}
+          >
+            <span className="auth-submit-fill" aria-hidden="true" />
+            <span className="auth-fill-label">Continue</span>
+          </button>
+        </div>
+      )}
 
       {step === 1 && registrationPhase === "account" && (
         <>
+          {error ? <div className="auth-error">{error}</div> : null}
           <h2>Owner account</h2>
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <label htmlFor="password">Password</label>
-          <p className="muted" style={{ margin: "0 0 8px", fontSize: "0.85rem" }}>
+          <div className="row">
+            <label className="auth-field" htmlFor="email">
+              <span className="auth-field-label">Email</span>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@club.com"
+              />
+            </label>
+            <label className="auth-field" htmlFor="name">
+              <span className="auth-field-label">Full name</span>
+              <input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+              />
+            </label>
+          </div>
+          <p className="muted" style={{ margin: "0 0 8px", fontSize: "0.78rem" }}>
             {STRONG_PASSWORD_HINT}
           </p>
-          <input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <PasswordStrengthBar password={password} />
-          <label htmlFor="confirmPassword">Confirm password</label>
-          <input
-            id="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-          <label htmlFor="name">Full name</label>
-          <input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
           <div className="row">
-            <div>
-              <label htmlFor="age">Age</label>
+            <label className="auth-field" htmlFor="password">
+              <span className="auth-field-label">Password</span>
+              <span className="auth-field-row">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  className="auth-eye"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </span>
+            </label>
+            <label className="auth-field" htmlFor="confirmPassword">
+              <span className="auth-field-label">Confirm password</span>
+              <span className="auth-field-row">
+                <input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  className="auth-eye"
+                  aria-label={
+                    showConfirmPassword
+                      ? "Hide confirm password"
+                      : "Show confirm password"
+                  }
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                >
+                  {showConfirmPassword ? "Hide" : "Show"}
+                </button>
+              </span>
+            </label>
+          </div>
+          <PasswordStrengthBar password={password} />
+          <div className="row">
+            <label className="auth-field" htmlFor="age">
+              <span className="auth-field-label">Age</span>
               <input
                 id="age"
                 inputMode="numeric"
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
               />
-            </div>
-            <div>
-              <label htmlFor="phone">Mobile (optional)</label>
+            </label>
+            <label className="auth-field" htmlFor="phone">
+              <span className="auth-field-label">Mobile (optional)</span>
               <input
                 id="phone"
                 value={phoneLocal}
@@ -546,7 +1001,7 @@ export default function Register() {
                 placeholder="+91 mobile number"
                 onChange={(e) => setPhoneLocal(e.target.value)}
               />
-            </div>
+            </label>
           </div>
           <div className="consent-row">
             <input
@@ -555,7 +1010,7 @@ export default function Register() {
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
             />
-            <label htmlFor="consent" style={{ margin: 0, color: "var(--text)" }}>
+            <label htmlFor="consent">
               I agree to the{" "}
               <a href={PRIVACY} target="_blank" rel="noreferrer">
                 Privacy Policy
@@ -571,170 +1026,215 @@ export default function Register() {
               .
             </label>
           </div>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void handleStep1()}>
-            {busy ? "Please wait…" : "Continue"}
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() => void handleStep1()}
+          >
+            <span className="auth-submit-fill" aria-hidden="true" />
+            <span className="auth-fill-label">
+              {busy ? "Please wait…" : "Continue"}
+            </span>
           </button>
-          <p className="muted" style={{ marginTop: 12 }}>
-            Already registered? <Link to="/login">Sign in</Link>
+          <p className="auth-footer">
+            Already registered?{" "}
+            <Link to="/login" className="auth-footer-strong">
+              Sign in
+            </Link>
             {" · "}
             <Link to="/forgot-password">Forgot password?</Link>
           </p>
         </>
       )}
 
-      {step === 1 && registrationPhase === "verify-email" && (
-        <>
-          <h2>Verify your email</h2>
-          <p className="muted">
-            We sent a 6-digit code to <strong>{email.trim().toLowerCase()}</strong>. Enter it below
-            to continue.
-          </p>
-          <label htmlFor="verificationCode">Verification code</label>
-          <input
-            id="verificationCode"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={verificationCode}
-            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-          />
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy || verificationCode.length !== 6}
-            onClick={() => void handleVerifyEmail()}
-          >
-            {busy || postSignInPending ? "Please wait…" : "Verify and continue"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={busy || resendCooldown > 0}
-            onClick={() => void handleResendVerification()}
-            style={{ marginLeft: 10 }}
-          >
-            {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={busy || postSignInPending}
-            onClick={() => {
-              setError(null);
-              setRegistrationPhase("account");
-            }}
-            style={{ marginTop: 10 }}
-          >
-            Back to account details
-          </button>
-          {postSignInPending ? (
-            <p className="muted" style={{ marginTop: 10 }}>
-              Signing you in…
-            </p>
-          ) : null}
-        </>
-      )}
-
       {step === 2 && (
-        <>
-          <h2>Club details</h2>
-          <label htmlFor="clubName">Club name</label>
-          <input
-            id="clubName"
-            value={clubName}
-            onChange={(e) => setClubName(e.target.value)}
-          />
-          <label htmlFor="address">Street address</label>
-          <textarea
-            id="address"
-            rows={3}
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Building, street, area, city, state, PIN"
-          />
-          <label>Club location on map</label>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={busy || geocoding || !address.trim()}
-            onClick={() => void handleFindOnMap()}
-            style={{ marginBottom: 8 }}
-          >
-            {geocoding ? "Finding address on map…" : "Find address on map"}
-          </button>
-          <ClubLocationPinPicker
-            lat={lat}
-            lng={lng}
-            onChange={handlePinChange}
-            disabled={busy || geocoding}
-            focusLat={mapFocusLat}
-            focusLng={mapFocusLng}
-          />
-          <div className="row">
-            <div>
-              <label htmlFor="currency">Currency</label>
-              <select
-                id="currency"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
+        <div className="club-shell">
+          <div className="club-main">
+            <header className="register-hero is-club">
+              <div className="register-hero-copy">
+                <Link to="/" className="register-hero-brand">
+                  <img
+                    className="register-hero-mark"
+                    src="/images/small-logo.png"
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                  />
+                  <span className="register-hero-brand-text">A3 BILLIARDS OS</span>
+                </Link>
+                <h1 className="register-hero-title">Create account</h1>
+                <p className="register-hero-subtitle">
+                  Owner account, club details, then subscription — same flow as before.
+                </p>
+
+                <nav className="register-stepper" aria-label="Onboarding progress">
+                  {(
+                    [
+                      { n: 1 as Step, label: "Account" },
+                      { n: 2 as Step, label: "Club" },
+                      { n: 3 as Step, label: "Pay" },
+                      { n: 4 as Step, label: "Done" },
+                    ] as const
+                  ).map(({ n, label }, index, list) => {
+                    const completed = step > n;
+                    const current = step === n;
+                    return (
+                      <div key={n} className="register-stepper-item">
+                        {index > 0 ? (
+                          <span
+                            className={`register-stepper-line ${step >= n ? "is-filled" : ""}`}
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          className={[
+                            "register-stepper-btn",
+                            current ? "is-current" : "",
+                            completed ? "is-completed" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          disabled={!completed}
+                          onClick={() => goToEarlierStep(n)}
+                          aria-current={current ? "step" : undefined}
+                          aria-label={`${label} (step ${n} of ${list.length})`}
+                        >
+                          <span className="register-stepper-circle">{n}</span>
+                          <span className="register-stepper-label">{label}</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </nav>
+              </div>
+            </header>
+
+            <div className="club-form">
+              <RegisterSecurityNote boxed />
+              <h2>Club details</h2>
+              {error ? <div className="auth-error">{error}</div> : null}
+
+              <label className="auth-field" htmlFor="clubName">
+                <span className="auth-field-label">Club name</span>
+                <input
+                  id="clubName"
+                  value={clubName}
+                  onChange={(e) => setClubName(e.target.value)}
+                />
+              </label>
+              <label className="auth-field" htmlFor="address">
+                <span className="auth-field-label">Street address</span>
+                <textarea
+                  id="address"
+                  rows={3}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Building, street, area, city, state, PIN"
+                />
+              </label>
+              <span className="auth-field-label">Club location on map</span>
+              <button
+                type="button"
+                className="btn btn-secondary club-find-btn"
+                disabled={busy || geocoding || !address.trim()}
+                onClick={() => void handleFindOnMap()}
               >
-                <option value="INR">INR</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="timezone">Timezone (IANA)</label>
-              <input
-                id="timezone"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-              />
+                <span>{geocoding ? "Finding address on map…" : "Find address on map"}</span>
+                <span aria-hidden="true">›</span>
+              </button>
+              <p className="muted club-map-hint">
+                Drag the map to move around, click to drop the pin, or use your current location.
+                Use +/− to zoom.
+              </p>
             </div>
           </div>
-          <div className="row">
-            <div>
-              <label htmlFor="baseRate">Base rate / minute</label>
-              <input
-                id="baseRate"
-                inputMode="decimal"
-                value={baseRate}
-                onChange={(e) => setBaseRate(e.target.value)}
-              />
+
+          <div className="club-side">
+            <ClubLocationPinPicker
+              lat={lat}
+              lng={lng}
+              onChange={handlePinChange}
+              disabled={busy || geocoding}
+              focusLat={mapFocusLat}
+              focusLng={mapFocusLng}
+              focusToken={mapFocusToken}
+              hideHint
+            />
+            <div className="row club-meta-row">
+              <label className="auth-field" htmlFor="currency">
+                <span className="auth-field-label">Currency</span>
+                <select
+                  id="currency"
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                >
+                  <option value="INR">INR</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </label>
+              <label className="auth-field" htmlFor="timezone">
+                <span className="auth-field-label">Timezone (IANA)</span>
+                <input
+                  id="timezone"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                />
+              </label>
             </div>
-            <div>
-              <label htmlFor="minBill">Minimum bill (minutes)</label>
-              <input
-                id="minBill"
-                inputMode="numeric"
-                value={minBill}
-                onChange={(e) => setMinBill(e.target.value)}
-              />
+            <div className="row club-meta-row">
+              <label className="auth-field" htmlFor="baseRate">
+                <span className="auth-field-label">Base rate / minute</span>
+                <input
+                  id="baseRate"
+                  inputMode="decimal"
+                  value={baseRate}
+                  onChange={(e) => setBaseRate(e.target.value)}
+                />
+              </label>
+              <label className="auth-field" htmlFor="minBill">
+                <span className="auth-field-label">Minimum bill (minutes)</span>
+                <input
+                  id="minBill"
+                  inputMode="numeric"
+                  value={minBill}
+                  onChange={(e) => setMinBill(e.target.value)}
+                />
+              </label>
             </div>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy || !canUseProtectedOnboarding}
-            onClick={() => void handleStep2()}
-          >
-            Continue to payment
-          </button>
-          {!canUseProtectedOnboarding ? (
-            <p className="muted" style={{ marginTop: 10 }}>
-              Sign in required…
-            </p>
-          ) : null}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={busy}
-            onClick={() => setStep(1)}
-            style={{ marginLeft: 10 }}
-          >
-            Back to account
-          </button>
-        </>
+
+          <div className="club-footer">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy || !canUseProtectedOnboarding}
+              onClick={() => void handleStep2()}
+            >
+              <span className="auth-submit-fill" aria-hidden="true" />
+              <span className="auth-fill-label club-continue-label">
+                <span>{busy ? "Please wait…" : "Continue to payment"}</span>
+                <span aria-hidden="true">→</span>
+              </span>
+            </button>
+            {!canUseProtectedOnboarding ? (
+              <p className="muted" style={{ marginTop: 10 }}>
+                Sign in required…
+              </p>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn-secondary club-back-btn"
+              disabled={busy}
+              onClick={() => setStep(1)}
+            >
+              <span aria-hidden="true">←</span>
+              Back to account
+            </button>
+          </div>
+        </div>
       )}
 
       {step === 3 && plans === undefined && (
@@ -742,70 +1242,207 @@ export default function Register() {
       )}
 
       {step === 3 && plans && (
-        <>
-          <h2>Choose plan</h2>
-          <div className="plan-grid">
-            {(plans as SubscriptionPlanRow[]).map((p) => (
-              <div
-                key={p.id}
-                className={`plan-card ${planId === p.id ? "selected" : ""}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => setPlanId(p.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") setPlanId(p.id);
-                }}
-              >
-                <h3>{p.label}</h3>
-                <p className="muted" style={{ margin: 0 }}>
-                  {(p.amountPaise / 100).toLocaleString("en-IN")} {p.currency} excl. GST
-                  {" · "}
-                  {(p.periodMs / 86_400_000).toFixed(0)} days access
+        <div className="pay-shell">
+          <div className="pay-main">
+            <header className="register-hero is-pay">
+              <div className="register-hero-copy">
+                <Link to="/" className="register-hero-brand">
+                  <img
+                    className="register-hero-mark"
+                    src="/images/small-logo.png"
+                    alt=""
+                    aria-hidden="true"
+                    draggable={false}
+                  />
+                  <span className="register-hero-brand-text">A3 BILLIARDS OS</span>
+                </Link>
+                <h1 className="register-hero-title">Create account</h1>
+                <p className="register-hero-subtitle">
+                  Owner account, club details, then subscription — same flow as before.
                 </p>
+
+                <nav className="register-stepper" aria-label="Onboarding progress">
+                  {(
+                    [
+                      { n: 1 as Step, label: "Account" },
+                      { n: 2 as Step, label: "Club" },
+                      { n: 3 as Step, label: "Pay" },
+                      { n: 4 as Step, label: "Done" },
+                    ] as const
+                  ).map(({ n, label }, index, list) => {
+                    const completed = step > n;
+                    const current = step === n;
+                    return (
+                      <div key={n} className="register-stepper-item">
+                        {index > 0 ? (
+                          <span
+                            className={`register-stepper-line ${step >= n ? "is-filled" : ""}`}
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          className={[
+                            "register-stepper-btn",
+                            current ? "is-current" : "",
+                            completed ? "is-completed" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          disabled={!completed}
+                          onClick={() => goToEarlierStep(n)}
+                          aria-current={current ? "step" : undefined}
+                          aria-label={`${label} (step ${n} of ${list.length})`}
+                        >
+                          <span className="register-stepper-circle">{n}</span>
+                          <span className="register-stepper-label">{label}</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </nav>
               </div>
-            ))}
+            </header>
+
+            <div className="pay-copy">
+              <RegisterSecurityNote boxed />
+              <h2>Choose plan</h2>
+              {error ? <div className="auth-error">{error}</div> : null}
+              <div className="pay-plan-grid" role="radiogroup" aria-label="Subscription plan">
+                {(plans as SubscriptionPlanRow[]).map((p) => {
+                  const selected = planId === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      className={`pay-plan-card ${selected ? "selected" : ""}`}
+                      role="radio"
+                      aria-checked={selected}
+                      tabIndex={0}
+                      onClick={() => setPlanId(p.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setPlanId(p.id);
+                        }
+                      }}
+                    >
+                      <span className={`pay-plan-radio ${selected ? "is-on" : ""}`} aria-hidden="true" />
+                      <div className="pay-plan-meta">
+                        <h3>{p.label}</h3>
+                        <p>
+                          {p.id === "monthly" ? (
+                            <>
+                              ₹0 first month, then {(p.amountPaise / 100).toLocaleString("en-IN")}{" "}
+                              {p.currency}/mo excl. GST
+                              {" · "}
+                              {(p.periodMs / 86_400_000).toFixed(0)} days access
+                            </>
+                          ) : (
+                            <>
+                              {(p.amountPaise / 100).toLocaleString("en-IN")} {p.currency} excl. GST
+                              {" · "}
+                              {(p.periodMs / 86_400_000).toFixed(0)} days access
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      {p.id === "monthly" ? (
+                        <span className="pay-plan-badge">Most popular ★</span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+              {(() => {
+                const selected = (plans as SubscriptionPlanRow[]).find((p) => p.id === planId);
+                if (!selected) return null;
+                return (
+                  <div className="pay-gst">
+                    <p className="pay-gst-sac">
+                      SAC: {selected.invoiceConfig.sacCode}
+                      {selected.invoiceConfig.gstin
+                        ? ` · Supplier GSTIN: ${selected.invoiceConfig.gstin}`
+                        : null}
+                    </p>
+                    <SubscriptionGstBreakdown gst={selected.gst} currency={selected.currency} compact />
+                    <p className="pay-confirm-note">
+                      <span className="pay-confirm-lock" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none">
+                          <rect
+                            x="6"
+                            y="11"
+                            width="12"
+                            height="9"
+                            rx="2"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                          />
+                          <path
+                            d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </span>
+                      Payment confirms in the background. This page advances when your club is created.
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
-          {(() => {
-            const selected = (plans as SubscriptionPlanRow[]).find((p) => p.id === planId);
-            if (!selected) return null;
-            return (
-              <>
-                <p className="muted" style={{ marginTop: 12 }}>
-                  SAC: {selected.invoiceConfig.sacCode}
-                  {selected.invoiceConfig.gstin
-                    ? ` · Supplier GSTIN: ${selected.invoiceConfig.gstin}`
-                    : null}
-                </p>
-                <SubscriptionGstBreakdown gst={selected.gst} currency={selected.currency} compact />
-              </>
-            );
-          })()}
-          <p className="muted">
-            Payment confirms in the background. This page advances when your club is created.
-          </p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy || paymentPending || !canUseProtectedOnboarding}
-            onClick={() => void handlePay()}
-          >
-            Pay with Razorpay
-          </button>
-          {paymentPending && !status?.hasClub ? (
-            <p className="muted" style={{ marginTop: 16 }}>
-              Waiting for confirmation…
-            </p>
-          ) : null}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={busy || paymentPending}
-            onClick={() => setStep(2)}
-            style={{ marginTop: 12 }}
-          >
-            Back to club details
-          </button>
-        </>
+
+          <div className="pay-aside">
+            <div className="pay-aside-art" aria-hidden="true">
+              <video
+                className="register-hero-video"
+                src="/videos/eightball-smoke.mp4"
+                poster="/images/auth-hero.png"
+                autoPlay
+                muted
+                loop
+                playsInline
+              />
+              <div className="register-hero-art-fade" />
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary pay-razorpay-btn"
+              disabled={busy || paymentPending || !canUseProtectedOnboarding}
+              onClick={() => void handlePay()}
+            >
+              <span className="auth-submit-fill" aria-hidden="true" />
+              <span className="auth-fill-label pay-razorpay-label">
+                <svg className="pay-razorpay-mark" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <path
+                    d="M7.2 3.2h6.4c2.6 0 4.2 1.8 4.2 4.1 0 2.6-1.9 4.2-4.6 4.2H9.6L8 20.8H4.2L7.2 3.2zm3.1 5.8h2.3c1.1 0 1.8-.6 1.8-1.5s-.6-1.4-1.7-1.4H11L10.3 9z"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span>{busy || paymentPending ? "Please wait…" : "Pay with Razorpay"}</span>
+                <span className="pay-razorpay-arrow" aria-hidden="true">
+                  →
+                </span>
+              </span>
+            </button>
+            {paymentPending && !status?.hasClub ? (
+              <p className="muted pay-waiting">Waiting for confirmation…</p>
+            ) : null}
+            {!canUseProtectedOnboarding ? (
+              <p className="muted pay-waiting">Sign in required…</p>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn-secondary pay-back-btn"
+              disabled={busy || paymentPending}
+              onClick={() => setStep(2)}
+            >
+              <span aria-hidden="true">←</span>
+              Back to club details
+            </button>
+          </div>
+        </div>
       )}
 
       {step === 4 && (
@@ -826,6 +1463,8 @@ export default function Register() {
           </p>
         </>
       )}
+      </div>
+      </div>
     </div>
   );
 }

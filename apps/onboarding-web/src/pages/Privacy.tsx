@@ -1,10 +1,30 @@
+import { LegalPage } from "../components/LegalPage";
+
+const TOC = [
+  { id: "information-we-collect", label: "Information We Collect" },
+  { id: "how-we-use", label: "How We Use Information" },
+  { id: "data-segregation", label: "Data Segregation and Multi-Club Structure" },
+  { id: "customer-complaints", label: "Customer Complaints — Cross-Club Visibility" },
+  { id: "live-streaming", label: "Live Streaming — Privacy Considerations" },
+  { id: "data-sharing", label: "Data Sharing and Disclosure" },
+  { id: "data-security", label: "Data Security" },
+  { id: "data-retention", label: "Data Retention and Deletion" },
+  { id: "your-rights", label: "Your Rights" },
+  { id: "childrens-privacy", label: "Children's Privacy" },
+  { id: "international-transfers", label: "International Data Transfers" },
+  { id: "changes", label: "Changes to This Policy" },
+  { id: "contact", label: "Contact Us" },
+];
+
 export default function Privacy() {
   return (
-    <article className="legal-doc card">
-      <h1>Privacy Policy</h1>
-      <p className="legal-meta muted">
-        <strong>Effective Date:</strong> 06-07-2026 · <strong>Last Updated:</strong> 06-07-2026
-      </p>
+    <LegalPage
+      title="Privacy Policy"
+      toc={TOC}
+      effectiveDate="06-07-2026"
+      lastUpdated="06-07-2026"
+      contactHref="#contact"
+    >
       <p>
         This Privacy Policy explains how A3 Billiards OS (&quot;we,&quot; &quot;us,&quot; &quot;our&quot;)
         collects, uses, shares, and protects information in connection with{" "}
@@ -14,7 +34,7 @@ export default function Privacy() {
       </p>
 
       <section>
-        <h2>1. Information We Collect</h2>
+        <h2 id="information-we-collect">1. Information We Collect</h2>
         <h3>1.1 Account and Identity Information</h3>
         <ul>
           <li>
@@ -120,7 +140,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>2. How We Use Information</h2>
+        <h2 id="how-we-use">2. How We Use Information</h2>
         <p>We use the information described above to:</p>
         <ul>
           <li>
@@ -149,7 +169,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>3. Data Segregation and Multi-Club Structure</h2>
+        <h2 id="data-segregation">3. Data Segregation and Multi-Club Structure</h2>
         <p>Our backend maintains two logical data areas:</p>
         <ul>
           <li>
@@ -171,7 +191,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>4. Customer Complaints — Cross-Club Visibility</h2>
+        <h2 id="customer-complaints">4. Customer Complaints — Cross-Club Visibility</h2>
         <p>
           Unlike most operational data, Customer Complaint records (Violent Behaviour, Theft, Runaway
           Without Payment, Late Credit Payment) are stored centrally and are visible to Club Owners across
@@ -183,7 +203,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>5. Live Streaming — Privacy Considerations</h2>
+        <h2 id="live-streaming">5. Live Streaming — Privacy Considerations</h2>
         <p>
           Because a Live Stream is visible to <strong>any authenticated Customer platform-wide</strong>,
           not only customers of the broadcasting club:
@@ -207,7 +227,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>6. Data Sharing and Disclosure</h2>
+        <h2 id="data-sharing">6. Data Sharing and Disclosure</h2>
         <p>We share information only as follows:</p>
         <ul>
           <li>
@@ -241,7 +261,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>7. Data Security</h2>
+        <h2 id="data-security">7. Data Security</h2>
         <p>
           We apply industry-standard security measures, including encryption in transit (TLS) and
           role-based access control enforced both in the app and at the backend query level, to protect
@@ -255,7 +275,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>8. Data Retention and Deletion</h2>
+        <h2 id="data-retention">8. Data Retention and Deletion</h2>
         <ul>
           <li>
             We retain account and operational data for as long as an account or club subscription is active
@@ -279,7 +299,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>9. Your Rights</h2>
+        <h2 id="your-rights">9. Your Rights</h2>
         <p>Subject to applicable law in your jurisdiction, you may have the right to:</p>
         <ul>
           <li>Access the personal data we hold about you;</li>
@@ -296,7 +316,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>10. Children&apos;s Privacy</h2>
+        <h2 id="childrens-privacy">10. Children&apos;s Privacy</h2>
         <p>
           The Service is not directed at, and we do not knowingly collect personal data from, children under
           the age of 18 (or the applicable age of digital consent in your jurisdiction). If we become
@@ -305,7 +325,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>11. International Data Transfers</h2>
+        <h2 id="international-transfers">11. International Data Transfers</h2>
         <p>
           Because we use infrastructure providers such as AWS, Google (Firebase), and Meta (WhatsApp
           Business API), your data may be processed or transmitted in countries other than your own. Where
@@ -315,7 +335,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>12. Changes to This Policy</h2>
+        <h2 id="changes">12. Changes to This Policy</h2>
         <p>
           We may update this Privacy Policy from time to time to reflect changes in the Service (for
           example, when new features are introduced) or in applicable law. We will indicate the
@@ -325,7 +345,7 @@ export default function Privacy() {
       </section>
 
       <section>
-        <h2>13. Contact Us</h2>
+        <h2 id="contact">13. Contact Us</h2>
         <p>
           If you have questions about this Privacy Policy or wish to exercise any of the rights described
           above, contact:
@@ -339,6 +359,6 @@ export default function Privacy() {
           Narayan Gowda Layout, 1st Stage, BTM Layout, Bengaluru, Karnataka 560029
         </p>
       </section>
-    </article>
+    </LegalPage>
   );
 }

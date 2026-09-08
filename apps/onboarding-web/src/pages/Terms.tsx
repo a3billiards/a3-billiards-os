@@ -1,15 +1,40 @@
 import { Link } from "react-router-dom";
+import { LegalPage } from "../components/LegalPage";
+
+const TOC = [
+  { id: "agreement", label: "Agreement to Terms and Parties" },
+  { id: "definitions", label: "Definitions" },
+  { id: "withdrawal", label: "Consumer Right of Withdrawal (Digital Content)" },
+  { id: "eligibility", label: "Eligibility and Accounts" },
+  { id: "description", label: "Description of the Service" },
+  { id: "multi-club", label: "Multi-Club Data Structure and Staff Access" },
+  { id: "billing", label: "Subscriptions, Billing, and Payments" },
+  { id: "gst-disclaimer", label: "GST & Tax Report Disclaimer" },
+  { id: "live-streaming", label: "Live Streaming — Additional Terms" },
+  { id: "complaints", label: "Customer Complaints System" },
+  { id: "acceptable-use", label: "Acceptable Use" },
+  { id: "third-party", label: "Third-Party Services" },
+  { id: "ip", label: "Intellectual Property" },
+  { id: "termination", label: "Termination and Suspension" },
+  { id: "liability", label: "Disclaimers and Limitation of Liability" },
+  { id: "indemnification", label: "Indemnification" },
+  { id: "governing-law", label: "Governing Law and Dispute Resolution" },
+  { id: "changes", label: "Changes to This Agreement" },
+  { id: "contact", label: "Contact Us" },
+];
 
 export default function Terms() {
   return (
-    <article className="legal-doc card">
-      <h1>Terms and Conditions</h1>
-      <p className="legal-meta muted">
-        <strong>Effective Date:</strong> 06-07-2026 · <strong>Last Updated:</strong> 06-07-2026
-      </p>
+    <LegalPage
+      title="Terms and Conditions"
+      toc={TOC}
+      effectiveDate="06-07-2026"
+      lastUpdated="06-07-2026"
+      contactHref="#contact"
+    >
 
       <section>
-        <h2>1. Agreement to Terms and Parties</h2>
+        <h2 id="agreement">1. Agreement to Terms and Parties</h2>
         <p>
           These Terms and Conditions (&quot;Agreement,&quot; &quot;Terms&quot;) govern access to and use of{" "}
           <strong>A3 Billiards OS</strong> (the &quot;Product,&quot; &quot;Service,&quot; or
@@ -35,7 +60,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>2. Definitions</h2>
+        <h2 id="definitions">2. Definitions</h2>
         <ul>
           <li>
             <strong>&quot;Club Owner&quot;</strong> — an individual or business that registers a billiards
@@ -73,7 +98,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>3. Consumer Right of Withdrawal (Digital Content)</h2>
+        <h2 id="withdrawal">3. Consumer Right of Withdrawal (Digital Content)</h2>
         <p>
           Where you purchase a paid subscription for club access through the Onboarding Website, that
           content is digital and is made available to you promptly upon purchase. By completing checkout and
@@ -86,7 +111,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>4. Eligibility and Accounts</h2>
+        <h2 id="eligibility">4. Eligibility and Accounts</h2>
         <ul>
           <li>
             You must be at least 18 years old, or the age of legal majority in your jurisdiction, to register
@@ -114,7 +139,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>5. Description of the Service</h2>
+        <h2 id="description">5. Description of the Service</h2>
         <p>
           A3 Billiards OS is an operations platform for billiards club owners and their customers. Depending
           on the App and your role, the Service may include:
@@ -176,7 +201,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>6. Multi-Club Data Structure and Staff Access</h2>
+        <h2 id="multi-club">6. Multi-Club Data Structure and Staff Access</h2>
         <p>
           Each club operates as an independent account. Financial, operational, and customer-interaction data
           associated with one club (e.g., sessions, bookings, snacks, financial records, loyalty ledgers,
@@ -194,7 +219,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>7. Subscriptions, Billing, and Payments</h2>
+        <h2 id="billing">7. Subscriptions, Billing, and Payments</h2>
         <ul>
           <li>
             <strong>Club subscriptions</strong> are sold to Club Owners through the Onboarding Website.
@@ -231,7 +256,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>8. GST &amp; Tax Report Disclaimer</h2>
+        <h2 id="gst-disclaimer">8. GST &amp; Tax Report Disclaimer</h2>
         <p>
           The GST &amp; Tax Report feature produces <strong>estimates for the Club Owner&apos;s own internal
           bookkeeping convenience only</strong>. It is not tax, legal, or accounting advice, does not file or
@@ -248,7 +273,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>9. Live Streaming — Additional Terms</h2>
+        <h2 id="live-streaming">9. Live Streaming — Additional Terms</h2>
         <p>
           Because Live Streaming makes a club&apos;s broadcast visible to{" "}
           <strong>any authenticated Customer platform-wide</strong>, regardless of whether they are a
@@ -305,7 +330,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>10. Customer Complaints System</h2>
+        <h2 id="complaints">10. Customer Complaints System</h2>
         <p>
           Club Owners may record a Complaint against a Customer&apos;s account under one of four defined
           categories (Violent Behaviour, Theft, Runaway Without Payment, Late Credit Payment). Complaints are
@@ -322,7 +347,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>11. Acceptable Use</h2>
+        <h2 id="acceptable-use">11. Acceptable Use</h2>
         <p>You agree not to:</p>
         <ul>
           <li>Use the Service for any unlawful purpose or in violation of any applicable law;</li>
@@ -347,7 +372,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>12. Third-Party Services</h2>
+        <h2 id="third-party">12. Third-Party Services</h2>
         <p>
           The Service relies on the following third-party infrastructure providers, each governed by their
           own terms and privacy practices in addition to this Agreement:
@@ -372,7 +397,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>13. Intellectual Property</h2>
+        <h2 id="ip">13. Intellectual Property</h2>
         <p>
           The Service, including its software, design, trademarks, and branding, is owned by us or our
           licensors and is protected by intellectual property laws. Except for the limited license to use the
@@ -383,7 +408,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>14. Termination and Suspension</h2>
+        <h2 id="termination">14. Termination and Suspension</h2>
         <p>
           We may suspend or terminate your access to the Service, without prior notice, if we believe you have
           violated this Agreement, if fraudulent or unlawful activity is suspected, or if a club&apos;s
@@ -395,7 +420,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>15. Disclaimers and Limitation of Liability</h2>
+        <h2 id="liability">15. Disclaimers and Limitation of Liability</h2>
         <p>
           The Service is provided &quot;as is&quot; and &quot;as available,&quot; without warranties of any
           kind, express or implied, to the fullest extent permitted by law, including as to merchantability,
@@ -411,7 +436,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>16. Indemnification</h2>
+        <h2 id="indemnification">16. Indemnification</h2>
         <p>
           You agree to indemnify and hold us harmless from any claims, damages, liabilities, and expenses
           (including reasonable legal fees) arising from your use of the Service, your violation of this
@@ -420,7 +445,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>17. Governing Law and Dispute Resolution</h2>
+        <h2 id="governing-law">17. Governing Law and Dispute Resolution</h2>
         <p>
           This Agreement is governed by the laws of <strong>India</strong>, without regard to its
           conflict-of-laws principles. Any dispute arising out of or relating to this Agreement will be
@@ -429,7 +454,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>18. Changes to This Agreement</h2>
+        <h2 id="changes">18. Changes to This Agreement</h2>
         <p>
           We may update this Agreement from time to time. Material changes will be notified through the App
           or by email where practicable. Continued use of the Service after changes take effect constitutes
@@ -438,7 +463,7 @@ export default function Terms() {
       </section>
 
       <section>
-        <h2>19. Contact Us</h2>
+        <h2 id="contact">19. Contact Us</h2>
         <p>Questions about this Agreement can be directed to:</p>
         <p>
           <strong>A3 Billiards OS</strong>
@@ -449,6 +474,6 @@ export default function Terms() {
           Narayan Gowda Layout, 1st Stage, BTM Layout, Bengaluru, Karnataka 560029
         </p>
       </section>
-    </article>
+    </LegalPage>
   );
 }

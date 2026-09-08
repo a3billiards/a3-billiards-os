@@ -11,23 +11,47 @@ export default function DeletionCancelled() {
 
   if (error === "missing_token") {
     title = "Invalid cancellation link";
-    body = "This link is missing a token. Open the full link from your deletion confirmation email.";
+    body =
+      "This link is missing a token. Open the full link from your deletion confirmation email.";
   } else if (error) {
     title = "Could not cancel deletion";
     body = decodeURIComponent(error).replace(/^[A-Z0-9_]+:\s*/, "");
   } else if (!success) {
     title = "Something went wrong";
-    body = "We could not confirm your cancellation. Try the link from your email again or contact support.";
+    body =
+      "We could not confirm your cancellation. Try the link from your email again or contact support.";
   }
 
   return (
-    <div className="layout">
-      <div className="card">
-        <h1>{title}</h1>
-        <p className="muted">{body}</p>
-        <p style={{ marginTop: "1.5rem" }}>
-          <Link to="/">Return to home</Link>
-        </p>
+    <div className="auth-page auth-page-login auth-page-forgot">
+      <div className="auth-stage" aria-hidden="true">
+        <img
+          className="auth-stage-art"
+          src="/images/auth-hero.png"
+          alt=""
+          draggable={false}
+        />
+        <div className="auth-stage-shade" />
+      </div>
+
+      <div className="auth-card">
+        <Link to="/" className="auth-card-brand">
+          <span className="auth-card-brand-a3">A3</span>
+          <span className="auth-card-brand-rest">BILLIARDS OS</span>
+        </Link>
+
+        <h1 className="auth-card-title">{title}</h1>
+        <p className="auth-card-subtitle">{body}</p>
+
+        <div className="auth-inline-actions">
+          <Link to="/login" className="auth-submit auth-submit-link">
+            <span className="auth-submit-label">Sign in</span>
+            <span className="auth-submit-fill" aria-hidden="true" />
+          </Link>
+          <Link to="/" className="auth-ghost-btn">
+            Return to home
+          </Link>
+        </div>
       </div>
     </div>
   );

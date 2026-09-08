@@ -1,16 +1,31 @@
 import { Link } from "react-router-dom";
+import { LegalPage } from "../components/LegalPage";
+
+const TOC = [
+  { id: "data-fiduciary", label: "Data fiduciary" },
+  { id: "personal-data", label: "Personal data collected" },
+  { id: "purpose", label: "Purpose & lawful grounds" },
+  { id: "rights", label: "Data principals' rights" },
+  { id: "processors", label: "Processors" },
+  { id: "children", label: "Children" },
+  { id: "breach", label: "Breach notification" },
+];
 
 export default function DPDP() {
   return (
-    <article className="legal-doc card">
-      <h1>DPDP — Data processing notice</h1>
-      <p className="legal-meta muted">
-        Summary aligned with the Digital Personal Data Protection Act, 2023 (India). This page is informational and does
-        not replace legal advice or executed data‑processing agreements.
-      </p>
-
+    <LegalPage
+      title="DPDP — Data processing notice"
+      toc={TOC}
+      contactHref="mailto:a3billiards@gmail.com"
+      intro={
+        <p className="legal-intro muted">
+          Summary aligned with the Digital Personal Data Protection Act, 2023 (India). This page is
+          informational and does not replace legal advice or executed data‑processing agreements.
+        </p>
+      }
+    >
       <section>
-        <h2>Data fiduciary</h2>
+        <h2 id="data-fiduciary">Data fiduciary</h2>
         <p>
           For onboarding personal data collected through this website, the operator of A3 Billiards OS acts as the{" "}
           <strong>Data Fiduciary</strong> (or appoints a clearly identified fiduciary in your enterprise agreement).
@@ -18,7 +33,7 @@ export default function DPDP() {
       </section>
 
       <section>
-        <h2>Personal data collected</h2>
+        <h2 id="personal-data">Personal data collected</h2>
         <ul>
           <li>Identifiers: name, email, optional phone.</li>
           <li>Credentials: password (hashed).</li>
@@ -29,7 +44,7 @@ export default function DPDP() {
       </section>
 
       <section>
-        <h2>Purpose &amp; lawful grounds</h2>
+        <h2 id="purpose">Purpose &amp; lawful grounds</h2>
         <table className="legal-table">
           <thead>
             <tr>
@@ -59,7 +74,7 @@ export default function DPDP() {
       </section>
 
       <section>
-        <h2>Data principals&apos; rights</h2>
+        <h2 id="rights">Data principals&apos; rights</h2>
         <p>
           Where applicable, you may exercise rights to access, correction, erasure (where not prohibited), grievance
           redressal, and nominate a representative. Withdrawal of consent may limit our ability to provide the service.
@@ -68,7 +83,7 @@ export default function DPDP() {
       </section>
 
       <section>
-        <h2>Processors</h2>
+        <h2 id="processors">Processors</h2>
         <p>
           We engage certified subprocessors (e.g. Convex for backend, Razorpay for payments, Google Maps for geocoding
           when enabled). Agreements impose confidentiality, security, and deletion obligations consistent with DPDP Rules
@@ -77,7 +92,7 @@ export default function DPDP() {
       </section>
 
       <section>
-        <h2>Children</h2>
+        <h2 id="children">Children</h2>
         <p>
           The service is not directed to minors under 18. We do not knowingly collect personal data from users below the
           onboarding age gate.
@@ -85,7 +100,7 @@ export default function DPDP() {
       </section>
 
       <section>
-        <h2>Breach notification</h2>
+        <h2 id="breach">Breach notification</h2>
         <p>
           We maintain incident response procedures and will notify affected users and authorities when required by law.
         </p>
@@ -94,6 +109,6 @@ export default function DPDP() {
       <p className="muted">
         See also the full <Link to="/privacy">Privacy Policy</Link> and <Link to="/terms">Terms of Service</Link>.
       </p>
-    </article>
+    </LegalPage>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAction } from "convex/react";
 import { api } from "../convexApi";
@@ -19,24 +19,59 @@ const STRENGTH_COLOR: Record<string, string> = {
   good: "#fb8c00",
   strong: "#43a047",
 };
+
 function PasswordStrengthBar({ password }: { password: string }) {
   const s = getPasswordStrength(password);
   if (s === "none") return null;
   const segs = s === "weak" ? 1 : s === "good" ? 2 : 3;
   const color = STRENGTH_COLOR[s] ?? "#ccc";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0 8px" }}>
-      <div style={{ flex: 1, display: "flex", gap: 4 }}>
+    <div className="auth-strength">
+      <div className="auth-strength-bars">
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i < segs ? color : "#333" }}
+            className="auth-strength-bar"
+            style={{ backgroundColor: i < segs ? color : "rgba(255,255,255,0.12)" }}
           />
         ))}
       </div>
-      <span style={{ fontSize: 12, fontWeight: 600, color, minWidth: 40, textAlign: "right" }}>
+      <span className="auth-strength-label" style={{ color }}>
         {STRENGTH_LABEL[s]}
       </span>
+    </div>
+  );
+}
+
+function AuthShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="auth-page auth-page-login auth-page-forgot">
+      <div className="auth-stage" aria-hidden="true">
+        <img
+          className="auth-stage-art"
+          src="/images/auth-hero.png"
+          alt=""
+          draggable={false}
+        />
+        <div className="auth-stage-shade" />
+      </div>
+      <div className="auth-card">
+        <Link to="/" className="auth-card-brand">
+          <span className="auth-card-brand-a3">A3</span>
+          <span className="auth-card-brand-rest">BILLIARDS OS</span>
+        </Link>
+        <h1 className="auth-card-title">{title}</h1>
+        {subtitle ? <p className="auth-card-subtitle">{subtitle}</p> : null}
+        {children}
+      </div>
     </div>
   );
 }
@@ -113,72 +148,96 @@ export default function ResetPassword() {
 
   if (checking) {
     return (
-      <div className="card">
-        <p className="muted">Checking reset link…</p>
-      </div>
+      <AuthShell title="Reset password" subtitle="Checking reset link…">
+        <p className="auth-card-subtitle">Please wait a moment.</p>
+      </AuthShell>
     );
   }
 
   if (!valid) {
     return (
-      <div className="card">
-        <h1>Reset link invalid</h1>
-        <p className="muted">
-          This password reset link is invalid, expired, or already used.
-        </p>
-        <Link to="/forgot-password" className="btn btn-primary" style={{ display: "inline-block", marginTop: 12 }}>
-          Request a new link
+      <AuthShell
+        title="Reset link invalid"
+        subtitle="This password reset link is invalid, expired, or already used."
+      >
+        <Link to="/forgot-password" className="auth-submit auth-submit-link">
+          <span className="auth-submit-label">Request a new link</span>
+          <span className="auth-submit-fill" aria-hidden="true" />
         </Link>
-      </div>
+        <p className="auth-footer">
+          <Link to="/login" className="auth-footer-strong">
+            Back to sign in
+          </Link>
+        </p>
+      </AuthShell>
     );
   }
 
   if (done) {
     return (
-      <div className="card">
-        <div className="success-banner">Your password has been updated.</div>
+      <AuthShell title="Password updated" subtitle="Your password has been updated.">
+        <div className="auth-success">You can sign in with your new password.</div>
         <button
           type="button"
-          className="btn btn-primary"
-          style={{ marginTop: 16 }}
+          className="auth-submit"
           onClick={() => nav("/login", { replace: true })}
         >
-          Sign in
+          <span className="auth-submit-label">Sign in</span>
+          <span className="auth-submit-fill" aria-hidden="true" />
         </button>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="card">
-      <h1>Set a new password</h1>
-      <p className="muted">{STRONG_PASSWORD_HINT}</p>
-      {error ? <div className="error-banner">{error}</div> : null}
-      <label htmlFor="newPassword">New password</label>
-      <input
-        id="newPassword"
-        type="password"
-        autoComplete="new-password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+    <AuthShell title="Set a new password" subtitle={STRONG_PASSWORD_HINT}>
+      {error ? <div className="auth-error">{error}</div> : null}
+
+      <label className="auth-field">
+        <span className="auth-field-label">New password</span>
+        <input
+          id="newPassword"
+          type="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={busy}
+        />
+      </label>
       <PasswordStrengthBar password={password} />
-      <label htmlFor="confirmPassword">Confirm password</label>
-      <input
-        id="confirmPassword"
-        type="password"
-        autoComplete="new-password"
-        value={confirm}
-        onChange={(e) => setConfirm(e.target.value)}
-      />
+
+      <label className="auth-field">
+        <span className="auth-field-label">Confirm password</span>
+        <input
+          id="confirmPassword"
+          type="password"
+          autoComplete="new-password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          disabled={busy}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void handleSubmit();
+          }}
+        />
+      </label>
+
       <button
         type="button"
-        className="btn btn-primary"
+        className="auth-submit"
         disabled={busy}
         onClick={() => void handleSubmit()}
       >
-        {busy ? "Saving…" : "Update password"}
+        <span className="auth-submit-label">
+          {busy ? "Saving…" : "Update password"}
+        </span>
+        <span className="auth-submit-fill" aria-hidden="true" />
       </button>
-    </div>
+
+      <p className="auth-footer">
+        <Link to="/login" className="auth-footer-strong">
+          Back to sign in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
