@@ -1,8 +1,9 @@
 /**
  * Google Sign-In credentials provider for Convex Auth.
  *
- * The React Native app calls `signIn("google", { idToken })` after the native
- * Google Sign-In library returns an ID token. This provider:
+ * The React Native app calls `signIn("google", { idToken })` or
+ * `signIn("googleOwner", { idToken })` after the native Google Sign-In library
+ * returns an ID token. This provider:
  *   1. Verifies the ID token against Google's JWKS (via google-auth-library
  *      in a Node action — see googleAuthActions.ts).
  *   2. Looks up the matching user by googleId, falling back to email.
@@ -10,9 +11,14 @@
  *      so Convex Auth can attach a session.
  *   4. Returns `{ userId }` — Convex Auth handles session creation.
  *
+ * If no user exists, returns `newUser` from the internal mutation and this
+ * layer throws `GOOGLE_AUTH_NEW_USER` with JSON payload (clients that probe
+ * first should never hit this for new users).
+ *
  * Throws:
  *   - GOOGLE_AUTH_001   — idToken missing or signature/audience invalid
- *   - GOOGLE_AUTH_NEW_USER — no matching account (client should route to register)
+ *   - GOOGLE_AUTH_NEW_USER — no matching account (legacy; prefer resolve* actions first)
+ *   - OWNER_001         — Google account exists but is not an owner (googleOwner only)
  *   - AUTH_002          — user account frozen
  *   - AUTH_006          — user account pending deletion
  */
@@ -21,9 +27,12 @@ import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials"
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
-export function A3Google() {
+function createA3GoogleProvider(options: {
+  providerId: "google" | "googleOwner";
+  requireOwnerRole: boolean;
+}) {
   return ConvexCredentials({
-    id: "google",
+    id: options.providerId,
     authorize: async (params, ctx) => {
       const idToken = params.idToken;
       if (typeof idToken !== "string" || idToken.length === 0) {
@@ -35,15 +44,23 @@ export function A3Google() {
         { idToken },
       );
 
-      const { userId } = await ctx.runMutation(
+      const result = await ctx.runMutation(
         internal.googleAuthOps.resolveOrLinkGoogleUser,
         {
           googleId: claims.googleId,
           email: claims.email ?? undefined,
+          name: claims.name,
+          requireOwnerRole: options.requireOwnerRole,
         },
       );
 
-      return { userId: userId as Id<"users"> };
+      if (result.outcome === "newUser") {
+        throw new Error(
+          `GOOGLE_AUTH_NEW_USER: ${JSON.stringify(result.pendingProfile)}`,
+        );
+      }
+
+      return { userId: result.userId as Id<"users"> };
     },
     crypto: {
       async hashSecret() {
@@ -53,5 +70,21 @@ export function A3Google() {
         return true;
       },
     },
+  });
+}
+
+/** Customer app + generic Google sign-in (`signIn("google", …)`). */
+export function A3Google() {
+  return createA3GoogleProvider({
+    providerId: "google",
+    requireOwnerRole: false,
+  });
+}
+
+/** Owner app only (`signIn("googleOwner", …)`). Rejects non-owner Google accounts. */
+export function A3GoogleOwner() {
+  return createA3GoogleProvider({
+    providerId: "googleOwner",
+    requireOwnerRole: true,
   });
 }

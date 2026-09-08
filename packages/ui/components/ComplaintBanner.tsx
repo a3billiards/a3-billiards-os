@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import { useTranslation } from "@a3/i18n";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing, radius, layout } from "../theme/spacing";
@@ -37,17 +38,20 @@ function badgeColors(t: ComplaintBannerType): {
   }
 }
 
-function formatRelativeTime(createdAt: number): string {
+function formatRelativeTime(
+  createdAt: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
   const sec = Math.floor((Date.now() - createdAt) / 1000);
-  if (sec < 60) return "just now";
+  if (sec < 60) return t("sharedUi.complaintBanner.justNow");
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} min ago`;
+  if (min < 60) return t("sharedUi.complaintBanner.minAgo", { min });
   const hr = Math.floor(min / 60);
-  if (hr < 48) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
+  if (hr < 48) return t(hr === 1 ? "sharedUi.complaintBanner.hoursAgo" : "sharedUi.complaintBanner.hoursAgo_other", { hr });
   const day = Math.floor(hr / 24);
-  if (day < 60) return `${day} day${day === 1 ? "" : "s"} ago`;
+  if (day < 60) return t(day === 1 ? "sharedUi.complaintBanner.daysAgo" : "sharedUi.complaintBanner.daysAgo_other", { day });
   const mo = Math.floor(day / 30);
-  return `${mo} month${mo === 1 ? "" : "s"} ago`;
+  return t(mo === 1 ? "sharedUi.complaintBanner.monthsAgo" : "sharedUi.complaintBanner.monthsAgo_other", { mo });
 }
 
 export interface ComplaintBannerProps {
@@ -64,9 +68,11 @@ export function ComplaintBanner({
   onCancel,
   showActions = true,
 }: ComplaintBannerProps): React.JSX.Element {
+  const { t } = useTranslation();
+
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>{"\u26A0"} Customer has active complaint(s)</Text>
+      <Text style={styles.title}>{t("sharedUi.complaintBanner.warning")}</Text>
       <ScrollView style={styles.list} nestedScrollEnabled showsVerticalScrollIndicator={false}>
         {complaints.map((c, i) => {
           const badge = badgeColors(c.type);
@@ -79,11 +85,11 @@ export function ComplaintBanner({
               </View>
               <View style={styles.rowBody}>
                 <Text style={styles.clubLine}>
-                  Filed by {c.clubName}
+                  {t("sharedUi.complaintBanner.filedBy", { clubName: c.clubName })}
                 </Text>
-                <Text style={styles.dateLine}>{formatRelativeTime(c.createdAt)}</Text>
+                <Text style={styles.timeLine}>{formatRelativeTime(c.createdAt, t)}</Text>
                 {c.description ? (
-                  <Text style={styles.desc} numberOfLines={4}>
+                  <Text style={styles.descLine} numberOfLines={3}>
                     {c.description}
                   </Text>
                 ) : null}
@@ -92,22 +98,14 @@ export function ComplaintBanner({
           );
         })}
       </ScrollView>
-      <Text style={styles.disclaimer}>
-        This is an advisory warning. You may still proceed or cancel the session.
-      </Text>
+      <Text style={styles.advisory}>{t("sharedUi.complaintBanner.advisory")}</Text>
       {showActions ? (
         <View style={styles.actions}>
-          <Pressable
-            onPress={onCancel}
-            style={({ pressed }) => [styles.btnSecondary, pressed && styles.pressed]}
-          >
-            <Text style={styles.btnSecondaryTxt}>Cancel</Text>
+          <Pressable style={styles.cancelBtn} onPress={onCancel}>
+            <Text style={styles.cancelTxt}>{t("sharedUi.complaintBanner.cancel")}</Text>
           </Pressable>
-          <Pressable
-            onPress={onAcknowledge}
-            style={({ pressed }) => [styles.btnPrimary, pressed && styles.pressed]}
-          >
-            <Text style={styles.btnPrimaryTxt}>Acknowledge and Proceed</Text>
+          <Pressable style={styles.ackBtn} onPress={onAcknowledge}>
+            <Text style={styles.ackTxt}>{t("sharedUi.complaintBanner.acknowledge")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -118,79 +116,46 @@ export function ComplaintBanner({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.bg.secondary,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.status.error,
-    borderRadius: radius.md,
-    padding: spacing[4],
-    maxHeight: 420,
-  },
-  title: {
-    ...typography.label,
-    color: colors.status.error,
-    marginBottom: spacing[3],
-  },
-  list: { maxHeight: 220 },
-  row: {
-    flexDirection: "row",
-    gap: spacing[3],
-    marginBottom: spacing[3],
-  },
-  badge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: radius.sm,
-    maxWidth: 120,
-  },
-  badgeTxt: {
-    ...typography.caption,
-    fontWeight: "600",
-  },
-  rowBody: { flex: 1, minWidth: 0 },
-  clubLine: { ...typography.bodySmall, color: colors.text.primary },
-  dateLine: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
-  desc: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    marginTop: spacing[2],
-    fontStyle: "italic",
-  },
-  disclaimer: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontStyle: "italic",
-    marginBottom: spacing[3],
-  },
-  actions: { gap: spacing[2] },
-  btnSecondary: {
     borderRadius: radius.lg,
     borderWidth: 1,
+    borderColor: colors.status.error,
+    padding: spacing[4],
+    gap: spacing[3],
+  },
+  title: { ...typography.label, color: colors.status.error, fontWeight: "700" },
+  list: { maxHeight: 160 },
+  row: { flexDirection: "row", gap: spacing[3], marginBottom: spacing[2] },
+  badge: {
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    alignSelf: "flex-start",
+    maxWidth: "40%",
+  },
+  badgeTxt: { ...typography.caption, fontWeight: "600" },
+  rowBody: { flex: 1, gap: 2 },
+  clubLine: { ...typography.bodySmall, color: colors.text.primary },
+  timeLine: { ...typography.caption, color: colors.text.secondary },
+  descLine: { ...typography.caption, color: colors.text.tertiary, marginTop: 2 },
+  advisory: { ...typography.caption, color: colors.text.secondary },
+  actions: { flexDirection: "row", gap: spacing[2] },
+  cancelBtn: {
+    flex: 1,
+    minHeight: layout.touchTarget,
+    borderRadius: radius.md,
+    borderWidth: 1,
     borderColor: colors.border.default,
-    backgroundColor: colors.bg.tertiary,
-    minHeight: layout.touchTarget,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: spacing[4],
   },
-  btnSecondaryTxt: { ...typography.buttonLarge, color: colors.text.primary },
-  btnPrimary: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.accent.amber,
+  cancelTxt: { ...typography.button, color: colors.text.secondary },
+  ackBtn: {
+    flex: 1,
     minHeight: layout.touchTarget,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent.green,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: spacing[4],
   },
-  btnPrimaryTxt: {
-    ...typography.buttonLarge,
-    color: colors.bg.primary,
-    fontWeight: "600",
-  },
-  pressed: { opacity: 0.88 },
+  ackTxt: { ...typography.button, color: colors.bg.primary },
 });
-
-export default ComplaintBanner;

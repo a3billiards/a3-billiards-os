@@ -1,24 +1,44 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
-import { requireViewer } from "./model/viewer";
+import type { Doc, Id } from "./_generated/dataModel";
+import { query, type QueryCtx } from "./_generated/server";
+import { requireAdminWithMfa } from "./model/viewer";
+import { compareYmd, dateYmdInTimeZone, fillDateGaps } from "@a3/utils/timezone";
+
+/**
+ * Platform-level revenue is reported in a single fixed timezone (IST) so a
+ * session ending near midnight is attributed to one consistent calendar day
+ * across all clubs, rather than shifting per club timezone.
+ */
+const PLATFORM_TIMEZONE = "Asia/Kolkata";
+const MAX_REVENUE_RANGE_DAYS = 92;
 
 function startOfTodayUtcMs(now: number): number {
   const d = new Date(now);
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
+async function loadAllActiveSessions(ctx: QueryCtx): Promise<Doc<"sessions">[]> {
+  const clubs = await ctx.db.query("clubs").collect();
+  const rows: Doc<"sessions">[] = [];
+
+  for (const club of clubs) {
+    const clubSessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_club_status", (q) =>
+        q.eq("clubId", club._id).eq("status", "active"),
+      )
+      .collect();
+    rows.push(...clubSessions);
+  }
+
+  rows.sort((a, b) => b.startTime - a.startTime);
+  return rows;
+}
+
 export const getAdminDashboard = query({
   args: { refreshKey: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const viewer = await requireViewer(ctx);
-    if (viewer.role !== "admin") {
-      throw new Error("AUTH_001: Admin authentication required");
-    }
-    const me = await ctx.db.get(viewer.userId);
-    if (!me?.adminMfaVerifiedAt) {
-      throw new Error("AUTH_003: Admin MFA verification required");
-    }
-
+    await requireAdminWithMfa(ctx);
     void args.refreshKey;
     const fetchedAt = Date.now();
     const startToday = startOfTodayUtcMs(fetchedAt);
@@ -28,10 +48,10 @@ export const getAdminDashboard = query({
       allUsers,
       activeSubs,
       graceSubs,
-      activeSessionsRows,
       paidCompletedRows,
       complaintsOpen,
       pendingBookings,
+      activeLiveStreams,
     ] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db
@@ -41,10 +61,6 @@ export const getAdminDashboard = query({
       ctx.db
         .query("clubs")
         .withIndex("by_subscriptionStatus", (q) => q.eq("subscriptionStatus", "grace"))
-        .collect(),
-      ctx.db
-        .query("sessionLogs")
-        .withIndex("by_status", (q) => q.eq("status", "active"))
         .collect(),
       ctx.db
         .query("sessionLogs")
@@ -60,11 +76,17 @@ export const getAdminDashboard = query({
         .query("bookings")
         .withIndex("by_global_status", (q) => q.eq("status", "pending_approval"))
         .collect(),
+      ctx.db
+        .query("liveStreams")
+        .withIndex("by_status_startedAt", (q) => q.eq("status", "live"))
+        .collect(),
     ]);
+
+    const activeSessionRows = await loadAllActiveSessions(ctx);
 
     const totalUsers = allUsers.filter((u) => u.deletionRequestedAt == null).length;
     const activeClubs = activeSubs.length + graceSubs.length;
-    const activeSessions = activeSessionsRows.length;
+    const activeSessions = activeSessionRows.length;
 
     let revenueAllTime = 0;
     let revenueToday = 0;
@@ -87,7 +109,344 @@ export const getAdminDashboard = query({
       },
       openComplaints: complaintsOpen.length,
       pendingBookings: pendingBookings.length,
+      activeLiveStreams: activeLiveStreams.length,
       fetchedAt,
     };
+  },
+});
+
+/**
+ * Platform revenue per calendar day (IST) for the admin app. Sums paid, completed
+ * cross-club session bills from `sessionLogs` — the same source as the dashboard
+ * all-time / today totals, just grouped by day. Guest sessions are not written to
+ * `sessionLogs`, so (as on the dashboard) they are not included here.
+ *
+ * `dateFrom`/`dateTo` are `YYYY-MM-DD` in IST, inclusive. Range is capped so the
+ * scan stays bounded.
+ */
+export const getAdminPlatformRevenueByDay = query({
+  args: {
+    dateFrom: v.string(),
+    dateTo: v.string(),
+  },
+  handler: async (ctx, { dateFrom, dateTo }) => {
+    await requireAdminWithMfa(ctx);
+
+    const empty = {
+      days: [] as { date: string; revenue: number; sessionCount: number }[],
+      totalRevenue: 0,
+      totalSessions: 0,
+      currency: "INR",
+      timeZone: PLATFORM_TIMEZONE,
+    };
+
+    if (compareYmd(dateFrom, dateTo) > 0) return empty;
+
+    // Guard against unbounded ranges (paise/rupee scan over all clubs).
+    let span = 1;
+    let cursorDate = dateFrom;
+    while (compareYmd(cursorDate, dateTo) < 0 && span <= MAX_REVENUE_RANGE_DAYS) {
+      const next = new Date(`${cursorDate}T00:00:00Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      cursorDate = next.toISOString().slice(0, 10);
+      span += 1;
+    }
+    if (span > MAX_REVENUE_RANGE_DAYS) {
+      throw new Error(
+        `DATA_002: Date range too large (max ${MAX_REVENUE_RANGE_DAYS} days)`,
+      );
+    }
+
+    const paidCompletedRows = await ctx.db
+      .query("sessionLogs")
+      .withIndex("by_status_payment", (q) =>
+        q.eq("status", "completed").eq("paymentStatus", "paid"),
+      )
+      .collect();
+
+    const byDay = new Map<string, { revenue: number; sessionCount: number }>();
+    for (const row of paidCompletedRows) {
+      const ms = row.endTime ?? row.startTime;
+      const date = dateYmdInTimeZone(ms, PLATFORM_TIMEZONE);
+      if (compareYmd(date, dateFrom) < 0 || compareYmd(date, dateTo) > 0) continue;
+      const cur = byDay.get(date) ?? { revenue: 0, sessionCount: 0 };
+      cur.revenue += row.billTotal ?? 0;
+      cur.sessionCount += 1;
+      byDay.set(date, cur);
+    }
+
+    const sparse = [...byDay.entries()].map(([date, r]) => ({
+      date,
+      revenue: r.revenue,
+      sessionCount: r.sessionCount,
+    }));
+    const days = fillDateGaps(sparse, dateFrom, dateTo, PLATFORM_TIMEZONE);
+
+    let totalRevenue = 0;
+    let totalSessions = 0;
+    for (const d of days) {
+      totalRevenue += d.revenue;
+      totalSessions += d.sessionCount;
+    }
+
+    return {
+      days,
+      totalRevenue,
+      totalSessions,
+      currency: "INR",
+      timeZone: PLATFORM_TIMEZONE,
+    };
+  },
+});
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  phone_update: "Phone updated",
+  admin_profile_edit: "Admin profile edited",
+  user_freeze: "User frozen",
+  user_unfreeze: "User unfrozen",
+  password_reset: "Password reset",
+  passcode_reset: "Passcode reset",
+  role_change: "Role changed",
+  complaint_dismiss: "Complaint dismissed",
+  session_force_end: "Session force-ended",
+};
+
+export const getAdminClubs = query({
+  args: {
+    searchText: v.optional(v.string()),
+    statusFilter: v.optional(
+      v.union(v.literal("active"), v.literal("grace"), v.literal("frozen")),
+    ),
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdminWithMfa(ctx);
+    const limit = Math.min(Math.max(args.limit ?? 20, 1), 50);
+
+    let clubs = await ctx.db.query("clubs").collect();
+    if (args.statusFilter !== undefined) {
+      clubs = clubs.filter((c) => c.subscriptionStatus === args.statusFilter);
+    }
+    const search = args.searchText?.trim().toLowerCase();
+    if (search) {
+      clubs = clubs.filter(
+        (c) =>
+          c.name.toLowerCase().includes(search) ||
+          c.address.toLowerCase().includes(search),
+      );
+    }
+    clubs.sort((a, b) => a.name.localeCompare(b.name));
+
+    let offset = 0;
+    if (args.cursor !== undefined && args.cursor.length > 0) {
+      const n = parseInt(args.cursor, 10);
+      if (!Number.isNaN(n) && n >= 0) offset = n;
+    }
+    const slice = clubs.slice(offset, offset + limit);
+    const nextCursor =
+      offset + limit < clubs.length ? String(offset + limit) : null;
+
+    const rows = await Promise.all(
+      slice.map(async (c) => {
+        const [owner, tables] = await Promise.all([
+          ctx.db.get(c.ownerId),
+          ctx.db
+            .query("tables")
+            .withIndex("by_club", (q) => q.eq("clubId", c._id))
+            .collect(),
+        ]);
+        return {
+          clubId: c._id,
+          ownerId: c.ownerId,
+          name: c.name,
+          address: c.address,
+          subscriptionStatus: c.subscriptionStatus,
+          subscriptionExpiresAt: c.subscriptionExpiresAt,
+          isDiscoverable: c.isDiscoverable,
+          ownerName: owner?.name ?? "Unknown",
+          ownerPhone: owner?.phone ?? null,
+          ownerFrozen: owner?.isFrozen ?? false,
+          tableCount: tables.filter((t) => t.isActive).length,
+          createdAt: c.createdAt,
+        };
+      }),
+    );
+
+    return { clubs: rows, nextCursor, totalCount: clubs.length };
+  },
+});
+
+export const getAdminAuditLog = query({
+  args: {
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { cursor, limit: limitArg }) => {
+    await requireAdminWithMfa(ctx);
+    const limit = Math.min(Math.max(limitArg ?? 30, 1), 50);
+
+    let minCreatedAtExclusive: number | undefined;
+    if (cursor !== undefined && cursor.length > 0) {
+      const parts = cursor.split(":");
+      const ts = Number(parts[0]);
+      if (!Number.isNaN(ts)) minCreatedAtExclusive = ts;
+    }
+
+    const batch = await ctx.db
+      .query("adminAuditLog")
+      .withIndex("by_createdAt", (iq) =>
+        minCreatedAtExclusive !== undefined
+          ? iq.lt("createdAt", minCreatedAtExclusive)
+          : iq.gte("createdAt", 0),
+      )
+      .order("desc")
+      .take(limit + 1);
+
+    const hasMore = batch.length > limit;
+    const slice = hasMore ? batch.slice(0, limit) : batch;
+    const nextCursor =
+      hasMore && slice.length > 0
+        ? `${slice[slice.length - 1].createdAt}:${slice[slice.length - 1]._id}`
+        : null;
+
+    const userIds = new Set<string>();
+    for (const row of slice) {
+      userIds.add(row.adminId);
+      if (row.targetUserId) userIds.add(row.targetUserId);
+    }
+
+    const nameById = new Map<string, string>();
+    for (const uid of userIds) {
+      const u = await ctx.db.get(uid as Id<"users">);
+      nameById.set(uid, u?.name ?? "Unknown");
+    }
+
+    const entries = slice.map((row) => ({
+      _id: row._id,
+      action: row.action,
+      actionLabel: AUDIT_ACTION_LABELS[row.action] ?? row.action,
+      adminId: row.adminId,
+      adminName: nameById.get(row.adminId) ?? "Unknown",
+      targetUserId: row.targetUserId ?? null,
+      targetUserName:
+        row.targetUserId !== undefined
+          ? (nameById.get(row.targetUserId) ?? "Unknown")
+          : null,
+      previousValue: row.previousValue ?? null,
+      newValue: row.newValue ?? null,
+      notes: row.notes ?? null,
+      createdAt: row.createdAt,
+    }));
+
+    return { entries, nextCursor };
+  },
+});
+
+export const getAdminActiveSessions = query({
+  args: {
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { cursor, limit: limitArg }) => {
+    await requireAdminWithMfa(ctx);
+    const limit = Math.min(Math.max(limitArg ?? 30, 1), 50);
+
+    const rows = await loadAllActiveSessions(ctx);
+
+    let offset = 0;
+    if (cursor !== undefined && cursor.length > 0) {
+      const n = parseInt(cursor, 10);
+      if (!Number.isNaN(n) && n >= 0) offset = n;
+    }
+
+    const slice = rows.slice(offset, offset + limit);
+    const nextCursor =
+      offset + limit < rows.length ? String(offset + limit) : null;
+
+    const sessions = await Promise.all(
+      slice.map(async (s) => {
+        const [club, table, customer] = await Promise.all([
+          ctx.db.get(s.clubId),
+          ctx.db.get(s.tableId),
+          s.customerId !== undefined ? ctx.db.get(s.customerId) : null,
+        ]);
+        const isGuest = s.isGuest || s.customerId === undefined;
+        return {
+          sessionId: s._id,
+          customerId: s.customerId ?? null,
+          customerName: isGuest
+            ? (s.guestName?.trim() || "Walk-in")
+            : (customer?.name ?? "Unknown"),
+          customerPhone: isGuest ? null : (customer?.phone ?? null),
+          isGuest,
+          clubId: s.clubId,
+          clubName: club?.name ?? "Unknown club",
+          tableLabel: table?.label ?? "Table",
+          startTime: s.startTime,
+          currency: s.currency,
+        };
+      }),
+    );
+
+    return { sessions, nextCursor, totalCount: rows.length };
+  },
+});
+
+export const getAdminPendingBookings = query({
+  args: {
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { cursor, limit: limitArg }) => {
+    await requireAdminWithMfa(ctx);
+    const limit = Math.min(Math.max(limitArg ?? 30, 1), 50);
+
+    const rows = await ctx.db
+      .query("bookings")
+      .withIndex("by_global_status", (q) => q.eq("status", "pending_approval"))
+      .collect();
+    rows.sort((a, b) =>
+      a.requestedDate === b.requestedDate
+        ? a.requestedStartTime.localeCompare(b.requestedStartTime)
+        : a.requestedDate.localeCompare(b.requestedDate),
+    );
+
+    let offset = 0;
+    if (cursor !== undefined && cursor.length > 0) {
+      const n = parseInt(cursor, 10);
+      if (!Number.isNaN(n) && n >= 0) offset = n;
+    }
+
+    const slice = rows.slice(offset, offset + limit);
+    const nextCursor =
+      offset + limit < rows.length ? String(offset + limit) : null;
+
+    const bookings = await Promise.all(
+      slice.map(async (b) => {
+        const [customer, club] = await Promise.all([
+          ctx.db.get(b.customerId),
+          ctx.db.get(b.clubId),
+        ]);
+        return {
+          bookingId: b._id,
+          customerId: b.customerId,
+          customerName: customer?.name ?? "Unknown",
+          customerPhone: customer?.phone ?? null,
+          clubId: b.clubId,
+          clubName: club?.name ?? "Unknown club",
+          tableType: b.tableType,
+          requestedDate: b.requestedDate,
+          requestedStartTime: b.requestedStartTime,
+          requestedDurationMin: b.requestedDurationMin,
+          estimatedCost: b.estimatedCost ?? null,
+          currency: b.currency,
+          notes: b.notes ?? null,
+          createdAt: b.createdAt,
+        };
+      }),
+    );
+
+    return { bookings, nextCursor, totalCount: rows.length };
   },
 });

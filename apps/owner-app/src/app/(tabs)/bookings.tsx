@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,19 +9,53 @@ import {
   Modal,
   TextInput,
   Alert,
+  I18nManager,
+  RefreshControl,
 } from "react-native";
-import { ComplaintBanner } from "@a3/ui/components";
+import { BookingCard, ComplaintBanner, GlassPageBackground } from "@a3/ui/components";
 import { useMutation, useQuery } from "convex/react";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { api } from "@a3/convex/_generated/api";
-import { BookingCard } from "@a3/ui/components";
-import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { colors, layout, radius, spacing, typography, glass } from "@a3/ui/theme";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 import { computeBookingUnixTime, timeZoneAbbreviation } from "@a3/utils/timezone";
 import { useLocalSearchParams } from "expo-router";
-import { getActiveRoleId } from "../../lib/activeRoleStorage";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../../lib/StaffRoleContext";
+import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
+import { TabAccessDenied } from "../../components/TabAccessDenied";
+import { CustomerQrScannerModal } from "../../components/CustomerQrScannerModal";
+import { ownerTabBarTotalInset } from "../../theme/ownerShell";
 
 type Segment = "pending" | "upcoming" | "history";
+
+type CheckInMatch = {
+  bookingId: Id<"bookings">;
+  customerId: Id<"users">;
+  customerName: string;
+  customerPhone: string | null;
+  tableType: string;
+  requestedDate: string;
+  requestedStartTime: string;
+  requestedDurationMin: number;
+  confirmedTableId: Id<"tables"> | undefined;
+  confirmedTableLabel: string | null;
+  status: string;
+  onlinePaymentStatus: string | null;
+  estimatedCost: number | undefined;
+  currency: string;
+  complaints: string[];
+};
+
+function to12h(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map((x) => Number(x));
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
 
 const FIGMA_BOOKINGS = {
   segmentRadius: 24,
@@ -35,18 +69,18 @@ const FIGMA_BOOKINGS = {
 } as const;
 
 const HISTORY_FILTERS = [
-  { key: "all", label: "All" },
-  { key: "rejected", label: "Rejected" },
-  { key: "cancelled_by_customer", label: "Cancelled" },
-  { key: "cancelled_by_club", label: "Cancelled" },
-  { key: "expired", label: "Expired" },
-  { key: "completed", label: "Completed" },
+  { key: "all", labelKey: "ownerApp.bookings.filters.all" },
+  { key: "rejected", labelKey: "ownerApp.bookings.filters.rejected" },
+  { key: "cancelled_by_customer", labelKey: "ownerApp.bookings.filters.cancelled" },
+  { key: "cancelled_by_club", labelKey: "ownerApp.bookings.filters.cancelled" },
+  { key: "expired", labelKey: "ownerApp.bookings.filters.expired" },
+  { key: "completed", labelKey: "ownerApp.bookings.filters.completed" },
 ] as const;
 
-function elapsedLabel(createdAt?: number): string {
+function elapsedLabel(createdAt: number | undefined, tr: (key: string, opts?: { min: number }) => string): string {
   if (!createdAt) return "";
   const min = Math.max(1, Math.floor((Date.now() - createdAt) / 60_000));
-  return `Submitted ${min} min ago`;
+  return tr("ownerApp.bookings.submittedAgo", { min });
 }
 
 function canStartNow(booking: {
@@ -62,17 +96,28 @@ function canStartNow(booking: {
   return now >= start - 15 * 60_000 && now <= start + 30 * 60_000;
 }
 
-export default function BookingsTab() {
+function BookingsTabContent() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const params = useLocalSearchParams<{ segment?: string }>();
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
+  const { roleId, canAccessTab } = useStaffRole();
+  const bookingsEnabled = useStaffTabQueriesEnabled("bookings");
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
+  const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
   const pending = useQuery(
     api.bookings.listPendingBookings,
-    clubId ? { clubId, limit: 50 } : "skip",
+    clubId && bookingsEnabled
+      ? { clubId, limit: 50, roleId: queryRoleId }
+      : "skip",
   );
   const upcoming = useQuery(
     api.bookings.listUpcomingBookings,
-    clubId ? { clubId, limit: 50 } : "skip",
+    clubId && bookingsEnabled
+      ? { clubId, limit: 50, roleId: queryRoleId }
+      : "skip",
   );
 
   const initialSeg =
@@ -91,7 +136,6 @@ export default function BookingsTab() {
   const [selectedTableId, setSelectedTableId] = useState<Id<"tables"> | null>(null);
   const [reasonText, setReasonText] = useState("");
   const [inFlight, setInFlight] = useState<string | null>(null);
-  const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
   const [complaintGateBooking, setComplaintGateBooking] = useState<{
     bookingId: Id<"bookings">;
     customerId: Id<"users">;
@@ -99,15 +143,11 @@ export default function BookingsTab() {
     confirmedTableId: Id<"tables"> | undefined;
   } | null>(null);
 
-  useEffect(() => {
-    void getActiveRoleId().then((v) => {
-      if (v) setRoleId(v as Id<"staffRoles">);
-    });
-  }, []);
-
   const complaintGateDetails = useQuery(
     api.complaints.getCustomerActiveComplaints,
-    complaintGateBooking ? { userId: complaintGateBooking.customerId } : "skip",
+    complaintGateBooking && clubId
+      ? { userId: complaintGateBooking.customerId, clubId }
+      : "skip",
   );
 
   const complaintBannerRows = useMemo(() => {
@@ -127,13 +167,14 @@ export default function BookingsTab() {
 
   const historyPage = useQuery(
     api.bookings.listHistoryBookings,
-    clubId
+    clubId && bookingsEnabled
       ? {
           clubId,
           statusFilter: historyFilter === "all" ? undefined : historyFilter,
           searchQuery: searchQuery.trim() || undefined,
           cursor: historyCursor,
           limit: 20,
+          roleId: queryRoleId,
         }
       : "skip",
   );
@@ -143,7 +184,66 @@ export default function BookingsTab() {
   const cancelByClub = useMutation(api.bookings.clubCancelBooking);
   const startSession = useMutation(api.bookings.startSessionFromBooking);
 
-  const timezone = dashboard ? timeZoneAbbreviation("Asia/Kolkata") : "";
+  // Booking check-in QR: scan a customer's booking QR or profile QR, verify it
+  // resolves to a confirmed booking at this club, then start via startSession.
+  const [showCheckInScanner, setShowCheckInScanner] = useState(false);
+  const [checkInQuery, setCheckInQuery] = useState<string | null>(null);
+  const [checkInLoading, setCheckInLoading] = useState(false);
+  const [checkInMatches, setCheckInMatches] = useState<CheckInMatch[] | null>(null);
+
+  const checkInResolve = useQuery(
+    api.bookings.resolveBookingCheckIn,
+    clubId && checkInQuery ? { clubId, payload: checkInQuery } : "skip",
+  );
+
+  useEffect(() => {
+    if (!checkInQuery || checkInResolve === undefined) return;
+    setCheckInLoading(false);
+    setCheckInQuery(null);
+    if (checkInResolve.ok) {
+      setCheckInMatches(checkInResolve.matches as CheckInMatch[]);
+    } else {
+      Alert.alert(
+        t("ownerApp.bookings.checkIn.title"),
+        checkInResolve.message,
+      );
+    }
+  }, [checkInResolve, checkInQuery, t]);
+
+  const startFromMatch = (m: CheckInMatch) => {
+    if (m.status !== "confirmed") {
+      Alert.alert(t("ownerApp.bookings.checkIn.title"), t("ownerApp.bookings.checkIn.notConfirmed"));
+      return;
+    }
+    setCheckInMatches(null);
+    if ((m.complaints?.length ?? 0) > 0) {
+      setComplaintGateBooking({
+        bookingId: m.bookingId,
+        customerId: m.customerId,
+        customerName: m.customerName,
+        confirmedTableId: m.confirmedTableId,
+      });
+      return;
+    }
+    void (async () => {
+      try {
+        setInFlight(m.bookingId);
+        await startSession({
+          bookingId: m.bookingId,
+          tableId: m.confirmedTableId,
+          roleId: queryRoleId,
+        });
+        Alert.alert(t("ownerApp.bookings.success"), t("ownerApp.bookings.startSuccess"));
+      } catch (e) {
+        Alert.alert(t("ownerApp.bookings.startFailed"), parseConvexError(e as Error).message);
+      } finally {
+        setInFlight(null);
+      }
+    })();
+  };
+
+  const clubTimezone = dashboard?.timezone ?? "Asia/Kolkata";
+  const timezone = dashboard ? timeZoneAbbreviation(clubTimezone) : "";
   const noBookings =
     (pending?.items.length ?? 0) +
       (upcoming?.items.length ?? 0) +
@@ -153,18 +253,45 @@ export default function BookingsTab() {
 
   const ensureHistoryData = useMemo(() => historyPage?.items ?? [], [historyPage]);
 
-  if (dashboard === undefined || (clubId && pending === undefined) || (clubId && upcoming === undefined)) {
+  if (dashboard === undefined) {
     return (
+      <GlassPageBackground>
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.accent.green} />
-        <Text style={styles.loadingText}>Loading bookings...</Text>
+        <ActivityIndicator size="large" color={glass.ctaBg} />
+        <Text style={styles.loadingText}>{t("common.loading")}</Text>
       </View>
+      </GlassPageBackground>
     );
   }
 
-  const openApprove = (bookingId: Id<"bookings">) => {
+  if (dashboard === null) {
+    return <OwnerNoClubPlaceholder />;
+  }
+
+  if (roleId !== undefined && !canAccessTab("bookings")) {
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.bookings")} />;
+  }
+
+  if (
+    (clubId && pending === undefined) ||
+    (clubId && upcoming === undefined)
+  ) {
+    return (
+      <GlassPageBackground>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={glass.ctaBg} />
+        <Text style={styles.loadingText}>{t("common.loading")}</Text>
+      </View>
+      </GlassPageBackground>
+    );
+  }
+
+  const openApprove = (
+    bookingId: Id<"bookings">,
+    preselectedTableId?: Id<"tables">,
+  ) => {
     setSelectedBookingId(bookingId);
-    setSelectedTableId(null);
+    setSelectedTableId(preselectedTableId ?? null);
     setShowApproveModal(true);
   };
   const openReject = (bookingId: Id<"bookings">) => {
@@ -188,7 +315,7 @@ export default function BookingsTab() {
       });
       setShowApproveModal(false);
     } catch (e) {
-      Alert.alert("Approve failed", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.bookings.approveFailed"), parseConvexError(e as Error).message);
     } finally {
       setInFlight(null);
     }
@@ -204,7 +331,7 @@ export default function BookingsTab() {
       });
       setShowRejectModal(false);
     } catch (e) {
-      Alert.alert("Reject failed", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.bookings.rejectFailed"), parseConvexError(e as Error).message);
     } finally {
       setInFlight(null);
     }
@@ -220,7 +347,7 @@ export default function BookingsTab() {
       });
       setShowCancelModal(false);
     } catch (e) {
-      Alert.alert("Cancel failed", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.bookings.cancelFailed"), parseConvexError(e as Error).message);
     } finally {
       setInFlight(null);
     }
@@ -230,17 +357,15 @@ export default function BookingsTab() {
     if (!dashboard?.bookingSettingsEnabled && noBookings) {
       return (
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>No bookings yet</Text>
-          <Text style={styles.emptyText}>
-            Enable online booking in Settings to start receiving requests.
-          </Text>
+          <Text style={styles.emptyTitle}>{t("ownerApp.bookings.noBookingsYet")}</Text>
+          <Text style={styles.emptyText}>{t("ownerApp.bookings.enableOnlineBooking")}</Text>
         </View>
       );
     }
 
     if (segment === "pending") {
       if (!pending || pending.items.length === 0) {
-        return <Text style={styles.emptyText}>No pending booking requests</Text>;
+        return <Text style={styles.emptyText}>{t("ownerApp.bookings.noPending")}</Text>;
       }
       return pending.items.map((item: any) => (
         <BookingCard
@@ -259,12 +384,15 @@ export default function BookingsTab() {
             notes: item.booking.notes,
             status: item.booking.status,
             createdAt: item.booking.createdAt,
+            confirmedTableLabel: item.requestedTableLabel,
           }}
           complaints={item.complaints}
           customerStats={item.customerStats}
           isLoading={inFlight === item.booking._id}
-          footerText={elapsedLabel(item.booking.createdAt)}
-          onApprove={() => openApprove(item.booking._id)}
+          footerText={elapsedLabel(item.booking.createdAt, t)}
+          onApprove={() =>
+            openApprove(item.booking._id, item.booking.confirmedTableId)
+          }
           onReject={() => openReject(item.booking._id)}
         />
       ));
@@ -272,10 +400,10 @@ export default function BookingsTab() {
 
     if (segment === "upcoming") {
       if (!upcoming || upcoming.items.length === 0) {
-        return <Text style={styles.emptyText}>No upcoming bookings</Text>;
+        return <Text style={styles.emptyText}>{t("ownerApp.bookings.noUpcoming")}</Text>;
       }
       return upcoming.items.map((item: any) => {
-        const startEnabled = canStartNow(item.booking, "Asia/Kolkata");
+        const startEnabled = canStartNow(item.booking, clubTimezone);
         return (
           <BookingCard
             key={item.booking._id}
@@ -287,7 +415,7 @@ export default function BookingsTab() {
               requestedDate: item.booking.requestedDate,
               requestedStartTime: item.booking.requestedStartTime,
               requestedDurationMin: item.booking.requestedDurationMin,
-              confirmedTableLabel: item.confirmedTableLabel ?? "Table to be assigned",
+              confirmedTableLabel: item.confirmedTableLabel ?? t("ownerApp.bookings.tableToAssign"),
               status: item.booking.status,
             }}
             complaints={item.complaints}
@@ -312,11 +440,11 @@ export default function BookingsTab() {
                         await startSession({
                           bookingId: item.booking._id,
                           tableId: item.booking.confirmedTableId,
-                          roleId,
+                          roleId: queryRoleId,
                         });
-                        Alert.alert("Success", "Session started successfully.");
+                        Alert.alert(t("ownerApp.bookings.success"), t("ownerApp.bookings.startSuccess"));
                       } catch (e) {
-                        Alert.alert("Start failed", parseConvexError(e as Error).message);
+                        Alert.alert(t("ownerApp.bookings.startFailed"), parseConvexError(e as Error).message);
                       } finally {
                         setInFlight(null);
                       }
@@ -324,7 +452,7 @@ export default function BookingsTab() {
                   }
                 : undefined
             }
-            footerText={`Times shown in ${timezone}`}
+            footerText={t("ownerApp.bookings.timesInTimezone", { timezone })}
           />
         );
       });
@@ -332,7 +460,7 @@ export default function BookingsTab() {
 
     const all = [...historyItems, ...ensureHistoryData];
     if (all.length === 0) {
-      return <Text style={styles.emptyText}>No booking history yet</Text>;
+      return <Text style={styles.emptyText}>{t("ownerApp.bookings.noHistory")}</Text>;
     }
     return (
       <>
@@ -360,7 +488,7 @@ export default function BookingsTab() {
               setHistoryCursor(historyPage.nextCursor!);
             }}
           >
-            <Text style={styles.loadMoreText}>Load more</Text>
+            <Text style={styles.loadMoreText}>{t("common.loadMore")}</Text>
           </Pressable>
         ) : null}
       </>
@@ -368,10 +496,11 @@ export default function BookingsTab() {
   };
 
   return (
+    <GlassPageBackground>
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Bookings</Text>
-        <Text style={styles.hint}>Times shown in {timezone}</Text>
+        <Text style={styles.title}>{t("ownerApp.bookings.title")}</Text>
+        <Text style={styles.hint}>{t("ownerApp.bookings.timesInTimezone", { timezone })}</Text>
       </View>
 
       <View style={styles.segmented}>
@@ -382,11 +511,27 @@ export default function BookingsTab() {
             onPress={() => setSegment(s)}
           >
             <Text style={[styles.segText, segment === s && styles.segTextActive]}>
-              {s[0].toUpperCase() + s.slice(1)}
+              {t(`ownerApp.bookings.${s}`)}
             </Text>
           </Pressable>
         ))}
       </View>
+
+      {segment === "upcoming" ? (
+        <View style={styles.checkInBar}>
+          <Pressable
+            style={styles.checkInScanBtn}
+            onPress={() => setShowCheckInScanner(true)}
+          >
+            <Text style={styles.checkInScanBtnText}>
+              {t("ownerApp.bookings.checkIn.scanButton")}
+            </Text>
+          </Pressable>
+          <Text style={styles.checkInBarHint}>
+            {t("ownerApp.bookings.checkIn.scanHint")}
+          </Text>
+        </View>
+      ) : null}
 
       {segment === "history" ? (
         <View style={styles.historyFilters}>
@@ -411,7 +556,7 @@ export default function BookingsTab() {
                       historyFilter === f.key && styles.chipTextActive,
                     ]}
                   >
-                    {f.label}
+                    {t(f.labelKey)}
                   </Text>
                 </Pressable>
               ))}
@@ -420,19 +565,30 @@ export default function BookingsTab() {
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search customer"
+            placeholder={t("ownerApp.bookings.searchPlaceholder")}
             placeholderTextColor={colors.text.tertiary}
             style={styles.search}
           />
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.list}>{renderSegment()}</ScrollView>
+      <ScrollView
+        contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {renderSegment()}
+      </ScrollView>
 
       <Modal visible={showApproveModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Assign a Table (Optional)</Text>
+            <Text style={styles.modalTitle}>
+              {selectedTableId
+                ? t("ownerApp.bookings.confirmTable")
+                : t("ownerApp.bookings.assignTable")}
+            </Text>
             <ScrollView style={{ maxHeight: 220 }}>
               {(assignableTables ?? []).map((t: any) => (
                 <Pressable
@@ -448,10 +604,10 @@ export default function BookingsTab() {
               ))}
             </ScrollView>
             <Pressable style={styles.primaryBtn} onPress={doApprove}>
-              <Text style={styles.primaryBtnText}>Confirm Approval</Text>
+              <Text style={styles.primaryBtnText}>{t("ownerApp.bookings.approve")}</Text>
             </Pressable>
             <Pressable style={styles.secondaryBtn} onPress={() => setShowApproveModal(false)}>
-              <Text style={styles.secondaryBtnText}>Close</Text>
+              <Text style={styles.secondaryBtnText}>{t("common.close")}</Text>
             </Pressable>
           </View>
         </View>
@@ -461,12 +617,12 @@ export default function BookingsTab() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {showRejectModal ? "Reject Booking" : "Cancel Booking"}
+              {showRejectModal ? t("ownerApp.bookings.rejectBooking") : t("ownerApp.bookings.cancelBooking")}
             </Text>
             <TextInput
               value={reasonText}
               onChangeText={(v) => setReasonText(v.slice(0, 300))}
-              placeholder="Reason (optional)"
+              placeholder={t("ownerApp.bookings.reasonOptional")}
               placeholderTextColor={colors.text.tertiary}
               multiline
               style={styles.reasonInput}
@@ -476,7 +632,9 @@ export default function BookingsTab() {
               style={styles.primaryBtn}
               onPress={showRejectModal ? doReject : doCancel}
             >
-              <Text style={styles.primaryBtnText}>Confirm</Text>
+              <Text style={styles.primaryBtnText}>
+                {showRejectModal ? t("ownerApp.bookings.reject") : t("ownerApp.bookings.cancel")}
+              </Text>
             </Pressable>
             <Pressable
               style={styles.secondaryBtn}
@@ -485,7 +643,7 @@ export default function BookingsTab() {
                 setShowCancelModal(false);
               }}
             >
-              <Text style={styles.secondaryBtnText}>Close</Text>
+              <Text style={styles.secondaryBtnText}>{t("common.close")}</Text>
             </Pressable>
           </View>
         </View>
@@ -509,12 +667,12 @@ export default function BookingsTab() {
                         bookingId: complaintGateBooking.bookingId,
                         tableId: complaintGateBooking.confirmedTableId,
                         staffAcknowledgedComplaint: true,
-                        roleId,
+                        roleId: queryRoleId,
                       });
                       setComplaintGateBooking(null);
-                      Alert.alert("Success", "Session started successfully.");
+                      Alert.alert(t("ownerApp.bookings.success"), t("ownerApp.bookings.startSuccess"));
                     } catch (e) {
-                      Alert.alert("Start failed", parseConvexError(e as Error).message);
+                      Alert.alert(t("ownerApp.bookings.startFailed"), parseConvexError(e as Error).message);
                     } finally {
                       setInFlight(null);
                     }
@@ -525,7 +683,82 @@ export default function BookingsTab() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={checkInMatches !== null} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t("ownerApp.bookings.checkIn.verifyTitle")}</Text>
+            <Text style={styles.checkInSubtitle}>{t("ownerApp.bookings.checkIn.verifySubtitle")}</Text>
+            <ScrollView style={{ maxHeight: 380 }}>
+              {(checkInMatches ?? []).map((m) => {
+                const startable = m.status === "confirmed";
+                const inWindow = canStartNow(m, clubTimezone);
+                const needsPay =
+                  (m.estimatedCost ?? 0) > 0 && m.onlinePaymentStatus !== "paid";
+                const canStart = startable && inWindow && !needsPay;
+                return (
+                  <View key={m.bookingId} style={styles.checkInMatch}>
+                    <Text style={styles.checkInName}>{m.customerName}</Text>
+                    {m.customerPhone ? (
+                      <Text style={styles.checkInMeta}>{m.customerPhone}</Text>
+                    ) : null}
+                    <Text style={styles.checkInMeta}>
+                      {m.tableType} · {to12h(m.requestedStartTime)} · {m.requestedDate}
+                    </Text>
+                    <Text style={styles.checkInMeta}>
+                      {m.confirmedTableLabel ?? t("ownerApp.bookings.tableToAssign")}
+                    </Text>
+                    {!startable ? (
+                      <Text style={styles.checkInWarn}>{t("ownerApp.bookings.checkIn.notConfirmed")}</Text>
+                    ) : needsPay ? (
+                      <Text style={styles.checkInWarn}>{t("ownerApp.bookings.checkIn.paymentPending")}</Text>
+                    ) : !inWindow ? (
+                      <Text style={styles.checkInWarn}>{t("ownerApp.bookings.checkIn.outsideWindow")}</Text>
+                    ) : null}
+                    {m.complaints.length > 0 ? (
+                      <Text style={styles.checkInWarn}>{t("ownerApp.bookings.checkIn.hasComplaints")}</Text>
+                    ) : null}
+                    <Pressable
+                      style={[
+                        styles.primaryBtn,
+                        (!canStart || inFlight === m.bookingId) && { opacity: 0.5 },
+                      ]}
+                      disabled={!canStart || inFlight === m.bookingId}
+                      onPress={() => startFromMatch(m)}
+                    >
+                      <Text style={styles.primaryBtnText}>
+                        {t("ownerApp.bookings.checkIn.startVerified")}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <Pressable style={styles.secondaryBtn} onPress={() => setCheckInMatches(null)}>
+              <Text style={styles.secondaryBtnText}>{t("common.close")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={checkInLoading} transparent animationType="fade">
+        <View style={[styles.modalBackdrop, styles.complaintGateBackdrop]}>
+          <ActivityIndicator size="large" color={glass.ctaBg} />
+        </View>
+      </Modal>
+
+      <CustomerQrScannerModal
+        visible={showCheckInScanner}
+        onClose={() => setShowCheckInScanner(false)}
+        onScan={(payload) => {
+          const trimmed = payload.trim();
+          if (!trimmed) return;
+          setCheckInLoading(true);
+          setCheckInQuery(trimmed);
+        }}
+      />
     </View>
+    </GlassPageBackground>
   );
 }
 
@@ -534,10 +767,10 @@ const SCREEN_PAD = spacing[6];
 const CARD_LIST_GAP = spacing[3];
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg.primary },
+  screen: { flex: 1, backgroundColor: "transparent" },
   centered: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -563,10 +796,10 @@ const styles = StyleSheet.create({
   segmented: {
     marginHorizontal: SCREEN_PAD,
     marginBottom: spacing[3],
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.inputBg,
     borderRadius: FIGMA_BOOKINGS.segmentRadius,
     borderWidth: 1,
-    borderColor: FIGMA_BOOKINGS.segmentBorder,
+    borderColor: glass.inputBorder,
     padding: spacing[1],
     flexDirection: "row",
     gap: spacing[1],
@@ -578,7 +811,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  segBtnActive: { backgroundColor: colors.bg.tertiary },
+  segBtnActive: {
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+  },
   segText: {
     fontSize: typography.labelSmall.fontSize,
     lineHeight: typography.labelSmall.lineHeight,
@@ -598,8 +835,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipActive: {
-    borderColor: FIGMA_BOOKINGS.chipActiveBorder,
-    backgroundColor: FIGMA_BOOKINGS.chipActiveFill,
+    borderColor: glass.inputBorderFocus,
+    backgroundColor: "rgba(56, 189, 248, 0.22)",
   },
   chipText: {
     fontSize: 12,
@@ -607,12 +844,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.text.secondary,
   },
-  chipTextActive: { color: "#000000" },
+  chipTextActive: { color: glass.textPrimary },
   search: {
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: glass.inputBorder,
     color: colors.text.primary,
     ...typography.body,
     paddingHorizontal: spacing[3],
@@ -620,10 +857,10 @@ const styles = StyleSheet.create({
   },
   list: { paddingHorizontal: SCREEN_PAD, paddingBottom: spacing[8], gap: CARD_LIST_GAP },
   emptyWrap: {
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.cardBg,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
     padding: spacing[4],
   },
   emptyTitle: { ...typography.heading4, color: colors.text.primary, marginBottom: spacing[2] },
@@ -632,7 +869,8 @@ const styles = StyleSheet.create({
     minHeight: layout.touchTarget,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.inputBorder,
+    backgroundColor: glass.inputBg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -646,10 +884,10 @@ const styles = StyleSheet.create({
   complaintGateBackdrop: { justifyContent: "center" },
   complaintGateCard: { maxHeight: "88%" },
   modalCard: {
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.tabPillBg,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.tabPillBorder,
     padding: spacing[4],
     gap: spacing[2],
   },
@@ -692,6 +930,53 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     ...typography.body,
   },
-  counter: { ...typography.caption, color: colors.text.secondary, textAlign: "right" },
+  counter: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    textAlign: I18nManager.isRTL ? "left" : "right",
+  },
+  checkInBar: {
+    paddingHorizontal: SCREEN_PAD,
+    marginBottom: spacing[3],
+    gap: spacing[1],
+  },
+  checkInScanBtn: {
+    minHeight: layout.touchTarget,
+    borderRadius: radius.md,
+    backgroundColor: glass.ctaBg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkInScanBtnText: { ...typography.button, color: glass.ctaText ?? "#000000" },
+  checkInBarHint: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  checkInSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
+  },
+  checkInMatch: {
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: spacing[3],
+    marginBottom: spacing[2],
+    gap: spacing[1],
+  },
+  checkInName: { ...typography.heading4, color: colors.text.primary },
+  checkInMeta: { ...typography.bodySmall, color: colors.text.secondary },
+  checkInWarn: { ...typography.caption, color: colors.accent.amber },
 });
+
+export default function BookingsTab() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.owner.bookings")}>
+      <BookingsTabContent />
+    </TabErrorBoundary>
+  );
+}
 

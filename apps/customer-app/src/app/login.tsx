@@ -1,233 +1,367 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import { LoginLanguagePicker, useTranslation } from "@a3/i18n";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll, PhoneInput } from "@a3/ui/components";
+import { usePostLoginNavigation } from "@a3/ui/hooks";
+import { DEFAULT_PHONE_E164, isValidE164, normalizeE164 } from "@a3/utils/phone";
+import { parseOtpAttemptsRemaining, parseOtpLockoutSeconds } from "@a3/utils/otp";
 
-GoogleSignin.configure({
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-  offlineAccess: false,
-});
+type Mode = "password" | "otp";
+type PhoneStep = "enterPhone" | "enterCode";
+
+const FROZEN_MESSAGE_KEY = "auth.customer.login.frozen";
 
 export default function CustomerLoginScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const { frozen } = useLocalSearchParams<{ frozen?: string }>();
   const { signIn } = useAuthActions();
-  const resolveGoogle = useAction(api.googleAuthActions.resolveGoogleSignIn);
+  const sendLoginOtp = useAction(api.phoneOtp.sendLoginOtp);
 
-  const [email, setEmail] = useState("");
+  const [mode, setMode] = useState<Mode>("otp");
+
+  const [phone, setPhone] = useState(DEFAULT_PHONE_E164);
   const [password, setPassword] = useState("");
+  const [phoneStep, setPhoneStep] = useState<PhoneStep>("enterPhone");
+  const [code, setCode] = useState("");
+  const [info, setInfo] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const codeRef = useRef<TextInput>(null);
+  const sendingOtpRef = useRef(false);
   const passwordRef = useRef<TextInput>(null);
+  const { schedulePostLogin, isWaitingForAuth } = usePostLoginNavigation();
 
-  const canSubmitEmail =
-    email.trim().length > 0 && password.length >= 8 && !loading && !googleLoading;
+  useEffect(() => {
+    if (frozen === "1") {
+      setError(t(FROZEN_MESSAGE_KEY));
+    }
+  }, [frozen, t]);
 
-  const navigatePostLogin = useCallback(() => {
-    router.replace("/post-login-gate");
-  }, [router]);
+  const normalizedPhone = normalizeE164(phone);
+  const phoneValid = isValidE164(normalizedPhone);
+  const codeValid = /^\d{6}$/.test(code.replace(/\s/g, ""));
+  const canSubmitPassword =
+    phoneValid && password.length >= 8 && !loading && !isWaitingForAuth;
 
-  const handleEmailLogin = useCallback(async () => {
-    if (!canSubmitEmail) return;
+  const handlePasswordLogin = useCallback(async () => {
+    if (!canSubmitPassword) return;
     setError(null);
     setLoading(true);
-
     try {
       const { signingIn } = await signIn("password", {
-        email: email.trim().toLowerCase(),
+        email: normalizedPhone,
         password,
         flow: "signIn",
       });
-
       if (!signingIn) {
-        setError("Sign-in failed. Check your email and password.");
+        setError(t("auth.customer.login.signInFailed"));
         setLoading(false);
         return;
       }
-
-      navigatePostLogin();
+      schedulePostLogin();
     } catch (e) {
-      const appError = parseConvexError(e as Error);
-      if (appError.code === "AUTH_002") {
-        setError("This account is frozen. Contact support.");
-      } else if (appError.code === "AUTH_006") {
-        setError("This account is pending deletion.");
+      const appErr = parseConvexError(e as Error);
+      if (appErr.code === "AUTH_002") {
+        setError(t(FROZEN_MESSAGE_KEY));
+      } else if (appErr.code === "AUTH_006") {
+        setError(t("auth.customer.login.pendingDeletion"));
       } else {
-        setError("Invalid email or password.");
+        setError(t("auth.customer.login.invalidCredentials"));
       }
       setLoading(false);
     }
-  }, [canSubmitEmail, email, password, signIn, navigatePostLogin]);
+  }, [canSubmitPassword, normalizedPhone, password, signIn, schedulePostLogin, t]);
 
-  const handleGoogleLogin = useCallback(async () => {
-    if (loading || googleLoading) return;
+  const handleSendOtp = useCallback(async () => {
+    if (!phoneValid || loading) return;
+    if (sendingOtpRef.current) return;
+    sendingOtpRef.current = true;
     setError(null);
-    setGoogleLoading(true);
-
+    setInfo(null);
+    setLoading(true);
     try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const response = await GoogleSignin.signIn();
-
-      const idToken = response.data?.idToken;
-      if (!idToken) {
-        setError("Google sign-in cancelled or failed.");
-        setGoogleLoading(false);
-        return;
-      }
-
-      const result = await resolveGoogle({ idToken });
-
-      if (result.isNewUser) {
-        router.replace({
-          pathname: "/register",
-          params: {
-            googleId: result.pendingProfile.googleId,
-            googleEmail: result.pendingProfile.email ?? "",
-            googleName: result.pendingProfile.name,
-          },
-        });
-        setGoogleLoading(false);
-        return;
-      }
-
-      // Existing user — establish a real Convex Auth session via the A3Google provider.
-      const { signingIn } = await signIn("google", { idToken });
-      if (!signingIn) {
-        setError("Google sign-in failed. Please try again.");
-        setGoogleLoading(false);
-        return;
-      }
-
-      navigatePostLogin();
+      await sendLoginOtp({ phone: normalizedPhone });
+      setPhoneStep("enterCode");
+      setInfo(t("auth.customer.login.otpSent"));
+      setTimeout(() => codeRef.current?.focus(), 50);
     } catch (e) {
-      const appError = parseConvexError(e as Error);
-      if (appError.code === "AUTH_002") {
-        setError("This account is frozen. Contact support.");
-      } else if (appError.code === "AUTH_006") {
-        setError("This account is pending deletion.");
-      } else if (appError.code === "GOOGLE_AUTH_001") {
-        setError("Google authentication failed. Please try again.");
-      } else {
-        setError("Google sign-in failed. Please try again.");
+      const appErr = parseConvexError(e as Error);
+      switch (appErr.code) {
+        case "AUTH_009":
+          setError(t("auth.customer.login.noAccount"));
+          break;
+        case "AUTH_002":
+          setError(t(FROZEN_MESSAGE_KEY));
+          break;
+        case "AUTH_006":
+          setError(t("auth.customer.login.pendingDeletion"));
+          break;
+        case "OTP_003":
+          setError(t("auth.customer.login.tooManyOtp"));
+          break;
+        case "OTP_005":
+          setError(t("auth.customer.login.invalidPhone"));
+          break;
+        default:
+          setError(appErr.message ?? t("auth.customer.login.couldNotSendOtp"));
       }
-      setGoogleLoading(false);
+    } finally {
+      sendingOtpRef.current = false;
+      setLoading(false);
     }
-  }, [loading, googleLoading, signIn, resolveGoogle, navigatePostLogin, router]);
+  }, [phoneValid, normalizedPhone, loading, sendLoginOtp, t]);
 
-  const busy = loading || googleLoading;
+  const handleVerifyOtp = useCallback(async () => {
+    if (!codeValid || loading) return;
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      const { signingIn } = await signIn("phoneOtp", {
+        phone: normalizedPhone,
+        code: code.replace(/\s/g, ""),
+        flow: "signIn",
+      });
+      if (!signingIn) {
+        setError(t("auth.customer.login.signInFailedGeneric"));
+        setLoading(false);
+        return;
+      }
+      schedulePostLogin();
+    } catch (e) {
+      const appErr = parseConvexError(e as Error);
+      switch (appErr.code) {
+        case "OTP_001": {
+          const lockSec = parseOtpLockoutSeconds(appErr.message);
+          if (lockSec) {
+            const mins = Math.max(1, Math.ceil(lockSec / 60));
+            setError(t("auth.customer.login.lockoutWait", { minutes: mins }));
+          } else {
+            setError(t("auth.customer.login.tooManyAttempts"));
+          }
+          break;
+        }
+        case "OTP_002": {
+          const remaining = parseOtpAttemptsRemaining(appErr.message);
+          setError(
+            remaining !== null
+              ? t("auth.customer.login.wrongOtpRemaining", { remaining })
+              : appErr.message ?? t("auth.customer.login.wrongOtp"),
+          );
+          break;
+        }
+        case "AUTH_002":
+          setError(t(FROZEN_MESSAGE_KEY));
+          break;
+        case "AUTH_006":
+          setError(t("auth.customer.login.pendingDeletion"));
+          break;
+        case "AUTH_009":
+          setError(t("auth.customer.login.noAccount"));
+          break;
+        default:
+          setError(t("auth.customer.login.couldNotVerifyOtp"));
+      }
+      setLoading(false);
+    }
+  }, [code, codeValid, normalizedPhone, loading, signIn, schedulePostLogin, t]);
+
+  const switchMode = useCallback(
+    (next: Mode) => {
+      setMode(next);
+      setError(null);
+      setInfo(null);
+      setPhoneStep("enterPhone");
+      setCode("");
+      setPassword("");
+    },
+    [],
+  );
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+    <GlassPageBackground>
+    <KeyboardFormScroll contentContainerStyle={styles.scroll}>
         <View style={styles.container}>
-          <Text style={styles.logo}>A3</Text>
-          <Text style={styles.title}>Welcome Back</Text>
+          <LoginLanguagePicker />
+          <View style={styles.logoTile}>
+            <Text style={styles.logoText}>A3</Text>
+          </View>
+          <Text style={styles.title}>{t("auth.customer.login.title")}</Text>
           <Text style={styles.subtitle}>
-            Sign in to your A3 Billiards account
+            {mode === "password"
+              ? t("auth.customer.login.subtitlePassword")
+              : t("auth.customer.login.subtitleOtp")}
           </Text>
+          <LiquidGlassCard style={styles.formCard} padding={24}>
 
-          {/* ── Google Sign-In (PRD v23: no password field for Google) ── */}
+          {mode === "password" ? (
+            <View style={styles.form}>
+              <Text style={styles.label}>{t("auth.customer.login.phone")}</Text>
+              <PhoneInput
+                value={phone}
+                onChangeValue={setPhone}
+                editable={!loading}
+                countryCodeLabel={t("auth.phone.countryCode")}
+                selectCountryLabel={t("auth.phone.selectCountry")}
+                accessibilityLabel={t("auth.phone.number")}
+                inputStyle={styles.input}
+              />
+              <Text style={styles.hint}>
+                {mode === "password"
+                  ? t("auth.customer.login.phoneHint")
+                  : t("auth.customer.login.phoneHintOtp")}
+              </Text>
+
+              <Text style={[styles.label, styles.fieldGap]}>{t("auth.customer.login.password")}</Text>
+              <TextInput
+                ref={passwordRef}
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder={t("auth.customer.login.passwordPlaceholder")}
+                placeholderTextColor={colors.text.tertiary}
+                secureTextEntry
+                textContentType="password"
+                returnKeyType="go"
+                onSubmitEditing={handlePasswordLogin}
+                editable={!loading}
+                accessibilityLabel={t("common.accessibilityPassword")}
+              />
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  !canSubmitPassword && styles.buttonDisabled,
+                  pressed && canSubmitPassword && styles.pressed,
+                ]}
+                onPress={handlePasswordLogin}
+                disabled={!canSubmitPassword}
+                accessibilityRole="button"
+              >
+                {loading ? (
+                  <ActivityIndicator color={glass.ctaText} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>{t("auth.customer.login.signIn")}</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.form}>
+              <Text style={styles.label}>{t("auth.customer.login.phone")}</Text>
+              <PhoneInput
+                value={phone}
+                onChangeValue={(value) => {
+                  setPhone(value);
+                  if (phoneStep === "enterCode") setPhoneStep("enterPhone");
+                }}
+                editable={!loading}
+                countryCodeLabel={t("auth.phone.countryCode")}
+                selectCountryLabel={t("auth.phone.selectCountry")}
+                accessibilityLabel={t("auth.phone.number")}
+                inputStyle={styles.input}
+              />
+              <Text style={styles.hint}>{t("auth.customer.login.phoneHintOtp")}</Text>
+
+              {phoneStep === "enterCode" ? (
+                <>
+                  <Text style={[styles.label, styles.fieldGap]}>{t("auth.customer.login.otp")}</Text>
+                  <TextInput
+                    ref={codeRef}
+                    style={styles.input}
+                    value={code}
+                    onChangeText={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))}
+                    placeholder={t("auth.customer.login.otpPlaceholder")}
+                    placeholderTextColor={colors.text.tertiary}
+                    keyboardType="number-pad"
+                    returnKeyType="go"
+                    onSubmitEditing={handleVerifyOtp}
+                    editable={!loading}
+                    accessibilityLabel={t("common.accessibilityOtpCode")}
+                  />
+                  <Pressable
+                    onPress={handleSendOtp}
+                    disabled={loading || !phoneValid}
+                    hitSlop={8}
+                    style={styles.resendRow}
+                  >
+                    <Text
+                      style={[
+                        styles.resendText,
+                        (loading || !phoneValid) && styles.disabledText,
+                      ]}
+                    >
+                      {t("auth.customer.login.resendOtp")}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  (loading ||
+                    (phoneStep === "enterPhone" && !phoneValid) ||
+                    (phoneStep === "enterCode" && !codeValid)) &&
+                    styles.buttonDisabled,
+                  pressed && !loading && styles.pressed,
+                ]}
+                onPress={
+                  phoneStep === "enterPhone" ? handleSendOtp : handleVerifyOtp
+                }
+                disabled={
+                  loading ||
+                  (phoneStep === "enterPhone" && !phoneValid) ||
+                  (phoneStep === "enterCode" && !codeValid)
+                }
+                accessibilityRole="button"
+              >
+                {loading ? (
+                  <ActivityIndicator color={glass.ctaText} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {phoneStep === "enterPhone"
+                      ? t("auth.customer.login.sendOtp")
+                      : t("auth.customer.login.verifySignIn")}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          )}
+
           <Pressable
-            style={({ pressed }) => [
-              styles.googleButton,
-              busy && styles.buttonDisabled,
-              pressed && !busy && styles.pressed,
-            ]}
-            onPress={handleGoogleLogin}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel="Continue with Google"
+            onPress={() => switchMode(mode === "password" ? "otp" : "password")}
+            disabled={loading}
+            hitSlop={8}
+            style={styles.toggleRow}
           >
-            {googleLoading ? (
-              <ActivityIndicator color={colors.text.primary} />
-            ) : (
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
-            )}
+            <Text style={styles.toggleText}>
+              {mode === "password"
+                ? t("auth.customer.login.useOtpInstead")
+                : t("auth.customer.login.usePasswordInstead")}
+            </Text>
           </Pressable>
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* ── Email + Password ── */}
-          <View style={styles.form}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={colors.text.tertiary}
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-              editable={!busy}
-              accessibilityLabel="Email address"
-            />
-
-            <Text style={[styles.label, { marginTop: spacing[4] }]}>
-              Password
-            </Text>
-            <TextInput
-              ref={passwordRef}
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor={colors.text.tertiary}
-              secureTextEntry
-              textContentType="password"
-              returnKeyType="go"
-              onSubmitEditing={handleEmailLogin}
-              editable={!busy}
-              accessibilityLabel="Password"
-            />
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                !canSubmitEmail && styles.buttonDisabled,
-                pressed && canSubmitEmail && styles.pressed,
-              ]}
-              onPress={handleEmailLogin}
-              disabled={!canSubmitEmail}
-              accessibilityRole="button"
-              accessibilityLabel="Sign in"
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.bg.primary} />
-              ) : (
-                <Text style={styles.primaryButtonText}>Sign In</Text>
-              )}
-            </Pressable>
-          </View>
+          {info !== null && (
+            <View style={styles.infoBox} accessibilityLiveRegion="polite">
+              <Text style={styles.infoText}>{info}</Text>
+            </View>
+          )}
 
           {error !== null && (
             <View
@@ -235,35 +369,37 @@ export default function CustomerLoginScreen() {
               accessibilityRole="alert"
               accessibilityLiveRegion="polite"
             >
-              <Text style={styles.errorLabel}>Error</Text>
+              <Text style={styles.errorLabel}>{t("common.error")}</Text>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
 
-          {/* ── Register link ── */}
+          </LiquidGlassCard>
+
           <View style={styles.registerRow}>
-            <Text style={styles.registerText}>Don't have an account? </Text>
+            <Text style={styles.registerText}>{t("auth.customer.login.noAccountSignup")} </Text>
             <Pressable
               onPress={() => router.push("/register")}
-              disabled={busy}
+              disabled={loading}
               hitSlop={8}
               accessibilityRole="link"
             >
-              <Text style={styles.registerLink}>Sign Up</Text>
+              <Text style={styles.registerLink}>{t("auth.customer.login.signUp")}</Text>
             </Pressable>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg.primary },
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing[8],
   },
   container: {
     alignItems: "center",
@@ -271,70 +407,69 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
   },
-  logo: {
-    ...typography.heading1,
-    fontSize: 48,
-    color: colors.accent.green,
-    letterSpacing: 4,
-    marginBottom: spacing[1],
+  logoTile: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[3],
+  },
+  logoText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: glass.textPrimary,
+    letterSpacing: 2,
   },
   title: {
     ...typography.heading2,
-    color: colors.text.primary,
+    color: glass.textPrimary,
     marginBottom: spacing[1],
   },
   subtitle: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     textAlign: "center",
-    marginBottom: spacing[8],
+    marginBottom: spacing[5],
   },
-  googleButton: {
-    width: "100%",
-    height: layout.buttonHeight,
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: layout.touchTarget,
-  },
-  googleButtonText: {
-    ...typography.buttonLarge,
-    color: colors.text.primary,
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    marginVertical: spacing[6],
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border.default },
-  dividerText: {
-    ...typography.labelSmall,
-    color: colors.text.secondary,
-    marginHorizontal: spacing[4],
-  },
+  formCard: { width: "100%" },
   form: { width: "100%" },
   label: {
     ...typography.label,
-    color: colors.text.secondary,
-    marginBottom: spacing[1.5],
+    color: glass.textMuted,
+    marginBottom: spacing[2],
   },
+  fieldGap: { marginTop: spacing[4] },
   input: {
     height: layout.inputHeight,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.inputBorder,
     paddingHorizontal: spacing[4],
     ...typography.body,
-    color: colors.text.primary,
+    color: glass.textPrimary,
   },
+  hint: {
+    ...typography.caption,
+    color: glass.textLabel,
+    marginTop: spacing[1],
+  },
+  resendRow: {
+    alignSelf: "flex-end",
+    marginTop: spacing[2],
+  },
+  resendText: {
+    ...typography.label,
+    color: "#86efac",
+  },
+  disabledText: { opacity: 0.45 },
   primaryButton: {
     height: layout.buttonHeight,
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -343,14 +478,39 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: glass.ctaText,
+    fontWeight: "700",
   },
-  buttonDisabled: { backgroundColor: colors.status.disabled },
+  buttonDisabled: { backgroundColor: colors.status.disabled, opacity: 0.7 },
   pressed: { opacity: 0.85 },
+  toggleRow: {
+    marginTop: spacing[6],
+    alignSelf: "center",
+  },
+  toggleText: {
+    ...typography.label,
+    color: "#86efac",
+  },
+  infoBox: {
+    backgroundColor: "rgba(67,160,71,0.14)",
+    borderColor: "rgba(67,160,71,0.4)",
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[4],
+    width: "100%",
+  },
+  infoText: {
+    ...typography.bodySmall,
+    color: "#86efac",
+  },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(244,67,54,0.12)",
+    borderColor: "rgba(244,67,54,0.4)",
+    borderWidth: 1,
     borderRadius: radius.md,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],
@@ -364,20 +524,21 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...typography.bodySmall,
-    color: colors.status.error,
+    color: "#fca5a5",
     flex: 1,
   },
   registerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing[8],
+    marginTop: spacing[6],
   },
   registerText: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
   },
   registerLink: {
     ...typography.label,
-    color: colors.accent.green,
+    color: "#86efac",
+    fontWeight: "700",
   },
 });

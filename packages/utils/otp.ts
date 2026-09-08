@@ -43,3 +43,22 @@ export function toE164India(local: string): string {
   if (d.length === 12 && d.startsWith("91")) return `+${d}`;
   throw new Error("DATA_002: Invalid Indian phone number");
 }
+
+/** Parse "N attempt(s) remaining" from Convex OTP_002 wrong-code errors. */
+export function parseOtpAttemptsRemaining(message: string): number | null {
+  const match = message.match(/(\d+)\s+attempt(?:s|\(s\))?\s+remaining/i);
+  if (!match) return null;
+  const n = Number(match[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Parse cooldown minutes from Convex OTP_001 lockout errors. */
+export function parseOtpLockoutSeconds(message: string): number | null {
+  const minuteMatch = message.match(/wait\s+(\d+)\s+minute/i);
+  if (minuteMatch) {
+    const mins = Number(minuteMatch[1]);
+    if (Number.isFinite(mins) && mins > 0) return mins * 60;
+  }
+  if (/5\s*minute/i.test(message)) return 300;
+  return null;
+}

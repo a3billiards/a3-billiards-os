@@ -14,20 +14,53 @@ const BCRYPT_ROUNDS = 10;
  * sliding window 5 sends per email per rolling hour (RATE_001).
  */
 export const generateMfaCode = action({
-  args: {},
-  handler: async (ctx) => {
+  args: { forceResend: v.optional(v.boolean()) },
+  handler: async (ctx, { forceResend }) => {
     const adminId = await getAuthUserId(ctx);
     if (adminId === null) {
       throw new Error("AUTH_001: Not authenticated");
     }
 
+    const user = await ctx.runQuery(internal.deletion.getUserById, {
+      userId: adminId,
+    });
+    if (!user || user.role !== "admin") {
+      throw new Error("MFA_001: Not an admin");
+    }
+    if (user.adminMfaVerifiedAt) {
+      return { success: true as const, alreadyVerified: true as const };
+    }
+
+    if (forceResend !== true) {
+      const hasActive = await ctx.runQuery(internal.mfa.hasActiveMfaCode, {
+        adminId,
+      });
+      if (hasActive) {
+        return { success: true as const, reusedExisting: true as const };
+      }
+    }
+
     const digits = randomInt(100_000, 1_000_000).toString();
     const codeHash = await bcrypt.hash(digits, BCRYPT_ROUNDS);
 
-    const { email } = await ctx.runMutation(internal.mfa.storeMfaCode, {
-      adminId,
-      codeHash,
-    });
+    let email: string;
+    try {
+      ({ email } = await ctx.runMutation(internal.mfa.storeMfaCode, {
+        adminId,
+        codeHash,
+      }));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("RATE_001")) {
+        const stillActive = await ctx.runQuery(internal.mfa.hasActiveMfaCode, {
+          adminId,
+        });
+        if (stillActive) {
+          return { success: true as const, reusedExisting: true as const };
+        }
+      }
+      throw e;
+    }
 
     await ctx.runAction(internal.notificationsFcm.sendMfaEmail, {
       email,
@@ -54,6 +87,11 @@ export const verifyMfaCode = action({
       throw new Error("AUTH_003: MFA code invalid or expired");
     }
 
+    const attemptKey = `mfa:${adminId}`;
+    await ctx.runQuery(internal.authAttemptLimit.assertNotLocked, {
+      key: attemptKey,
+    });
+
     const candidates = await ctx.runQuery(
       internal.mfa.listActiveMfaCandidates,
       { adminId },
@@ -62,6 +100,7 @@ export const verifyMfaCode = action({
     for (const row of candidates) {
       const match = await bcrypt.compare(normalized, row.codeHash);
       if (match) {
+        await ctx.runMutation(internal.authAttemptLimit.clear, { key: attemptKey });
         await ctx.runMutation(internal.mfa.consumeMfaCode, {
           recordId: row._id,
         });
@@ -69,6 +108,9 @@ export const verifyMfaCode = action({
       }
     }
 
+    await ctx.runMutation(internal.authAttemptLimit.recordFailed, {
+      key: attemptKey,
+    });
     throw new Error("AUTH_003: MFA code invalid or expired");
   },
 });

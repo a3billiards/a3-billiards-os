@@ -27,14 +27,27 @@ function minutesInWindow(
 
 /**
  * Returns ratePerMin locked for this session start instant.
+ * Optional tableType uses typeBaseRates override before special-rate windows.
  */
 export function resolveRatePerMinAtSessionStart(
   club: Doc<"clubs">,
   startTimeUtcMs: number,
+  tableType?: string,
 ): number {
   const tz = club.timezone;
   const dow = dayOfWeekInTimeZone(startTimeUtcMs, tz);
   const nowMin = minutesFromMidnightInTimeZone(startTimeUtcMs, tz);
+  const normalizedType = normalizeTableType(tableType);
+
+  let base = club.baseRatePerMin;
+  if (normalizedType && club.typeBaseRates?.length) {
+    const override = club.typeBaseRates.find(
+      (r) => normalizeTableType(r.tableType) === normalizedType,
+    );
+    if (override) {
+      base = override.baseRatePerMin;
+    }
+  }
 
   for (const rule of club.specialRates) {
     if (!rule.daysOfWeek.includes(dow)) continue;
@@ -44,15 +57,16 @@ export function resolveRatePerMinAtSessionStart(
       return rule.ratePerMin;
     }
   }
-  return club.baseRatePerMin;
+  return base;
 }
 
 export function bookingAppliesToTable(
   booking: Doc<"bookings">,
   table: Doc<"tables">,
 ): boolean {
-  if (booking.confirmedTableId !== undefined) {
-    return booking.confirmedTableId === table._id;
+  const reservedTableId = booking.confirmedTableId ?? booking.requestedTableId;
+  if (reservedTableId !== undefined) {
+    return reservedTableId === table._id;
   }
   return (
     normalizeTableType(booking.tableType) ===

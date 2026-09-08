@@ -5,324 +5,374 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
   Linking,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useMutation, useAction } from "convex/react";
+import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { LoginLanguagePicker, useTranslation } from "@a3/i18n";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll, PhoneInput } from "@a3/ui/components";
+import { DEFAULT_PHONE_E164, isValidE164 } from "@a3/utils/phone";
+import { parseOtpAttemptsRemaining, parseOtpLockoutSeconds } from "@a3/utils/otp";
 
 const PRIVACY_URL = "https://a3billiards.com/privacy";
 const TOS_URL = "https://a3billiards.com/terms";
 
+type Step = "details" | "code";
+
 export default function RegisterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    googleId?: string;
-    googleEmail?: string;
-    googleName?: string;
-  }>();
-  const isGoogleFlow = Boolean(params.googleId);
-
   const { signIn } = useAuthActions();
-  const createUser = useMutation(api.users.createUser);
-  const completeGoogleReg = useAction(
-    api.googleAuthActions.completeGoogleRegistration,
-  );
+  const sendSignupOtp = useAction(api.phoneOtp.sendSignupOtp);
 
-  const [name, setName] = useState(params.googleName ?? "");
-  const [email, setEmail] = useState(params.googleEmail ?? "");
-  const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("+91");
+  const [step, setStep] = useState<Step>("details");
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState(DEFAULT_PHONE_E164);
   const [age, setAge] = useState("");
   const [consent, setConsent] = useState(false);
+  const [code, setCode] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const emailRef = useRef<TextInput>(null);
-  const passwordRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
   const ageRef = useRef<TextInput>(null);
+  const codeRef = useRef<TextInput>(null);
+  const sendingOtpRef = useRef(false);
 
   const parsedAge = Number(age);
-  const ageValid = age.length > 0 && Number.isInteger(parsedAge) && parsedAge > 0;
-  const phoneValid = /^\+91\d{10}$/.test(phone.replace(/\s/g, ""));
-  const emailValid = email.trim().length > 0 && email.includes("@");
-  const nameValid = name.trim().length > 0;
+  const ageValid =
+    age.length > 0 && Number.isInteger(parsedAge) && parsedAge >= 18;
+  const phoneValid = isValidE164(phone.replace(/\s/g, ""));
+  const emailValid =
+    email.trim().length === 0 ||
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const nameValid = name.trim().length >= 2;
+  const codeValid = /^\d{6}$/.test(code.replace(/\s/g, ""));
 
-  const canSubmit =
-    nameValid &&
-    emailValid &&
-    (isGoogleFlow || password.length >= 8) &&
-    phoneValid &&
-    ageValid &&
-    consent &&
-    !loading;
+  const canSendOtp =
+    nameValid && emailValid && phoneValid && ageValid && consent && !loading;
 
-  const handleSubmit = useCallback(async () => {
-    if (!canSubmit) return;
+  const handleSendOtp = useCallback(async () => {
+    if (!canSendOtp) return;
+    if (sendingOtpRef.current) return;
+    sendingOtpRef.current = true;
     setError(null);
-
-    if (parsedAge < 18) {
-      setError("You must be 18 or older to register.");
-      return;
-    }
-
+    setInfo(null);
     setLoading(true);
-
     try {
-      const normalizedPhone = phone.replace(/\s/g, "");
-
-      if (isGoogleFlow) {
-        await completeGoogleReg({
-          googleId: params.googleId!,
-          email: email.trim().toLowerCase(),
-          name: name.trim(),
-          phone: normalizedPhone,
-          age: parsedAge,
-          consentGiven: true,
-        });
-      } else {
-        await signIn("password", {
-          email: email.trim().toLowerCase(),
-          password,
-          flow: "signUp",
-        });
-
-        await createUser({
-          name: name.trim(),
-          age: parsedAge,
-          consentGiven: true,
-        });
-      }
-
-      router.replace({
-        pathname: "/verify-phone",
-        params: { phone: normalizedPhone },
-      });
+      await sendSignupOtp({ phone: phone.replace(/\s/g, "") });
+      setStep("code");
+      setInfo(t("auth.customer.register.otpSent"));
+      setTimeout(() => codeRef.current?.focus(), 50);
     } catch (e) {
-      const appError = parseConvexError(e as Error);
-      switch (appError.code) {
-        case "AUTH_005":
-          setError("You must agree to the Privacy Policy and Terms.");
-          break;
-        case "AUTH_007":
-          setError("You must be 18 or older to register.");
-          break;
+      const appErr = parseConvexError(e as Error);
+      switch (appErr.code) {
         case "OTP_005":
-          setError("Invalid phone number. Use +91 followed by 10 digits.");
+          setError(t("auth.customer.register.invalidPhone"));
           break;
         case "OTP_006":
-          setError("This phone number cannot be used for registration.");
+          setError(t("auth.customer.register.phoneCannotRegister"));
           break;
         case "OTP_007":
-          setError(
-            "This phone number is already registered. Try signing in instead.",
-          );
+          setError(t("auth.customer.register.phoneAlreadyRegistered"));
           break;
-        case "CLUB_003":
-          setError("This email is already registered. Try signing in.");
+        case "OTP_003":
+          setError(t("auth.customer.register.tooManyOtp"));
           break;
         default:
-          setError(appError.message || "Registration failed. Please try again.");
+          setError(appErr.message ?? t("auth.customer.register.couldNotSendOtp"));
       }
     } finally {
+      sendingOtpRef.current = false;
+      setLoading(false);
+    }
+  }, [canSendOtp, phone, sendSignupOtp, t]);
+
+  const handleVerifyAndSignUp = useCallback(async () => {
+    if (!codeValid || loading) return;
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+      const { signingIn } = await signIn("phoneOtp", {
+        phone: phone.replace(/\s/g, ""),
+        code: code.replace(/\s/g, ""),
+        flow: "signUp",
+        name: name.trim(),
+        age: parsedAge,
+        consentGiven: true,
+        ...(trimmedEmail.length > 0 ? { email: trimmedEmail } : {}),
+      });
+      if (!signingIn) {
+        setError(t("auth.customer.register.signUpFailed"));
+        setLoading(false);
+        return;
+      }
+      router.replace("/set-password?from=register");
+    } catch (e) {
+      const appErr = parseConvexError(e as Error);
+      switch (appErr.code) {
+        case "OTP_001": {
+          const lockSec = parseOtpLockoutSeconds(appErr.message);
+          if (lockSec) {
+            const mins = Math.max(1, Math.ceil(lockSec / 60));
+            setError(t("auth.customer.register.lockoutWait", { minutes: mins }));
+          } else {
+            setError(t("auth.customer.register.tooManyAttempts"));
+          }
+          break;
+        }
+        case "OTP_002": {
+          const remaining = parseOtpAttemptsRemaining(appErr.message);
+          setError(
+            remaining !== null
+              ? t("auth.customer.register.wrongOtpRemaining", { remaining })
+              : appErr.message ?? t("auth.customer.register.wrongOtp"),
+          );
+          break;
+        }
+        case "OTP_007":
+          setError(t("auth.customer.register.phoneAlreadyRegistered"));
+          break;
+        case "AUTH_005":
+          setError(t("auth.customer.register.mustAgreeConsent"));
+          break;
+        case "AUTH_007":
+          setError(t("auth.customer.register.mustBe18"));
+          break;
+        case "DATA_001":
+          setError(t("auth.customer.register.nameRequired"));
+          break;
+        default:
+          setError(t("auth.customer.register.couldNotCompleteSignUp"));
+      }
       setLoading(false);
     }
   }, [
-    canSubmit,
-    parsedAge,
-    phone,
-    isGoogleFlow,
-    completeGoogleReg,
-    params.googleId,
+    codeValid,
+    loading,
     email,
-    name,
     signIn,
-    password,
-    createUser,
+    phone,
+    code,
+    name,
+    parsedAge,
     router,
+    t,
   ]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+    <GlassPageBackground>
+    <KeyboardFormScroll contentContainerStyle={styles.scroll}>
         <View style={styles.container}>
-          <Text style={styles.logo}>A3</Text>
-          <Text style={styles.title}>Create Account</Text>
+          <LoginLanguagePicker />
+          <View style={styles.logoTile}>
+            <Text style={styles.logoText}>A3</Text>
+          </View>
+          <Text style={styles.title}>{t("auth.customer.register.title")}</Text>
           <Text style={styles.subtitle}>
-            {isGoogleFlow
-              ? "Complete your profile to get started"
-              : "Join A3 Billiards to book tables and more"}
+            {step === "details"
+              ? t("auth.customer.register.subtitleDetails")
+              : t("auth.customer.register.subtitleCode")}
           </Text>
 
-          {/* ── Name ── */}
-          <View style={styles.form}>
-            <Text style={styles.label}>Full Name</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="Your full name"
-              placeholderTextColor={colors.text.tertiary}
-              autoCapitalize="words"
-              autoComplete="name"
-              textContentType="name"
-              returnKeyType="next"
-              onSubmitEditing={() => emailRef.current?.focus()}
-              editable={!loading}
-              accessibilityLabel="Full name"
-            />
+          <LiquidGlassCard style={styles.formCard} padding={20}>
+          {step === "details" ? (
+            <View style={styles.form}>
+              <Text style={styles.label}>{t("auth.customer.register.fullName")}</Text>
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder={t("auth.customer.register.fullNamePlaceholder")}
+                placeholderTextColor={colors.text.tertiary}
+                autoCapitalize="words"
+                autoComplete="name"
+                returnKeyType="next"
+                onSubmitEditing={() => emailRef.current?.focus()}
+                editable={!loading}
+              />
 
-            {/* ── Email ── */}
-            <Text style={[styles.label, styles.fieldGap]}>Email</Text>
-            <TextInput
-              ref={emailRef}
-              style={[
-                styles.input,
-                isGoogleFlow && styles.inputDisabled,
-              ]}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={colors.text.tertiary}
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              returnKeyType="next"
-              onSubmitEditing={() =>
-                isGoogleFlow
-                  ? phoneRef.current?.focus()
-                  : passwordRef.current?.focus()
-              }
-              editable={!loading && !isGoogleFlow}
-              accessibilityLabel="Email address"
-            />
-
-            {/* ── Password (hidden for Google flow, PRD v23) ── */}
-            {!isGoogleFlow && (
-              <>
-                <Text style={[styles.label, styles.fieldGap]}>Password</Text>
-                <TextInput
-                  ref={passwordRef}
-                  style={styles.input}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Minimum 8 characters"
-                  placeholderTextColor={colors.text.tertiary}
-                  secureTextEntry
-                  textContentType="newPassword"
-                  returnKeyType="next"
-                  onSubmitEditing={() => phoneRef.current?.focus()}
-                  editable={!loading}
-                  accessibilityLabel="Password"
-                />
-              </>
-            )}
-
-            {/* ── Phone ── */}
-            <Text style={[styles.label, styles.fieldGap]}>Phone Number</Text>
-            <TextInput
-              ref={phoneRef}
-              style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="+91XXXXXXXXXX"
-              placeholderTextColor={colors.text.tertiary}
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              returnKeyType="next"
-              onSubmitEditing={() => ageRef.current?.focus()}
-              editable={!loading}
-              accessibilityLabel="Phone number"
-            />
-            <Text style={styles.hint}>E.164 format: +91 followed by 10 digits</Text>
-
-            {/* ── Age ── */}
-            <Text style={[styles.label, styles.fieldGap]}>Age</Text>
-            <TextInput
-              ref={ageRef}
-              style={styles.input}
-              value={age}
-              onChangeText={(t) => setAge(t.replace(/\D/g, ""))}
-              placeholder="18"
-              placeholderTextColor={colors.text.tertiary}
-              keyboardType="number-pad"
-              returnKeyType="done"
-              editable={!loading}
-              accessibilityLabel="Age"
-            />
-
-            {/* ── Consent checkbox ── */}
-            <Pressable
-              style={styles.consentRow}
-              onPress={() => setConsent((prev) => !prev)}
-              disabled={loading}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: consent }}
-              accessibilityLabel="Agree to Privacy Policy and Terms of Service"
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  consent && styles.checkboxChecked,
-                ]}
-              >
-                {consent && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-              <Text style={styles.consentText}>
-                I agree to the{" "}
-                <Text
-                  style={styles.consentLink}
-                  onPress={() => Linking.openURL(PRIVACY_URL)}
-                  accessibilityRole="link"
-                >
-                  Privacy Policy
-                </Text>
-                {" "}and{" "}
-                <Text
-                  style={styles.consentLink}
-                  onPress={() => Linking.openURL(TOS_URL)}
-                  accessibilityRole="link"
-                >
-                  Terms of Service
-                </Text>
+              <Text style={[styles.label, styles.fieldGap]}>
+                {t("auth.customer.register.email")}{" "}
+                <Text style={styles.optional}>{t("auth.customer.register.emailOptional")}</Text>
               </Text>
-            </Pressable>
+              <TextInput
+                ref={emailRef}
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder={t("auth.customer.register.emailPlaceholder")}
+                placeholderTextColor={colors.text.tertiary}
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                returnKeyType="next"
+                onSubmitEditing={() => phoneRef.current?.focus()}
+                editable={!loading}
+              />
 
-            {/* ── Submit ── */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                !canSubmit && styles.buttonDisabled,
-                pressed && canSubmit && styles.pressed,
-              ]}
-              onPress={handleSubmit}
-              disabled={!canSubmit}
-              accessibilityRole="button"
-              accessibilityLabel="Create account"
-              accessibilityState={{ disabled: !canSubmit }}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.bg.primary} />
-              ) : (
-                <Text style={styles.primaryButtonText}>Create Account</Text>
-              )}
-            </Pressable>
-          </View>
+              <Text style={[styles.label, styles.fieldGap]}>{t("auth.customer.register.phone")}</Text>
+              <PhoneInput
+                inputRef={phoneRef}
+                value={phone}
+                onChangeValue={setPhone}
+                editable={!loading}
+                returnKeyType="next"
+                onSubmitEditing={() => ageRef.current?.focus()}
+                countryCodeLabel={t("auth.phone.countryCode")}
+                selectCountryLabel={t("auth.phone.selectCountry")}
+                accessibilityLabel={t("auth.phone.number")}
+                inputStyle={styles.input}
+              />
+              <Text style={styles.hint}>{t("auth.customer.register.phoneHint")}</Text>
+
+              <Text style={[styles.label, styles.fieldGap]}>{t("auth.customer.register.age")}</Text>
+              <TextInput
+                ref={ageRef}
+                style={styles.input}
+                value={age}
+                onChangeText={(text) => setAge(text.replace(/\D/g, ""))}
+                placeholder={t("auth.customer.register.agePlaceholder")}
+                placeholderTextColor={colors.text.tertiary}
+                keyboardType="number-pad"
+                returnKeyType="done"
+                editable={!loading}
+              />
+
+              <Pressable
+                style={styles.consentRow}
+                onPress={() => setConsent((p) => !p)}
+                disabled={loading}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: consent }}
+              >
+                <View
+                  style={[styles.checkbox, consent && styles.checkboxChecked]}
+                >
+                  {consent && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={styles.consentText}>
+                  {t("auth.customer.register.consentPrefix")}{" "}
+                  <Text
+                    style={styles.consentLink}
+                    onPress={() => void Linking.openURL(PRIVACY_URL).catch(() => {})}
+                  >
+                    {t("auth.customer.register.privacyPolicy")}
+                  </Text>
+                  {" "}{t("auth.customer.register.consentAnd")}{" "}
+                  <Text
+                    style={styles.consentLink}
+                    onPress={() => void Linking.openURL(TOS_URL).catch(() => {})}
+                  >
+                    {t("auth.customer.register.termsOfService")}
+                  </Text>
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  !canSendOtp && styles.buttonDisabled,
+                  pressed && canSendOtp && styles.pressed,
+                ]}
+                onPress={handleSendOtp}
+                disabled={!canSendOtp}
+                accessibilityRole="button"
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.bg.primary} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>{t("auth.customer.register.sendOtp")}</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.form}>
+              <Text style={styles.label}>{t("auth.customer.register.otpCode")}</Text>
+              <TextInput
+                ref={codeRef}
+                style={styles.input}
+                value={code}
+                onChangeText={(text) => setCode(text.replace(/\D/g, "").slice(0, 6))}
+                placeholder={t("auth.customer.register.otpPlaceholder")}
+                placeholderTextColor={colors.text.tertiary}
+                keyboardType="number-pad"
+                returnKeyType="go"
+                onSubmitEditing={handleVerifyAndSignUp}
+                editable={!loading}
+              />
+              <Text style={styles.hint}>
+                {t("auth.customer.register.sentTo", { phone: phone.replace(/\s/g, "") })}
+              </Text>
+
+              <Pressable
+                onPress={handleSendOtp}
+                disabled={loading || !canSendOtp}
+                hitSlop={8}
+                style={styles.resendRow}
+              >
+                <Text
+                  style={[
+                    styles.resendText,
+                    (loading || !canSendOtp) && styles.disabledText,
+                  ]}
+                >
+                  {t("auth.customer.register.resendOtp")}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  (!codeValid || loading) && styles.buttonDisabled,
+                  pressed && codeValid && !loading && styles.pressed,
+                ]}
+                onPress={handleVerifyAndSignUp}
+                disabled={!codeValid || loading}
+                accessibilityRole="button"
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.bg.primary} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {t("auth.customer.register.verifyCreateAccount")}
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setStep("details");
+                  setCode("");
+                  setError(null);
+                  setInfo(null);
+                }}
+                disabled={loading}
+                hitSlop={8}
+                style={styles.toggleRow}
+              >
+                <Text style={styles.toggleText}>{t("auth.customer.register.editDetails")}</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {info !== null && (
+            <View style={styles.infoBox} accessibilityLiveRegion="polite">
+              <Text style={styles.infoText}>{info}</Text>
+            </View>
+          )}
 
           {error !== null && (
             <View
@@ -330,33 +380,31 @@ export default function RegisterScreen() {
               accessibilityRole="alert"
               accessibilityLiveRegion="polite"
             >
-              <Text style={styles.errorLabel}>Error</Text>
+              <Text style={styles.errorLabel}>{t("auth.customer.register.errorLabel")}</Text>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
+          </LiquidGlassCard>
 
-          {/* ── Login link ── */}
-          {!isGoogleFlow && (
-            <View style={styles.loginRow}>
-              <Text style={styles.loginText}>Already have an account? </Text>
-              <Pressable
-                onPress={() => router.replace("/login")}
-                disabled={loading}
-                hitSlop={8}
-                accessibilityRole="link"
-              >
-                <Text style={styles.loginLink}>Sign In</Text>
-              </Pressable>
-            </View>
-          )}
+          <View style={styles.loginRow}>
+            <Text style={styles.loginText}>{t("auth.customer.register.alreadyHaveAccount")} </Text>
+            <Pressable
+              onPress={() => router.replace("/login")}
+              disabled={loading}
+              hitSlop={8}
+              accessibilityRole="link"
+            >
+              <Text style={styles.loginLink}>{t("auth.customer.register.signIn")}</Text>
+            </Pressable>
+          </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardFormScroll>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg.primary },
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
@@ -369,47 +417,59 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
   },
-  logo: {
-    ...typography.heading1,
-    fontSize: 48,
-    color: colors.accent.green,
-    letterSpacing: 4,
-    marginBottom: spacing[1],
+  logoTile: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[3],
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: glass.textPrimary,
+    letterSpacing: 2,
   },
   title: {
     ...typography.heading2,
-    color: colors.text.primary,
+    color: glass.textPrimary,
     marginBottom: spacing[1],
   },
   subtitle: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     textAlign: "center",
-    marginBottom: spacing[8],
+    marginBottom: spacing[5],
   },
+  formCard: { width: "100%" },
   form: { width: "100%" },
   label: {
     ...typography.label,
-    color: colors.text.secondary,
-    marginBottom: spacing[1.5],
+    color: glass.textMuted,
+    marginBottom: spacing[2],
+  },
+  optional: {
+    ...typography.caption,
+    color: glass.textLabel,
   },
   fieldGap: { marginTop: spacing[4] },
   input: {
     height: layout.inputHeight,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
     paddingHorizontal: spacing[4],
     ...typography.body,
-    color: colors.text.primary,
-  },
-  inputDisabled: {
-    opacity: 0.6,
+    color: glass.textPrimary,
   },
   hint: {
     ...typography.caption,
-    color: colors.text.tertiary,
+    color: glass.textLabel,
     marginTop: spacing[1],
   },
   consentRow: {
@@ -423,36 +483,45 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: radius.xs,
     borderWidth: 2,
-    borderColor: colors.border.default,
-    backgroundColor: colors.bg.tertiary,
+    borderColor: glass.cardBorder,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacing[3],
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: colors.accent.green,
-    borderColor: colors.accent.green,
+    backgroundColor: "#86efac",
+    borderColor: "#86efac",
   },
   checkmark: {
-    color: colors.bg.primary,
+    color: "#052e16",
     fontSize: 16,
     fontWeight: "700",
     lineHeight: 20,
   },
   consentText: {
     ...typography.bodySmall,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     flex: 1,
     paddingTop: 2,
   },
   consentLink: {
-    color: colors.accent.green,
+    color: "#86efac",
     textDecorationLine: "underline",
   },
+  resendRow: {
+    alignSelf: "flex-end",
+    marginTop: spacing[2],
+  },
+  resendText: {
+    ...typography.label,
+    color: "#86efac",
+  },
+  disabledText: { opacity: 0.45 },
   primaryButton: {
     height: layout.buttonHeight,
-    backgroundColor: colors.accent.green,
+    backgroundColor: "#86efac",
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -461,14 +530,36 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: "#052e16",
+    fontWeight: "700",
   },
-  buttonDisabled: { backgroundColor: colors.status.disabled },
+  buttonDisabled: { backgroundColor: colors.status.disabled, opacity: 0.7 },
   pressed: { opacity: 0.85 },
+  toggleRow: { marginTop: spacing[4], alignSelf: "center" },
+  toggleText: {
+    ...typography.label,
+    color: "#86efac",
+  },
+  infoBox: {
+    backgroundColor: "rgba(67,160,71,0.14)",
+    borderColor: "rgba(67,160,71,0.4)",
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[4],
+    width: "100%",
+  },
+  infoText: {
+    ...typography.bodySmall,
+    color: "#86efac",
+  },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(244,67,54,0.12)",
+    borderColor: "rgba(244,67,54,0.4)",
+    borderWidth: 1,
     borderRadius: radius.md,
     paddingVertical: spacing[3],
     paddingHorizontal: spacing[4],
@@ -482,20 +573,21 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...typography.bodySmall,
-    color: colors.status.error,
+    color: "#fca5a5",
     flex: 1,
   },
   loginRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing[8],
+    marginTop: spacing[6],
   },
   loginText: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
   },
   loginLink: {
     ...typography.label,
-    color: colors.accent.green,
+    color: "#86efac",
+    fontWeight: "700",
   },
 });

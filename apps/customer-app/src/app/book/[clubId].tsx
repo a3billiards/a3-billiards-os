@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -15,12 +16,16 @@ import { useMutation, useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
+import { TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
 import {
   DateStrip,
   TableTypePicker,
+  TablePicker,
   TimeSlotGrid,
+  GlassPageBackground,
 } from "@a3/ui/components";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import {
   resolveBookingRatePerMin,
 } from "@a3/utils/bookingRate";
@@ -29,58 +34,52 @@ import {
   zonedWallTimeToUtcMs,
 } from "@a3/utils/timezone";
 import { formatHhmm12h } from "@a3/utils/availability";
+import { tableTypeI18nKey, tableTypeLabel } from "@a3/utils/tableTypes";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 
-const STEPS = ["Type", "Date", "Time", "Review"] as const;
+const STEP_KEYS = [
+  "customerApp.booking.steps.type",
+  "customerApp.booking.steps.table",
+  "customerApp.booking.steps.date",
+  "customerApp.booking.steps.duration",
+  "customerApp.booking.steps.time",
+  "customerApp.booking.steps.review",
+] as const;
 
-const DURATION_LABELS: Record<number, { chip: string; summary: string; sub?: string }> = {
-  30: { chip: "30m", summary: "30 minutes", sub: "Quick game" },
-  60: { chip: "1h", summary: "1 hour", sub: "Standard session" },
-  90: { chip: "1.5h", summary: "1.5 hours", sub: "Extended play" },
-  120: { chip: "2h", summary: "2 hours", sub: "Tournament practice" },
-  180: { chip: "3h", summary: "3 hours", sub: "Long session" },
+const DURATION_KEY_MAP: Record<number, string> = {
+  30: "d30",
+  60: "d60",
+  90: "d90",
+  120: "d120",
+  180: "d180",
 };
 
-function bookingErrorMessage(err: unknown, minAdvanceMinutes: number): string {
+function bookingErrorMessage(
+  err: unknown,
+  minAdvanceMinutes: number,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
   const raw = err instanceof Error ? err.message : String(err);
-  if (raw.includes("BOOKING_001")) {
-    return "You already have 2 active bookings at this club.";
-  }
-  if (raw.includes("BOOKING_002")) {
-    return "You already have active bookings at 2 clubs. Please complete or cancel existing bookings before booking at a new club.";
-  }
-  if (raw.includes("BOOKING_003")) {
-    return "This slot is no longer available. Please select a different time.";
-  }
-  if (raw.includes("BOOKING_004")) {
-    return "This club is not accepting online bookings at the moment.";
-  }
-  if (raw.includes("BOOKING_008")) {
-    return "The selected time is outside the club's bookable hours or date range.";
-  }
-  if (raw.includes("BOOKING_009")) {
-    return "This table type is not available for online booking.";
-  }
+  if (raw.includes("BOOKING_001")) return t("customerApp.booking.errors.booking001");
+  if (raw.includes("BOOKING_002")) return t("customerApp.booking.errors.booking002");
+  if (raw.includes("BOOKING_003")) return t("customerApp.booking.errors.booking003");
+  if (raw.includes("BOOKING_004")) return t("customerApp.booking.errors.booking004");
+  if (raw.includes("BOOKING_008")) return t("customerApp.booking.errors.booking008");
+  if (raw.includes("BOOKING_009")) return t("customerApp.booking.errors.booking009");
   if (raw.includes("BOOKING_010")) {
-    return `Please book at least ${minAdvanceMinutes} minutes in advance.`;
+    return t("customerApp.booking.errors.booking010", { minutes: minAdvanceMinutes });
   }
-  if (raw.includes("AUTH_002")) {
-    return "Your account is currently suspended.";
-  }
-  if (raw.includes("AUTH_004")) {
-    return "Please verify your phone number before booking.";
-  }
-  if (raw.includes("AUTH_006")) {
-    return "Your account is pending deletion.";
-  }
-  if (raw.includes("SUBSCRIPTION_003")) {
-    return "This club is not accepting online bookings at the moment.";
-  }
-  return raw.replace(/^[A-Z_]+_\d+:\s*/, "") || "Something went wrong. Please try again.";
+  if (raw.includes("AUTH_002")) return t("customerApp.booking.errors.auth002");
+  if (raw.includes("AUTH_004")) return t("customerApp.booking.errors.auth004");
+  if (raw.includes("AUTH_006")) return t("customerApp.booking.errors.auth006");
+  if (raw.includes("SUBSCRIPTION_003")) return t("customerApp.booking.errors.subscription003");
+  if (raw.includes("PAYMENT_004")) return t("customerApp.booking.errors.payment004");
+  return raw.replace(/^[A-Z_]+_\d+:\s*/, "") || t("customerApp.booking.errors.generic");
 }
 
 function formatMoney(currency: string, amount: number): string {
   try {
-    return new Intl.NumberFormat("en-IN", {
+    return new Intl.NumberFormat(getCurrentLanguage(), {
       style: "currency",
       currency,
       maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
@@ -90,14 +89,17 @@ function formatMoney(currency: string, amount: number): string {
   }
 }
 
-function capitalizeWords(s: string): string {
-  return s
-    .split(/\s+/)
-    .map((w) => (w.length ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(" ");
+function localizedTableType(
+  raw: string,
+  t: (key: string) => string,
+): string {
+  const key = tableTypeI18nKey(raw);
+  return key ? t(key) : tableTypeLabel(raw);
 }
 
-export default function BookClubScreen() {
+function BookClubScreenContent() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const { clubId: clubIdParam } = useLocalSearchParams<{ clubId: string }>();
   const clubId = (clubIdParam ?? "") as Id<"clubs">;
@@ -110,14 +112,19 @@ export default function BookClubScreen() {
 
   const [step, setStep] = useState(0);
   const [tableType, setTableType] = useState<string | null>(null);
+  const [selectedTableId, setSelectedTableId] = useState<Id<"tables"> | null>(null);
   const [dateYmd, setDateYmd] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
-  const slotOptions: number[] =
-    ctx?.bookingSettings.slotDurationOptions ?? [30, 60, 90, 120];
+  const slotDurationOptions = ctx?.bookingSettings.slotDurationOptions;
+  const slotOptions = useMemo(
+    () => slotDurationOptions ?? [30, 60, 90, 120],
+    [slotDurationOptions],
+  );
   const defaultDuration = slotOptions[0] ?? 30;
 
   useEffect(() => {
@@ -128,12 +135,23 @@ export default function BookClubScreen() {
 
   const durationForSlots = durationMin ?? defaultDuration;
 
+  const tablesForType = useMemo(() => {
+    if (!ctx || !tableType) return [];
+    return ctx.tablesByType[tableType.trim().toLowerCase()] ?? [];
+  }, [ctx, tableType]);
+
+  const selectedTableLabel = useMemo(() => {
+    if (!selectedTableId) return "";
+    return tablesForType.find((t) => t.tableId === selectedTableId)?.label ?? "";
+  }, [selectedTableId, tablesForType]);
+
   const availableSlots = useQuery(
     api.bookings.getAvailableSlots,
-    clubIdParam && tableType && dateYmd
+    clubIdParam && tableType && selectedTableId && dateYmd
       ? {
           clubId,
           tableType,
+          tableId: selectedTableId,
           requestedDate: dateYmd,
           requestedDurationMin: durationForSlots,
         }
@@ -141,16 +159,16 @@ export default function BookClubScreen() {
   );
 
   useEffect(() => {
-    if (step !== 3 || !selectedTime || availableSlots === undefined) return;
+    if (step !== 5 || !selectedTime || availableSlots === undefined) return;
     if (!availableSlots.includes(selectedTime)) {
       setSelectedTime(null);
-      setStep(2);
+      setStep(4);
       Alert.alert(
-        "Time unavailable",
-        "Your selected time is no longer available for this duration. Please pick a new time.",
+        t("customerApp.booking.alerts.timeUnavailableTitle"),
+        t("customerApp.booking.alerts.timeUnavailableBody"),
       );
     }
-  }, [availableSlots, durationForSlots, selectedTime, step]);
+  }, [availableSlots, durationForSlots, selectedTime, step, t]);
 
   const tzLabel = useMemo(
     () => (ctx ? timeZoneAbbreviation(ctx.timezone) : ""),
@@ -176,7 +194,7 @@ export default function BookClubScreen() {
   const summaryDateLabel = useMemo(() => {
     if (!ctx || !dateYmd) return "";
     const ms = zonedWallTimeToUtcMs(dateYmd, "12:00", ctx.timezone);
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(getCurrentLanguage(), {
       timeZone: ctx.timezone,
       weekday: "short",
       day: "numeric",
@@ -201,14 +219,17 @@ export default function BookClubScreen() {
   };
 
   const onConfirm = async () => {
-    if (!ctx || !tableType || !dateYmd || !selectedTime || durationMin === null) {
+    if (!ctx || !tableType || !selectedTableId || !dateYmd || !selectedTime || durationMin === null) {
       return;
     }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await submit({
         clubId,
         tableType,
+        requestedTableId: selectedTableId,
         requestedDate: dateYmd,
         requestedStartTime: selectedTime,
         requestedDurationMin: durationMin,
@@ -217,55 +238,62 @@ export default function BookClubScreen() {
       router.replace("/(tabs)/bookings");
       setTimeout(() => {
         Alert.alert(
-          "Booking request sent!",
-          "You'll be notified once the club responds.",
+          t("customerApp.booking.alerts.requestSentTitle"),
+          t("customerApp.booking.alerts.requestSentPayBody"),
         );
       }, 0);
     } catch (e) {
       Alert.alert(
-        "Booking failed",
-        bookingErrorMessage(e, ctx.bookingSettings.minAdvanceMinutes),
+        t("customerApp.booking.alerts.bookingFailedTitle"),
+        bookingErrorMessage(e, ctx.bookingSettings.minAdvanceMinutes, t),
       );
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
   if (!clubIdParam) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <Text style={styles.errorText}>Missing club.</Text>
+          <Text style={styles.errorText}>{t("customerApp.booking.missingClub")}</Text>
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (ctx === undefined) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <ActivityIndicator color={colors.accent.green} size="large" />
+          <ActivityIndicator color={glass.ctaBg} size="large" />
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (!ctx.bookingSettings.enabled) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.disabledWrap}>
           <Pressable style={styles.iconBtn} onPress={handleClose}>
             <MaterialIcons name="arrow-back" size={24} color={colors.text.primary} />
           </Pressable>
           <Text style={styles.disabledTitle}>
-            Online booking is not available at this club.
+            {t("customerApp.booking.onlineBookingUnavailable")}
           </Text>
           <Pressable style={styles.primaryBtn} onPress={handleClose}>
-            <Text style={styles.primaryBtnText}>Go back</Text>
+            <Text style={styles.primaryBtnText}>{t("customerApp.booking.goBack")}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
@@ -276,6 +304,7 @@ export default function BookClubScreen() {
 
   if (bookableTypes.length === 0) {
     return (
+      <GlassPageBackground>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Pressable style={styles.iconBtn} onPress={handleClose}>
@@ -284,17 +313,19 @@ export default function BookClubScreen() {
         </View>
         <View style={styles.disabledWrap}>
           <Text style={styles.disabledTitle}>
-            Online booking is not available at this club.
+            {t("customerApp.booking.onlineBookingUnavailable")}
           </Text>
           <Pressable style={styles.primaryBtn} onPress={handleClose}>
-            <Text style={styles.primaryBtnText}>Go back</Text>
+            <Text style={styles.primaryBtnText}>{t("customerApp.booking.goBack")}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Pressable style={styles.iconBtn} onPress={handleBack}>
@@ -310,8 +341,8 @@ export default function BookClubScreen() {
 
       <View style={styles.stepper}>
         <View style={styles.dotsRow}>
-          {STEPS.map((label, i) => (
-            <React.Fragment key={label}>
+          {STEP_KEYS.map((stepKey, i) => (
+            <React.Fragment key={stepKey}>
               {i > 0 ? (
                 <View
                   style={[
@@ -333,8 +364,8 @@ export default function BookClubScreen() {
           ))}
         </View>
         <View style={styles.labelsRow}>
-          {STEPS.map((label, i) => (
-            <View key={label} style={styles.stepLabelCell}>
+          {STEP_KEYS.map((stepKey, i) => (
+            <View key={stepKey} style={styles.stepLabelCell}>
               <Text
                 style={[
                   styles.stepLabel,
@@ -342,7 +373,7 @@ export default function BookClubScreen() {
                   i > step && styles.stepLabelMuted,
                 ]}
               >
-                {label}
+                {t(stepKey)}
               </Text>
             </View>
           ))}
@@ -352,7 +383,10 @@ export default function BookClubScreen() {
       <ScrollView
         style={styles.body}
         contentContainerStyle={styles.bodyContent}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {step === 0 && (
           <TableTypePicker
@@ -363,17 +397,34 @@ export default function BookClubScreen() {
             selectedType={tableType}
             onSelectType={(t: string) => {
               setTableType(t);
+              setSelectedTableId(null);
               setStep(1);
             }}
           />
         )}
 
-        {step === 1 && !bh ? (
+        {step === 1 && tableType ? (
+          <TablePicker
+            tableType={tableType}
+            tables={tablesForType}
+            selectedTableId={selectedTableId}
+            onSelectTable={(id: string) => {
+              setSelectedTableId(id as Id<"tables">);
+              setDateYmd(null);
+              setSelectedTime(null);
+              setStep(2);
+            }}
+            headingLabel={t("customerApp.booking.whichTable")}
+            emptyLabel={t("customerApp.booking.noTablesEmpty")}
+          />
+        ) : null}
+
+        {step === 2 && !bh ? (
           <Text style={styles.errorText}>
-            This club has not finished booking setup (hours missing).
+            {t("customerApp.booking.setupIncomplete")}
           </Text>
         ) : null}
-        {step === 1 && bh ? (
+        {step === 2 && bh ? (
           <>
             <DateStrip
               timeZone={ctx.timezone}
@@ -387,14 +438,63 @@ export default function BookClubScreen() {
               selectedYmd={dateYmd}
               onSelectYmd={(d: string) => {
                 setDateYmd(d);
-                setStep(2);
+                setSelectedTime(null);
+                setStep(3);
               }}
+              headingLabel={t("customerApp.booking.pickDate")}
+              todayLabel={t("customerApp.booking.today")}
+              noDatesLabel={t("customerApp.booking.noDatesAvailable")}
             />
-            <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
+            <Text style={styles.tzHint}>{t("customerApp.booking.timesShownIn", { tz: tzLabel })}</Text>
           </>
         ) : null}
 
-        {step === 2 && bh && tableType && dateYmd ? (
+        {step === 3 && dateYmd ? (
+          <>
+            <Text style={styles.reviewHeading}>{t("customerApp.booking.durationHeading")}</Text>
+            <View style={styles.durGrid}>
+              {slotOptions.map((d: number) => {
+                const durKey = DURATION_KEY_MAP[d];
+                const chip = durKey
+                  ? t(`customerApp.booking.durations.${durKey}.chip`)
+                  : t("customerApp.booking.durations.chipFallback", { count: d });
+                const sub = durKey ? t(`customerApp.booking.durations.${durKey}.sub`) : null;
+                const active = durationMin === d;
+                return (
+                  <Pressable
+                    key={d}
+                    onPress={() => {
+                      setDurationMin(d);
+                      setSelectedTime(null);
+                      setStep(4);
+                    }}
+                    style={[styles.durCard, active && styles.durCardActive]}
+                  >
+                    <Text
+                      style={[styles.durChip, active && styles.durChipActive]}
+                    >
+                      {chip}
+                    </Text>
+                    {sub ? (
+                      <Text style={styles.durSub}>{sub}</Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+            {durationMin !== null && durationMin < ctx.minBillMinutes ? (
+              <View style={styles.warnCard}>
+                <Text style={styles.warnText}>
+                  {t("customerApp.booking.minChargeWarning", {
+                    minutes: ctx.minBillMinutes,
+                  })}
+                </Text>
+              </View>
+            ) : null}
+          </>
+        ) : null}
+
+        {step === 4 && bh && tableType && selectedTableId && dateYmd && durationMin !== null ? (
           <>
             <TimeSlotGrid
               availableSlots={availableSlots}
@@ -402,105 +502,76 @@ export default function BookClubScreen() {
               selectedTime={selectedTime}
               onSelectTime={(t: string) => {
                 setSelectedTime(t);
-                setStep(3);
+                setStep(5);
               }}
               bookableOpen={bh.open}
               bookableClose={bh.close}
             />
-            <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
+            <Text style={styles.tzHint}>{t("customerApp.booking.timesShownIn", { tz: tzLabel })}</Text>
           </>
         ) : null}
 
-        {step === 3 && bh && tableType && dateYmd && selectedTime ? (
+        {step === 5 && bh && tableType && selectedTableId && dateYmd && selectedTime && durationMin !== null ? (
           <View style={styles.review}>
-            <Text style={styles.reviewHeading}>How long do you want to play?</Text>
-            <View style={styles.durGrid}>
-              {slotOptions.map((d: number) => {
-                const meta = DURATION_LABELS[d] ?? {
-                  chip: `${d}m`,
-                  summary: `${d} minutes`,
-                };
-                const active = durationMin === d;
-                return (
-                  <Pressable
-                    key={d}
-                    onPress={() => setDurationMin(d)}
-                    style={[
-                      styles.durCard,
-                      active && styles.durCardActive,
-                    ]}
-                  >
-                    <Text
-                      style={[styles.durChip, active && styles.durChipActive]}
-                    >
-                      {meta.chip}
-                    </Text>
-                    {meta.sub ? (
-                      <Text style={styles.durSub}>{meta.sub}</Text>
-                    ) : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {durationMin !== null && durationMin < ctx.minBillMinutes ? (
-              <View style={styles.warnCard}>
-                <Text style={styles.warnText}>
-                  Minimum charge is {ctx.minBillMinutes} minutes. Your booking
-                  will be billed at the {ctx.minBillMinutes}-minute rate.
-                </Text>
-              </View>
-            ) : null}
-
-            <Text style={styles.confirmTitle}>Confirm your booking</Text>
+            <Text style={styles.confirmTitle}>{t("customerApp.booking.confirmTitle")}</Text>
             <View style={styles.summaryCard}>
               <Text style={styles.summaryClub}>{ctx.name}</Text>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Table Type</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryTable")}</Text>
                 <Text style={styles.summaryVal}>
-                  {capitalizeWords(tableType)}
+                  {selectedTableLabel || t("customerApp.booking.emDash")}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Date</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryTableType")}</Text>
+                <Text style={styles.summaryVal}>
+                  {localizedTableType(tableType, t)}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryDate")}</Text>
                 <Text style={styles.summaryVal}>{summaryDateLabel}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Time</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryTime")}</Text>
                 <Text style={styles.summaryVal}>
-                  {formatHhmm12h(selectedTime)}
+                  {formatHhmm12h(selectedTime, getCurrentLanguage())}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Duration</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryDuration")}</Text>
                 <Text style={styles.summaryVal}>
                   {durationMin !== null
-                    ? (DURATION_LABELS[durationMin]?.summary ??
-                      `${durationMin} minutes`)
-                    : "—"}
+                    ? (DURATION_KEY_MAP[durationMin]
+                        ? t(`customerApp.booking.durations.${DURATION_KEY_MAP[durationMin]}.summary`)
+                        : t("customerApp.booking.durations.summaryFallback", { count: durationMin }))
+                    : t("customerApp.booking.emDash")}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryKey}>Estimated Cost</Text>
+                <Text style={styles.summaryKey}>{t("customerApp.booking.summaryEstimatedCost")}</Text>
                 <Text style={styles.summaryVal}>
-                  Est. {formatMoney(ctx.currency, estimatedPreview)} — actual
-                  bill may vary
+                  {t("customerApp.booking.estimatedCostValue", {
+                    amount: formatMoney(ctx.currency, estimatedPreview),
+                  })}
                 </Text>
               </View>
             </View>
-            <Text style={styles.tzHint}>Times shown in {tzLabel}</Text>
+            <Text style={styles.tzHint}>{t("customerApp.booking.timesShownIn", { tz: tzLabel })}</Text>
 
-            <Text style={styles.notesLabel}>Notes (optional)</Text>
+            <Text style={styles.payHint}>{t("customerApp.booking.payAfterApprovalHint")}</Text>
+
+            <Text style={styles.notesLabel}>{t("customerApp.booking.notesOptional")}</Text>
             <TextInput
               style={styles.notesInput}
-              placeholder="Add a note for the club"
+              placeholder={t("customerApp.booking.notesPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               value={notes}
               onChangeText={(t: string) => setNotes(t.slice(0, 200))}
               multiline
               maxLength={200}
             />
-            <Text style={styles.counter}>{notes.length}/200</Text>
+            <Text style={styles.counter}>{t("customerApp.booking.notesCounter", { count: notes.length })}</Text>
 
             <Pressable
               style={[
@@ -511,22 +582,32 @@ export default function BookClubScreen() {
               disabled={submitting}
             >
               {submitting ? (
-                <ActivityIndicator color={colors.bg.primary} />
+                <ActivityIndicator color={glass.ctaText} />
               ) : (
-                <Text style={styles.primaryBtnText}>Confirm Booking</Text>
+                <Text style={styles.primaryBtnText}>{t("customerApp.booking.confirmBooking")}</Text>
               )}
             </Pressable>
           </View>
         ) : null}
       </ScrollView>
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
 const DOT_GAP = 4;
 
+export default function BookClubScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("customerApp.clubProfile.bookTable")}>
+      <BookClubScreenContent />
+    </TabErrorBoundary>
+  );
+}
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
+  safe: { flex: 1, backgroundColor: "transparent" },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   errorText: { ...typography.body, color: colors.status.error },
   body: { flex: 1 },
@@ -571,10 +652,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.default,
   },
   dotActive: {
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     transform: [{ scale: 1.15 }],
   },
-  dotDone: { backgroundColor: colors.accent.green },
+  dotDone: { backgroundColor: glass.ctaBg },
   stepLine: {
     flex: 1,
     height: 2,
@@ -582,12 +663,12 @@ const styles = StyleSheet.create({
     marginHorizontal: DOT_GAP,
     maxWidth: 40,
   },
-  stepLineActive: { backgroundColor: colors.accent.green },
+  stepLineActive: { backgroundColor: glass.ctaBg },
   labelsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  stepLabelCell: { width: "25%" },
+  stepLabelCell: { flex: 1 },
   stepLabel: {
     ...typography.caption,
     color: colors.text.secondary,
@@ -613,7 +694,7 @@ const styles = StyleSheet.create({
     marginVertical: spacing[6],
   },
   textBtn: { alignSelf: "center", marginTop: spacing[4] },
-  textBtnLabel: { ...typography.label, color: colors.accent.green },
+  textBtnLabel: { ...typography.label, color: glass.ctaBg },
   review: { gap: spacing[3] },
   reviewHeading: {
     ...typography.heading3,
@@ -627,14 +708,14 @@ const styles = StyleSheet.create({
   durCard: {
     width: "47%",
     minHeight: 94,
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderRadius: glass.cardRadiusSmall,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
     padding: spacing[4],
   },
   durCardActive: {
-    borderColor: colors.accent.green,
+    borderColor: glass.inputBorderFocus,
     borderWidth: 2,
   },
   durChip: {
@@ -642,7 +723,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     textAlign: "center",
   },
-  durChipActive: { color: colors.accent.green },
+  durChipActive: { color: glass.ctaBg },
   durSub: {
     ...typography.bodySmall,
     color: colors.text.secondary,
@@ -663,11 +744,11 @@ const styles = StyleSheet.create({
     marginTop: spacing[2],
   },
   summaryCard: {
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderRadius: glass.cardRadiusSmall,
     padding: spacing[4],
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.cardBorder,
   },
   summaryClub: {
     ...typography.heading4,
@@ -688,15 +769,26 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   notesLabel: { ...typography.label, color: colors.text.secondary },
+  payHint: {
+    ...typography.bodySmall,
+    color: colors.accent.green,
+    marginBottom: spacing[3],
+    lineHeight: 20,
+  },
+  couponHint: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
+  },
   notesInput: {
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
     borderRadius: radius.md,
     minHeight: 80,
     padding: spacing[3],
     color: colors.text.primary,
     ...typography.body,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: glass.inputBorder,
   },
   counter: {
     ...typography.caption,
@@ -704,7 +796,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   primaryBtn: {
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     borderRadius: radius.md,
     minHeight: layout.buttonHeight,
     alignItems: "center",
@@ -714,6 +806,6 @@ const styles = StyleSheet.create({
   primaryBtnDisabled: { opacity: 0.7 },
   primaryBtnText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: glass.ctaText,
   },
 });

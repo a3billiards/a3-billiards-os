@@ -8,7 +8,7 @@ import {
   TextInput,
   Modal,
   Alert,
-  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -18,24 +18,32 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { shareCsvExport } from "@a3/ui/shareJson";
+import { PhoneInput } from "@a3/ui/components";
+import { DEFAULT_PHONE_E164 } from "@a3/utils/phone";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
+import { usePullToRefresh } from "@a3/ui/hooks";
 
-const COMPLAINT_LABEL: Record<string, string> = {
-  violent_behaviour: "Violent Behaviour",
-  theft: "Theft",
-  runaway_without_payment: "Runaway Without Payment",
-  late_credit_payment: "Late Credit Payment",
+const COMPLAINT_TYPE_KEYS: Record<string, string> = {
+  violent_behaviour: "adminApp.userProfile.complaintViolentBehaviour",
+  theft: "adminApp.userProfile.complaintTheft",
+  runaway_without_payment: "adminApp.userProfile.complaintRunaway",
+  late_credit_payment: "adminApp.userProfile.complaintLateCredit",
 };
 
-function elapsedAgo(startMs: number): string {
+function elapsedAgo(
+  startMs: number,
+  tr: (key: string, opts?: Record<string, unknown>) => string,
+): string {
   const m = Math.floor((Date.now() - startMs) / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m} min ago`;
+  if (m < 1) return tr("adminApp.userProfile.elapsedJustNow");
+  if (m < 60) return tr("adminApp.userProfile.elapsedMinAgo", { minutes: m });
   const h = Math.floor(m / 60);
-  return `${h} h ${m % 60} min ago`;
+  return tr("adminApp.userProfile.elapsedHoursAgo", { hours: h, minutes: m % 60 });
 }
 
 function formatDate(ms: number): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(getCurrentLanguage(), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(ms));
@@ -43,15 +51,17 @@ function formatDate(ms: number): string {
 
 function RoleHeaderBadge({
   role,
+  tr,
 }: {
   role: "admin" | "owner" | "customer";
+  tr: (key: string) => string;
 }): React.JSX.Element {
   const cfg =
     role === "admin"
-      ? { bg: colors.status.info, label: "Admin" }
+      ? { bg: colors.status.info, label: tr("adminApp.roles.admin") }
       : role === "owner"
-        ? { bg: colors.accent.amber, label: "Owner" }
-        : { bg: colors.bg.tertiary, label: "Customer" };
+        ? { bg: colors.accent.amber, label: tr("adminApp.roles.owner") }
+        : { bg: colors.bg.tertiary, label: tr("adminApp.roles.customer") };
   return (
     <View style={[styles.roleHdr, { backgroundColor: cfg.bg }]}>
       <Text style={styles.roleHdrText}>{cfg.label}</Text>
@@ -60,19 +70,31 @@ function RoleHeaderBadge({
 }
 
 export default function UserProfileScreen(): React.JSX.Element {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
-  const { userId: rawId } = useLocalSearchParams<{ userId: string }>();
-  const userId = rawId as Id<"users">;
+  const { userId: rawParam } = useLocalSearchParams<{ userId: string | string[] }>();
+  const rawId = Array.isArray(rawParam) ? rawParam[0] : rawParam;
 
-  const profile = useQuery(api.users.getUserProfile, { userId });
+  const userId = (rawId ?? "") as Id<"users">;
+  const validId = typeof rawId === "string" && rawId.length > 0;
+
+  const profile = useQuery(api.users.getUserProfile, validId ? { userId } : "skip");
+  const currentUser = useQuery(api.users.getCurrentUser, {});
   const editUser = useMutation(api.users.adminEditUser);
   const updatePhone = useMutation(api.users.adminUpdatePhone);
   const freezeUser = useMutation(api.users.adminFreezeUser);
   const unfreezeUser = useMutation(api.users.adminUnfreezeUser);
   const resetPasscode = useMutation(api.users.adminResetOwnerPasscode);
+  const cancelDeletion = useMutation(api.users.adminCancelDeletion);
+  const endClubSubscription = useMutation(api.users.adminEndClubSubscription);
   const promoteAdmin = useMutation(api.users.adminPromoteToAdmin);
+  const demoteAdmin = useMutation(api.users.adminDemoteToOwner);
   const forceEnd = useMutation(api.sessions.forceEndSession);
   const sendResetEmail = useAction(api.usersAdminActions.adminResetUserPassword);
+  const exportUserData = useAction(api.dataExportActions.adminExportUserData);
+
+  const [exportingUser, setExportingUser] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
@@ -80,7 +102,7 @@ export default function UserProfileScreen(): React.JSX.Element {
   const [editEmail, setEditEmail] = useState("");
 
   const [phoneOpen, setPhoneOpen] = useState(false);
-  const [phoneVal, setPhoneVal] = useState("");
+  const [phoneVal, setPhoneVal] = useState(DEFAULT_PHONE_E164);
 
   const [forceOpen, setForceOpen] = useState(false);
   const [forceReason, setForceReason] = useState("");
@@ -90,6 +112,8 @@ export default function UserProfileScreen(): React.JSX.Element {
 
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [promoteConfirm, setPromoteConfirm] = useState("");
+  const [demoteOpen, setDemoteOpen] = useState(false);
+  const [demoteConfirm, setDemoteConfirm] = useState("");
 
   const [expandedComplaint, setExpandedComplaint] = useState<string | null>(
     null,
@@ -107,7 +131,7 @@ export default function UserProfileScreen(): React.JSX.Element {
     try {
       const age = parseInt(editAge, 10);
       if (Number.isNaN(age)) {
-        Alert.alert("Invalid age");
+        Alert.alert(t("adminApp.userProfile.invalidAge"));
         return;
       }
       await editUser({
@@ -117,9 +141,9 @@ export default function UserProfileScreen(): React.JSX.Element {
         ...(editEmail.trim().length > 0 ? { email: editEmail.trim() } : {}),
       });
       setEditOpen(false);
-      Alert.alert("Saved", "Profile updated.");
+      Alert.alert(t("adminApp.userProfile.saved"), t("adminApp.userProfile.profileUpdated"));
     } catch (e) {
-      Alert.alert("Error", parseConvexError(e as Error).message);
+      Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
     }
   };
 
@@ -127,28 +151,28 @@ export default function UserProfileScreen(): React.JSX.Element {
     try {
       await updatePhone({ userId, phone: phoneVal.trim() });
       setPhoneOpen(false);
-      setPhoneVal("");
-      Alert.alert("Saved", "Phone updated.");
+      setPhoneVal(DEFAULT_PHONE_E164);
+      Alert.alert(t("adminApp.userProfile.saved"), t("adminApp.userProfile.phoneUpdated"));
     } catch (e) {
-      Alert.alert("Error", parseConvexError(e as Error).message);
+      Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
     }
   };
 
   const onFreeze = () => {
     if (!profile) return;
     Alert.alert(
-      "Freeze account",
-      `Freeze ${profile.user.name}'s account? They will be immediately locked out.`,
+      t("adminApp.userProfile.freezeTitle"),
+      t("adminApp.userProfile.freezeMessage", { name: profile.user.name }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("adminApp.userProfile.cancel"), style: "cancel" },
         {
-          text: "Freeze",
+          text: t("adminApp.userProfile.freeze"),
           style: "destructive",
           onPress: async () => {
             try {
               await freezeUser({ userId });
             } catch (e) {
-              Alert.alert("Error", parseConvexError(e as Error).message);
+              Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
             }
           },
         },
@@ -159,17 +183,17 @@ export default function UserProfileScreen(): React.JSX.Element {
   const onUnfreeze = () => {
     if (!profile) return;
     Alert.alert(
-      "Unfreeze account",
-      `Unfreeze ${profile.user.name}'s account? They will regain access immediately.`,
+      t("adminApp.userProfile.unfreezeTitle"),
+      t("adminApp.userProfile.unfreezeMessage", { name: profile.user.name }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("adminApp.userProfile.cancel"), style: "cancel" },
         {
-          text: "Unfreeze",
+          text: t("adminApp.userProfile.unfreeze"),
           onPress: async () => {
             try {
               await unfreezeUser({ userId });
             } catch (e) {
-              Alert.alert("Error", parseConvexError(e as Error).message);
+              Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
             }
           },
         },
@@ -178,20 +202,81 @@ export default function UserProfileScreen(): React.JSX.Element {
   };
 
   const onResetPassword = () => {
-    if (!profile?.user.email) return;
+    if (!profile) return;
+    if (!profile.user.email) {
+      Alert.alert(
+        t("adminApp.userProfile.resetPasswordTitle"),
+        t("adminApp.users.resetPasswordNoEmailHint"),
+        [
+          { text: t("adminApp.userProfile.cancel"), style: "cancel" },
+          { text: t("adminApp.userProfile.editProfile"), onPress: openEdit },
+        ],
+      );
+      return;
+    }
     Alert.alert(
-      "Reset password",
-      `Send a password reset email to ${profile.user.email}?`,
+      t("adminApp.userProfile.resetPasswordTitle"),
+      t("adminApp.userProfile.resetPasswordMessage", { email: profile.user.email }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("adminApp.userProfile.cancel"), style: "cancel" },
         {
-          text: "Send",
+          text: t("adminApp.userProfile.send"),
           onPress: async () => {
             try {
               await sendResetEmail({ userId });
-              Alert.alert("Sent", "Password reset email sent.");
+              Alert.alert(t("adminApp.userProfile.done"), t("adminApp.userProfile.passwordResetSent"));
             } catch (e) {
-              Alert.alert("Error", parseConvexError(e as Error).message);
+              Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const onCancelDeletion = () => {
+    if (!profile) return;
+    Alert.alert(
+      t("adminApp.userProfile.cancelDeletionTitle"),
+      t("adminApp.userProfile.cancelDeletionMessage", { name: profile.user.name }),
+      [
+        { text: t("adminApp.userProfile.cancel"), style: "cancel" },
+        {
+          text: t("adminApp.userProfile.cancelDeletion"),
+          onPress: async () => {
+            try {
+              await cancelDeletion({ userId });
+              Alert.alert(t("adminApp.userProfile.done"), t("adminApp.userProfile.deletionCancelled"));
+            } catch (e) {
+              Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const onEndSubscription = () => {
+    if (!profile?.ownedClub) return;
+    Alert.alert(
+      t("adminApp.userProfile.endSubscriptionTitle"),
+      t("adminApp.userProfile.endSubscriptionMessage", { clubName: profile.ownedClub.name }),
+      [
+        { text: t("adminApp.userProfile.cancel"), style: "cancel" },
+        {
+          text: t("adminApp.userProfile.endSubscription"),
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const result = await endClubSubscription({ userId });
+              Alert.alert(
+                t("adminApp.userProfile.done"),
+                result.alreadyEnded
+                  ? t("adminApp.userProfile.subscriptionAlreadyEnded")
+                  : t("adminApp.userProfile.subscriptionEnded"),
+              );
+            } catch (e) {
+              Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
             }
           },
         },
@@ -202,18 +287,18 @@ export default function UserProfileScreen(): React.JSX.Element {
   const onResetPasscode = () => {
     if (!profile) return;
     Alert.alert(
-      "Reset settings passcode",
-      `Clear ${profile.user.name}'s settings passcode? They will be forced to set a new one on next login.`,
+      t("adminApp.userProfile.resetPasscodeTitle"),
+      t("adminApp.userProfile.resetPasscodeMessage", { name: profile.user.name }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("adminApp.userProfile.cancel"), style: "cancel" },
         {
-          text: "Reset",
+          text: t("adminApp.userProfile.reset"),
           onPress: async () => {
             try {
               await resetPasscode({ userId });
-              Alert.alert("Done", "Passcode cleared.");
+              Alert.alert(t("adminApp.userProfile.done"), t("adminApp.userProfile.passcodeCleared"));
             } catch (e) {
-              Alert.alert("Error", parseConvexError(e as Error).message);
+              Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
             }
           },
         },
@@ -223,16 +308,52 @@ export default function UserProfileScreen(): React.JSX.Element {
 
   const onPromote = async () => {
     if (promoteConfirm.trim() !== "CONFIRM") {
-      Alert.alert("Type CONFIRM to enable promotion.");
+      Alert.alert(t("adminApp.userProfile.typeConfirmPromote"));
       return;
     }
     try {
       await promoteAdmin({ userId });
       setPromoteOpen(false);
       setPromoteConfirm("");
-      Alert.alert("Done", "User promoted to admin.");
+      Alert.alert(
+        t("adminApp.userProfile.done"),
+        t("adminApp.userProfile.promoted"),
+      );
     } catch (e) {
-      Alert.alert("Error", parseConvexError(e as Error).message);
+      Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
+    }
+  };
+
+  const onDemote = async () => {
+    if (demoteConfirm.trim() !== "CONFIRM") {
+      Alert.alert(t("adminApp.userProfile.typeConfirmDemote"));
+      return;
+    }
+    try {
+      await demoteAdmin({ userId });
+      setDemoteOpen(false);
+      setDemoteConfirm("");
+      Alert.alert(
+        t("adminApp.userProfile.done"),
+        t("adminApp.userProfile.demoted"),
+      );
+    } catch (e) {
+      Alert.alert(t("auth.admin.mfa.errorLabel"), parseConvexError(e as Error).message);
+    }
+  };
+
+  const onExportUser = async () => {
+    setExportingUser(true);
+    try {
+      const data = await exportUserData({ targetUserId: userId });
+      await shareCsvExport(data.filename, data.csv);
+    } catch (e) {
+      Alert.alert(
+        t("adminApp.userProfile.exportFailed"),
+        parseConvexError(e as Error).message,
+      );
+    } finally {
+      setExportingUser(false);
     }
   };
 
@@ -240,7 +361,7 @@ export default function UserProfileScreen(): React.JSX.Element {
     if (!forceSessionId) return;
     const r = forceReason.trim();
     if (!r || r.length > 300) {
-      Alert.alert("Reason required", "Enter 1–300 characters.");
+      Alert.alert(t("adminApp.userProfile.reasonRequired"), t("adminApp.userProfile.reasonRequiredBody"));
       return;
     }
     try {
@@ -248,13 +369,13 @@ export default function UserProfileScreen(): React.JSX.Element {
       setForceOpen(false);
       setForceReason("");
       setForceSessionId(null);
-      Alert.alert("Ended", "Session was force-ended.");
+      Alert.alert(t("adminApp.userProfile.sessionEnded"), t("adminApp.userProfile.sessionForceEnded"));
     } catch (e) {
       const msg = parseConvexError(e as Error).message;
       if (msg.includes("FORCE_001")) {
-        Alert.alert("Already ended", "This session has already ended.");
+        Alert.alert(t("adminApp.userProfile.sessionAlreadyEnded"), t("adminApp.userProfile.sessionAlreadyEndedBody"));
       } else {
-        Alert.alert("Error", msg);
+        Alert.alert(t("auth.admin.mfa.errorLabel"), msg);
       }
     }
   };
@@ -279,15 +400,27 @@ export default function UserProfileScreen(): React.JSX.Element {
     );
   }
 
-  if (profile === null) {
+  if (!validId || profile === null) {
     return (
       <SafeAreaView style={styles.safe}>
-        <Text style={styles.err}>User not found.</Text>
+        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.bootRow}>
+          <MaterialIcons name="arrow-back" size={24} color={colors.text.primary} />
+        </Pressable>
+        <Text style={styles.err}>{t("adminApp.userProfile.notFound")}</Text>
       </SafeAreaView>
     );
   }
 
   const { user, complaints, activeSessions, ownedClub } = profile;
+
+  const canDemote =
+    currentUser?.isSuperAdmin === true &&
+    currentUser._id !== userId &&
+    user.role === "admin" &&
+    !user.isSuperAdmin;
+
+  const showAdminPasswordWarning =
+    user.role === "admin" && user.email && !user.hasPasswordLogin;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -297,7 +430,12 @@ export default function UserProfileScreen(): React.JSX.Element {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         <View style={styles.hero}>
           <View style={styles.avatarLg}>
             <Text style={styles.avatarLgText}>
@@ -305,7 +443,7 @@ export default function UserProfileScreen(): React.JSX.Element {
             </Text>
           </View>
           <Text style={styles.heroName}>{user.name}</Text>
-          <RoleHeaderBadge role={user.role} />
+          <RoleHeaderBadge role={user.role} tr={t} />
           {user.email ? (
             <Text style={styles.heroMeta}>{user.email}</Text>
           ) : null}
@@ -316,49 +454,51 @@ export default function UserProfileScreen(): React.JSX.Element {
 
         {user.isFrozen ? (
           <View style={styles.bannerFrozen}>
-            <Text style={styles.bannerFrozenText}>⛔ Account Frozen</Text>
+            <Text style={styles.bannerFrozenText}>{t("adminApp.userProfile.accountFrozen")}</Text>
           </View>
         ) : null}
         {user.deletionRequestedAt != null ? (
           <View style={styles.bannerDel}>
-            <Text style={styles.bannerDelText}>
-              🕐 Pending Deletion (30-day grace)
-            </Text>
+            <Text style={styles.bannerDelText}>{t("adminApp.userProfile.pendingDeletion")}</Text>
+          </View>
+        ) : null}
+        {showAdminPasswordWarning ? (
+          <View style={styles.bannerWarn}>
+            <Text style={styles.bannerWarnText}>{t("adminApp.userProfile.noPasswordWarning")}</Text>
           </View>
         ) : null}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Account</Text>
-          <Text style={styles.rowLine}>Age: {user.age}</Text>
+          <Text style={styles.cardTitle}>{t("adminApp.userProfile.accountSection")}</Text>
+          <Text style={styles.rowLine}>{t("adminApp.userProfile.age", { age: user.age })}</Text>
           <Text style={styles.rowLine}>
-            Phone verified: {user.phoneVerified ? "Yes" : "No"}
+            {t("adminApp.userProfile.phoneVerified", { value: user.phoneVerified ? t("adminApp.userProfile.yes") : t("adminApp.userProfile.no") })}
           </Text>
           <Text style={styles.rowLine}>
-            Consent:{" "}
             {user.consentGivenAt != null
-              ? `Consent given on ${formatDate(user.consentGivenAt)}`
-              : "Legacy account"}
+              ? t("adminApp.userProfile.consentGiven", { date: formatDate(user.consentGivenAt) })
+              : t("adminApp.userProfile.legacyAccount")}
           </Text>
-          <Text style={styles.rowLine}>Joined: {formatDate(user.createdAt)}</Text>
+          <Text style={styles.rowLine}>{t("adminApp.userProfile.joined", { date: formatDate(user.createdAt) })}</Text>
           {user.role === "owner" && ownedClub ? (
             <>
-              <Text style={styles.rowLine}>Club: {ownedClub.name}</Text>
+              <Text style={styles.rowLine}>{t("adminApp.userProfile.club", { name: ownedClub.name })}</Text>
               <Text style={styles.rowLine}>
-                Subscription: {ownedClub.subscriptionStatus}
+                {t("adminApp.userProfile.subscription", { status: ownedClub.subscriptionStatus })}
               </Text>
               <Text style={styles.rowLine}>
-                Settings passcode: {user.settingsPasscodeSet ? "Set" : "Not set"}
+                {t("adminApp.userProfile.settingsPasscode", { value: user.settingsPasscodeSet ? t("adminApp.userProfile.passcodeSet") : t("adminApp.userProfile.passcodeNotSet") })}
               </Text>
             </>
           ) : null}
           {user.role === "customer" && affiliationsText ? (
-            <Text style={styles.rowLine}>Played at: {affiliationsText}</Text>
+            <Text style={styles.rowLine}>{t("adminApp.userProfile.playedAt", { clubs: affiliationsText })}</Text>
           ) : null}
         </View>
 
         {activeSessions.length > 0 ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Active Sessions</Text>
+            <Text style={styles.cardTitle}>{t("adminApp.userProfile.activeSessionsSection")}</Text>
             {activeSessions.map((s) => (
               <View key={s.sessionId} style={styles.sessionRow}>
                 <View style={{ flex: 1 }}>
@@ -366,7 +506,7 @@ export default function UserProfileScreen(): React.JSX.Element {
                     {s.clubName} · {s.tableLabel}
                   </Text>
                   <Text style={styles.subtle}>
-                    Started {elapsedAgo(s.startTime)}
+                    {t("adminApp.userProfile.started", { time: elapsedAgo(s.startTime, t) })}
                   </Text>
                 </View>
                 <Pressable
@@ -377,7 +517,7 @@ export default function UserProfileScreen(): React.JSX.Element {
                     setForceOpen(true);
                   }}
                 >
-                  <Text style={styles.dangerBtnText}>Force End</Text>
+                  <Text style={styles.dangerBtnText}>{t("adminApp.userProfile.forceEnd")}</Text>
                 </Pressable>
               </View>
             ))}
@@ -386,7 +526,7 @@ export default function UserProfileScreen(): React.JSX.Element {
 
         {complaints.length > 0 ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Complaints ({complaints.length})</Text>
+            <Text style={styles.cardTitle}>{t("adminApp.userProfile.complaintsSection", { count: complaints.length })}</Text>
             {complaints.map((c) => {
               const open = expandedComplaint === c._id;
               return (
@@ -399,11 +539,11 @@ export default function UserProfileScreen(): React.JSX.Element {
                 >
                   <View style={styles.complaintHead}>
                     <Text style={styles.complaintType}>
-                      {COMPLAINT_LABEL[c.type] ?? c.type}
+                      {t(COMPLAINT_TYPE_KEYS[c.type] ?? c.type)}
                     </Text>
                     {c.removedAt != null ? (
                       <View style={styles.dismissed}>
-                        <Text style={styles.dismissedText}>Dismissed</Text>
+                        <Text style={styles.dismissedText}>{t("adminApp.userProfile.dismissed")}</Text>
                       </View>
                     ) : null}
                   </View>
@@ -420,49 +560,77 @@ export default function UserProfileScreen(): React.JSX.Element {
         ) : null}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Actions</Text>
+          <Text style={styles.cardTitle}>{t("adminApp.userProfile.actionsSection")}</Text>
           <Pressable style={styles.actionBtn} onPress={openEdit}>
-            <Text style={styles.actionBtnText}>Edit Profile</Text>
+            <Text style={styles.actionBtnText}>{t("adminApp.userProfile.editProfile")}</Text>
           </Pressable>
           <Pressable
             style={styles.actionBtn}
             onPress={() => {
-              setPhoneVal(user.phone ?? "");
+              setPhoneVal(user.phone ?? DEFAULT_PHONE_E164);
               setPhoneOpen(true);
             }}
           >
-            <Text style={styles.actionBtnText}>Update Phone</Text>
+            <Text style={styles.actionBtnText}>{t("adminApp.userProfile.updatePhone")}</Text>
           </Pressable>
 
           {user.role !== "admin" && !user.isFrozen ? (
             <Pressable style={styles.actionBtnDanger} onPress={onFreeze}>
-              <Text style={styles.actionBtnDangerText}>Freeze Account</Text>
+              <Text style={styles.actionBtnDangerText}>
+                {t("adminApp.userProfile.freezeAccount")}
+              </Text>
             </Pressable>
           ) : null}
           {user.isFrozen ? (
             <Pressable style={styles.actionBtnOk} onPress={onUnfreeze}>
-              <Text style={styles.actionBtnOkText}>Unfreeze Account</Text>
+              <Text style={styles.actionBtnOkText}>{t("adminApp.userProfile.unfreezeAccount")}</Text>
+            </Pressable>
+          ) : null}
+
+          {user.deletionRequestedAt != null && user.role !== "admin" ? (
+            <Pressable style={styles.actionBtnOk} onPress={onCancelDeletion}>
+              <Text style={styles.actionBtnOkText}>{t("adminApp.userProfile.cancelDeletion")}</Text>
+            </Pressable>
+          ) : null}
+
+          {user.role === "owner" &&
+          ownedClub &&
+          ownedClub.subscriptionStatus !== "frozen" ? (
+            <Pressable style={styles.actionBtnDanger} onPress={onEndSubscription}>
+              <Text style={styles.actionBtnDangerText}>
+                {t("adminApp.userProfile.endSubscription")}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {(user.role === "customer" || user.role === "owner") ? (
+            <Pressable
+              style={styles.actionBtn}
+              onPress={onResetPassword}
+            >
+              <Text style={styles.actionBtnText}>
+                {t("adminApp.userProfile.resetPassword")}
+                {!user.email ? ` — ${t("adminApp.userProfile.resetPasswordNoEmail")}` : ""}
+              </Text>
             </Pressable>
           ) : null}
 
           <Pressable
-            style={[
-              styles.actionBtn,
-              !user.email && { opacity: 0.45 },
-            ]}
-            onPress={user.email ? onResetPassword : undefined}
-            disabled={!user.email}
+            style={[styles.actionBtn, exportingUser && { opacity: 0.6 }]}
+            onPress={() => void onExportUser()}
+            disabled={exportingUser}
           >
             <Text style={styles.actionBtnText}>
-              Reset Password
-              {!user.email ? " (no email on file)" : ""}
+              {exportingUser
+                ? t("adminApp.userProfile.exporting")
+                : t("adminApp.userProfile.downloadUserData")}
             </Text>
           </Pressable>
 
           {user.role === "owner" ? (
             <Pressable style={styles.actionBtnSecondary} onPress={onResetPasscode}>
               <Text style={styles.actionBtnSecondaryText}>
-                Reset Settings Passcode
+                {t("adminApp.userProfile.resetSettingsPasscode")}
               </Text>
             </Pressable>
           ) : null}
@@ -472,7 +640,16 @@ export default function UserProfileScreen(): React.JSX.Element {
               style={styles.actionBtnSecondary}
               onPress={() => setPromoteOpen(true)}
             >
-              <Text style={styles.actionBtnSecondaryText}>Promote to Admin</Text>
+              <Text style={styles.actionBtnSecondaryText}>{t("adminApp.userProfile.promoteToAdmin")}</Text>
+            </Pressable>
+          ) : null}
+
+          {canDemote ? (
+            <Pressable
+              style={styles.actionBtnDanger}
+              onPress={() => setDemoteOpen(true)}
+            >
+              <Text style={styles.actionBtnDangerText}>{t("adminApp.userProfile.demoteToOwner")}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -481,22 +658,22 @@ export default function UserProfileScreen(): React.JSX.Element {
       <Modal visible={editOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit profile</Text>
+            <Text style={styles.modalTitle}>{t("adminApp.userProfile.editProfileTitle")}</Text>
             <Text style={styles.warn}>
-              Editing email updates the login credential for this account.
+              {t("adminApp.userProfile.editEmailWarning")}
             </Text>
             <TextInput
               style={styles.input}
               value={editName}
               onChangeText={setEditName}
-              placeholder="Name"
+              placeholder={t("adminApp.userProfile.namePlaceholder")}
               placeholderTextColor={colors.text.secondary}
             />
             <TextInput
               style={styles.input}
               value={editAge}
               onChangeText={setEditAge}
-              placeholder="Age"
+              placeholder={t("adminApp.userProfile.agePlaceholder")}
               keyboardType="number-pad"
               placeholderTextColor={colors.text.secondary}
             />
@@ -504,16 +681,16 @@ export default function UserProfileScreen(): React.JSX.Element {
               style={styles.input}
               value={editEmail}
               onChangeText={setEditEmail}
-              placeholder="Email"
+              placeholder={t("adminApp.userProfile.emailPlaceholder")}
               autoCapitalize="none"
               placeholderTextColor={colors.text.secondary}
             />
             <View style={styles.modalActions}>
               <Pressable onPress={() => setEditOpen(false)}>
-                <Text style={styles.link}>Cancel</Text>
+                <Text style={styles.link}>{t("adminApp.userProfile.cancel")}</Text>
               </Pressable>
               <Pressable onPress={onSaveEdit}>
-                <Text style={styles.linkStrong}>Save</Text>
+                <Text style={styles.linkStrong}>{t("adminApp.userProfile.save")}</Text>
               </Pressable>
             </View>
           </View>
@@ -523,21 +700,21 @@ export default function UserProfileScreen(): React.JSX.Element {
       <Modal visible={phoneOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Update phone (E.164)</Text>
-            <TextInput
-              style={styles.input}
+            <Text style={styles.modalTitle}>{t("adminApp.userProfile.updatePhoneTitle")}</Text>
+            <PhoneInput
               value={phoneVal}
-              onChangeText={setPhoneVal}
-              placeholder="+919876543210"
-              autoCapitalize="none"
-              placeholderTextColor={colors.text.secondary}
+              onChangeValue={setPhoneVal}
+              countryCodeLabel={t("auth.phone.countryCode")}
+              selectCountryLabel={t("auth.phone.selectCountry")}
+              accessibilityLabel={t("auth.phone.number")}
+              inputStyle={styles.input}
             />
             <View style={styles.modalActions}>
               <Pressable onPress={() => setPhoneOpen(false)}>
-                <Text style={styles.link}>Cancel</Text>
+                <Text style={styles.link}>{t("adminApp.userProfile.cancel")}</Text>
               </Pressable>
               <Pressable onPress={onSavePhone}>
-                <Text style={styles.linkStrong}>Save</Text>
+                <Text style={styles.linkStrong}>{t("adminApp.userProfile.save")}</Text>
               </Pressable>
             </View>
           </View>
@@ -547,8 +724,8 @@ export default function UserProfileScreen(): React.JSX.Element {
       <Modal visible={forceOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Force end session</Text>
-            <Text style={styles.subtle}>Reason (required, max 300 chars)</Text>
+            <Text style={styles.modalTitle}>{t("adminApp.userProfile.forceEndTitle")}</Text>
+            <Text style={styles.subtle}>{t("adminApp.userProfile.forceEndReasonHint")}</Text>
             <TextInput
               style={[styles.input, { minHeight: 80 }]}
               value={forceReason}
@@ -563,10 +740,10 @@ export default function UserProfileScreen(): React.JSX.Element {
                   setForceSessionId(null);
                 }}
               >
-                <Text style={styles.link}>Cancel</Text>
+                <Text style={styles.link}>{t("adminApp.userProfile.cancel")}</Text>
               </Pressable>
               <Pressable onPress={onForceEnd}>
-                <Text style={styles.linkStrong}>End session</Text>
+                <Text style={styles.linkStrong}>{t("adminApp.userProfile.endSession")}</Text>
               </Pressable>
             </View>
           </View>
@@ -576,16 +753,15 @@ export default function UserProfileScreen(): React.JSX.Element {
       <Modal visible={promoteOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Promote to Admin</Text>
+            <Text style={styles.modalTitle}>{t("adminApp.userProfile.promoteTitle")}</Text>
             <Text style={styles.warn}>
-              Promote {user.name} to Admin? This grants full platform access. This
-              action cannot be undone. Type CONFIRM to enable the button.
+              {t("adminApp.userProfile.promoteWarning", { name: user.name })}
             </Text>
             <TextInput
               style={styles.input}
               value={promoteConfirm}
               onChangeText={setPromoteConfirm}
-              placeholder="CONFIRM"
+              placeholder={t("common.confirmKeyword")}
               autoCapitalize="characters"
               placeholderTextColor={colors.text.secondary}
             />
@@ -596,7 +772,7 @@ export default function UserProfileScreen(): React.JSX.Element {
                   setPromoteConfirm("");
                 }}
               >
-                <Text style={styles.link}>Cancel</Text>
+                <Text style={styles.link}>{t("adminApp.userProfile.cancel")}</Text>
               </Pressable>
               <Pressable
                 onPress={onPromote}
@@ -608,7 +784,49 @@ export default function UserProfileScreen(): React.JSX.Element {
                     promoteConfirm.trim() !== "CONFIRM" && { opacity: 0.4 },
                   ]}
                 >
-                  Promote
+                  {t("adminApp.userProfile.promote")}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={demoteOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t("adminApp.userProfile.demoteTitle")}</Text>
+            <Text style={styles.warn}>
+              {t("adminApp.userProfile.demoteWarning", { name: user.name })}
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={demoteConfirm}
+              onChangeText={setDemoteConfirm}
+              placeholder={t("common.confirmKeyword")}
+              autoCapitalize="characters"
+              placeholderTextColor={colors.text.secondary}
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => {
+                  setDemoteOpen(false);
+                  setDemoteConfirm("");
+                }}
+              >
+                <Text style={styles.link}>{t("adminApp.userProfile.cancel")}</Text>
+              </Pressable>
+              <Pressable
+                onPress={onDemote}
+                disabled={demoteConfirm.trim() !== "CONFIRM"}
+              >
+                <Text
+                  style={[
+                    styles.linkStrong,
+                    demoteConfirm.trim() !== "CONFIRM" && { opacity: 0.4 },
+                  ]}
+                >
+                  {t("adminApp.userProfile.demote")}
                 </Text>
               </Pressable>
             </View>
@@ -673,6 +891,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing[2],
   },
   bannerDelText: { color: colors.accent.amber, fontWeight: "600" },
+  bannerWarn: {
+    backgroundColor: colors.accent.amber + "22",
+    padding: spacing[3],
+    borderRadius: radius.md,
+    marginBottom: spacing[3],
+  },
+  bannerWarnText: { color: colors.accent.amber, fontWeight: "600" },
   card: {
     backgroundColor: colors.bg.secondary,
     borderRadius: radius.md,

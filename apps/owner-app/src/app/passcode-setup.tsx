@@ -3,23 +3,23 @@ import {
   View,
   Text,
   TextInput,
-  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAction } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { useTranslation } from "@a3/i18n";
 
 const PIN_LENGTH = 6;
 
 type Stage = "enter" | "confirm";
 
 export default function PasscodeSetupScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const setupPasscode = useAction(api.passcodeActions.setupPasscode);
 
@@ -97,7 +97,7 @@ export default function PasscodeSetupScreen() {
     }
 
     if (code !== firstPasscode) {
-      setError("Passcodes do not match. Try again.");
+      setError(t("ownerApp.settings.passcode.mismatch"));
       setStage("enter");
       setFirstPasscode("");
       resetDigits();
@@ -108,11 +108,11 @@ export default function PasscodeSetupScreen() {
     setError(null);
     try {
       await setupPasscode({ passcode: code });
-      router.replace("/(tabs)/slots");
+      router.replace("/(tabs)/home");
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "PASSCODE_003") {
-        router.replace("/(tabs)/slots");
+        router.replace("/(tabs)/home");
         return;
       }
       setError(appError.message);
@@ -122,7 +122,7 @@ export default function PasscodeSetupScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isComplete, loading, stage, code, firstPasscode, setupPasscode, router, resetDigits]);
+  }, [isComplete, loading, stage, code, firstPasscode, setupPasscode, router, resetDigits, t]);
 
   useEffect(() => {
     if (isComplete && !loading) {
@@ -131,19 +131,18 @@ export default function PasscodeSetupScreen() {
   }, [isComplete, loading, handleSubmit]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAvoidingView style={styles.flex} {...iosKeyboardAvoidingProps}>
       <View style={styles.container}>
-        <Text style={styles.logo}>A3</Text>
+        <Text style={styles.logo}>{t("auth.owner.register.logo")}</Text>
         <Text style={styles.title}>
-          {stage === "enter" ? "Set Settings Passcode" : "Confirm Passcode"}
+          {stage === "enter"
+            ? t("ownerApp.settings.passcode.setupTitle")
+            : t("ownerApp.settings.passcode.confirmTitle")}
         </Text>
         <Text style={styles.subtitle}>
           {stage === "enter"
-            ? "Choose a 6-digit PIN to protect your club settings"
-            : "Enter the same 6-digit PIN again to confirm"}
+            ? t("ownerApp.settings.passcode.setupSubtitle")
+            : t("ownerApp.settings.passcode.confirmSubtitle")}
         </Text>
 
         <View style={styles.codeRow}>
@@ -168,7 +167,10 @@ export default function PasscodeSetupScreen() {
               secureTextEntry
               autoFocus={i === 0}
               editable={!loading}
-              accessibilityLabel={`Digit ${i + 1} of ${PIN_LENGTH}`}
+              accessibilityLabel={t("auth.owner.verifyPhone.digitLabel", {
+                index: i + 1,
+                total: PIN_LENGTH,
+              })}
               selectTextOnFocus
             />
           ))}
@@ -187,15 +189,12 @@ export default function PasscodeSetupScreen() {
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
-            <Text style={styles.errorDot}>Error</Text>
+            <Text style={styles.errorDot}>{t("ownerApp.settings.passcode.error")}</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
 
-        <Text style={styles.hint}>
-          You'll need this passcode every time you access Settings or approve
-          staff actions.
-        </Text>
+        <Text style={styles.hint}>{t("ownerApp.settings.passcode.setupHint")}</Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -268,7 +267,7 @@ const styles = StyleSheet.create({
   errorDot: {
     ...typography.labelSmall,
     color: colors.status.error,
-    marginRight: spacing[2],
+    marginEnd: spacing[2],
   },
   errorText: {
     ...typography.bodySmall,

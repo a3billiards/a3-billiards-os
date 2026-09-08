@@ -7,7 +7,12 @@ import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
-import { colors, typography } from "@a3/ui/theme";
+import { colors, typography, glass } from "@a3/ui/theme";
+import { ensureI18nInitialized, useTranslation } from "@a3/i18n";
+import { I18nConvexBridge } from "../lib/I18nConvexBridge";
+
+ensureI18nInitialized();
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 try {
   void SplashScreen.preventAutoHideAsync();
@@ -36,18 +41,15 @@ const secureStorage: TokenStorage = {
 };
 
 function MissingConfigScreen() {
+  const { t } = useTranslation();
   useEffect(() => {
     void SplashScreen.hideAsync().catch(() => {});
   }, []);
   return (
     <View style={configErrorStyles.root}>
       <Text style={configErrorStyles.icon}>⚠️</Text>
-      <Text style={configErrorStyles.heading}>Configuration Error</Text>
-      <Text style={configErrorStyles.body}>
-        EXPO_PUBLIC_CONVEX_URL is missing from this build. The app cannot
-        connect to the backend. Please reinstall the latest build or contact
-        support at support@a3billiards.com.
-      </Text>
+      <Text style={configErrorStyles.heading}>{t("common.config.missingConvexTitle")}</Text>
+      <Text style={configErrorStyles.body}>{t("common.config.missingConvexBody")}</Text>
     </View>
   );
 }
@@ -55,38 +57,60 @@ function MissingConfigScreen() {
 function SplashHider() {
   const { isLoading } = useConvexAuth();
   useEffect(() => {
+    void SplashScreen.hideAsync().catch(() => {});
+  }, []);
+  useEffect(() => {
     if (!isLoading) {
       void SplashScreen.hideAsync().catch(() => {});
     }
   }, [isLoading]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void SplashScreen.hideAsync().catch(() => {});
+    }, 3000);
+    return () => clearTimeout(t);
+  }, []);
   return null;
 }
 
+const sentryReady =
+  Boolean(SENTRY_DSN) &&
+  !SENTRY_DSN.includes("xxxx") &&
+  SENTRY_DSN.startsWith("https://");
+
 function RootLayout() {
   if (!convex) {
-    return <MissingConfigScreen />;
+    return (
+      <SafeAreaProvider>
+        <MissingConfigScreen />
+      </SafeAreaProvider>
+    );
   }
   return (
-    <ConvexAuthProvider client={convex} storage={secureStorage}>
-      <SplashHider />
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.bg.primary },
-          animation: "fade",
-        }}
-      />
-    </ConvexAuthProvider>
+    <SafeAreaProvider>
+      <ConvexAuthProvider client={convex} storage={secureStorage}>
+        <I18nConvexBridge>
+          <SplashHider />
+          <StatusBar style="light" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: glass.pageBgBottom },
+              animation: "fade",
+            }}
+          />
+        </I18nConvexBridge>
+      </ConvexAuthProvider>
+    </SafeAreaProvider>
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default sentryReady ? Sentry.wrap(RootLayout) : RootLayout;
 
 const configErrorStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: glass.pageBgBottom,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,

@@ -13,9 +13,10 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  mutation,
   query,
 } from "./_generated/server";
-import { requireViewer } from "./model/viewer";
+import { requireAdminWithMfa, requireViewer } from "./model/viewer";
 import { computeBookingUnixTime } from "@a3/utils/timezone";
 
 const targetTypeV = v.union(
@@ -30,11 +31,55 @@ function throwErr(message: string): never {
 }
 
 async function requireAdminViewer(ctx: Parameters<typeof requireViewer>[0]) {
-  const viewer = await requireViewer(ctx);
-  if (viewer.role !== "admin") {
-    throwErr("AUTH_001: Admin authentication required");
+  return requireAdminWithMfa(ctx);
+}
+
+/** Users matching target audience (ignores push tokens). */
+function countMatchingUsers(
+  allUsers: Doc<"users">[],
+  args: {
+    targetType: "all" | "role" | "selected";
+    targetRole?: "owner" | "customer";
+    targetUserIds?: Id<"users">[];
+  },
+): number {
+  const { targetType, targetRole, targetUserIds } = args;
+  if (targetType === "all") {
+    return allUsers.filter((u) => !u.isFrozen).length;
   }
-  return viewer;
+  if (targetType === "role") {
+    if (targetRole !== "owner" && targetRole !== "customer") return 0;
+    return allUsers.filter(
+      (u) => u.role === targetRole && !u.isFrozen,
+    ).length;
+  }
+  if (!targetUserIds || targetUserIds.length === 0) return 0;
+  const idSet = new Set(targetUserIds);
+  return allUsers.filter((u) => idSet.has(u._id)).length;
+}
+
+/** All users matching broadcast audience (in-app inbox), regardless of push tokens. */
+function resolveAllTargetUsers(
+  allUsers: Doc<"users">[],
+  args: {
+    targetType: "all" | "role" | "selected";
+    targetRole?: "owner" | "customer";
+    targetUserIds?: Id<"users">[];
+  },
+): Doc<"users">[] {
+  const { targetType, targetRole, targetUserIds } = args;
+  if (targetType === "all") {
+    return allUsers.filter((u) => !u.isFrozen);
+  }
+  if (targetType === "role") {
+    if (targetRole !== "owner" && targetRole !== "customer") return [];
+    return allUsers.filter(
+      (u) => u.role === targetRole && !u.isFrozen,
+    );
+  }
+  if (!targetUserIds || targetUserIds.length === 0) return [];
+  const idSet = new Set(targetUserIds);
+  return allUsers.filter((u) => idSet.has(u._id));
 }
 
 /** Resolve users who will receive a broadcast (with ≥1 token). */
@@ -77,18 +122,27 @@ export const getRecipientCount = query({
   },
   handler: async (ctx, args) => {
     await requireAdminViewer(ctx);
-    const all = await ctx.db.query("users").collect();
     if (args.targetType === "selected") {
       const ids = args.targetUserIds ?? [];
-      let count = 0;
+      let withPush = 0;
       for (const id of ids) {
         const u = await ctx.db.get(id);
-        if (u && u.fcmTokens.length > 0) count += 1;
+        if (u && u.fcmTokens.length > 0) withPush += 1;
       }
-      return { count };
+      return {
+        count: withPush,
+        matchingUsers: ids.length,
+        withPushEnabled: withPush,
+      };
     }
+    const all = await ctx.db.query("users").collect();
     const recipients = resolveRecipientUsers(all, args);
-    return { count: recipients.length };
+    const matchingUsers = countMatchingUsers(all, args);
+    return {
+      count: recipients.length,
+      matchingUsers,
+      withPushEnabled: recipients.length,
+    };
   },
 });
 
@@ -231,6 +285,8 @@ export const internalInsertAdminBroadcast = internalMutation({
     createdAt: v.number(),
   },
   handler: async (ctx, args) => {
+    const allUsers = await ctx.db.query("users").collect();
+    const targetUsers = resolveAllTargetUsers(allUsers, args);
     const id = await ctx.db.insert("adminNotifications", {
       sentByAdminId: args.sentByAdminId,
       title: args.title,
@@ -241,7 +297,18 @@ export const internalInsertAdminBroadcast = internalMutation({
       deliveryStatus: {},
       createdAt: args.createdAt,
     });
-    return { notificationId: id };
+    for (const user of targetUsers) {
+      await ctx.db.insert("userInboxNotifications", {
+        userId: user._id,
+        adminNotificationId: id,
+        kind: "admin_broadcast",
+        title: args.title,
+        body: args.body,
+        isRead: false,
+        createdAt: args.createdAt,
+      });
+    }
+    return { notificationId: id, inboxCount: targetUsers.length };
   },
 });
 
@@ -271,6 +338,9 @@ export const internalAssertAdmin = internalQuery({
     const u = await ctx.db.get(userId);
     if (!u || u.role !== "admin") {
       throw new Error("AUTH_001: Admin authentication required");
+    }
+    if (!u.adminMfaVerifiedAt) {
+      throw new Error("AUTH_003: Admin MFA verification required");
     }
     return { ok: true as const };
   },
@@ -306,6 +376,136 @@ export const getNotificationRecipientBreakdown = query({
     }
 
     return { delivered, failed, moreDelivered, moreFailed };
+  },
+});
+
+// ── User in-app inbox (owner + customer) ────────────────────────────────────
+
+async function requireInboxViewer(ctx: Parameters<typeof requireViewer>[0]) {
+  const viewer = await requireViewer(ctx);
+  if (
+    viewer.role !== "owner" &&
+    viewer.role !== "customer"
+  ) {
+    throwErr("PERM_001: Inbox not available for this account");
+  }
+  return viewer;
+}
+
+export const getUnreadInboxCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const viewer = await requireInboxViewer(ctx);
+    const rows = await ctx.db
+      .query("userInboxNotifications")
+      .withIndex("by_user_isRead_createdAt", (q) =>
+        q.eq("userId", viewer.userId).eq("isRead", false),
+      )
+      .collect();
+    return { count: rows.length };
+  },
+});
+
+export const getLatestUnreadInboxNotification = query({
+  args: {},
+  handler: async (ctx) => {
+    const viewer = await requireInboxViewer(ctx);
+    const rows = await ctx.db
+      .query("userInboxNotifications")
+      .withIndex("by_user_isRead_createdAt", (q) =>
+        q.eq("userId", viewer.userId).eq("isRead", false),
+      )
+      .order("desc")
+      .take(1);
+    const latest = rows[0];
+    if (!latest) return null;
+    return {
+      _id: latest._id,
+      title: latest.title,
+      body: latest.body,
+      kind: latest.kind,
+      isRead: latest.isRead,
+      createdAt: latest.createdAt,
+    };
+  },
+});
+
+export const listMyInboxNotifications = query({
+  args: {
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { cursor, limit: limitArg }) => {
+    const viewer = await requireInboxViewer(ctx);
+    const limit = Math.min(Math.max(limitArg ?? 30, 1), 50);
+
+    let maxCreatedAtExclusive: number | undefined;
+    if (cursor !== undefined && cursor.length > 0) {
+      const ts = Number(cursor.split(":")[0]);
+      if (!Number.isNaN(ts)) maxCreatedAtExclusive = ts;
+    }
+
+    let q = ctx.db
+      .query("userInboxNotifications")
+      .withIndex("by_user_createdAt", (iq) => {
+        const base = iq.eq("userId", viewer.userId);
+        return maxCreatedAtExclusive !== undefined
+          ? base.lt("createdAt", maxCreatedAtExclusive)
+          : base;
+      })
+      .order("desc");
+
+    const batch = await q.take(limit + 1);
+    const hasMore = batch.length > limit;
+    const slice = hasMore ? batch.slice(0, limit) : batch;
+    const nextCursor =
+      hasMore && slice.length > 0
+        ? `${slice[slice.length - 1].createdAt}:${slice[slice.length - 1]._id}`
+        : null;
+
+    return {
+      notifications: slice.map((row) => ({
+        _id: row._id,
+        title: row.title,
+        body: row.body,
+        kind: row.kind,
+        isRead: row.isRead,
+        createdAt: row.createdAt,
+      })),
+      nextCursor,
+    };
+  },
+});
+
+export const markInboxNotificationRead = mutation({
+  args: { notificationId: v.id("userInboxNotifications") },
+  handler: async (ctx, { notificationId }) => {
+    const viewer = await requireInboxViewer(ctx);
+    const row = await ctx.db.get(notificationId);
+    if (!row || row.userId !== viewer.userId) {
+      throwErr("DATA_003: Notification not found");
+    }
+    if (!row.isRead) {
+      await ctx.db.patch(notificationId, { isRead: true });
+    }
+    return { ok: true as const };
+  },
+});
+
+export const markAllInboxNotificationsRead = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const viewer = await requireInboxViewer(ctx);
+    const unread = await ctx.db
+      .query("userInboxNotifications")
+      .withIndex("by_user_isRead_createdAt", (q) =>
+        q.eq("userId", viewer.userId).eq("isRead", false),
+      )
+      .collect();
+    for (const row of unread) {
+      await ctx.db.patch(row._id, { isRead: true });
+    }
+    return { marked: unread.length };
   },
 });
 
@@ -363,6 +563,209 @@ export const getBookingForNotification = internalQuery({
       .withIndex("by_bookingId", (q) => q.eq("bookingId", bookingId))
       .unique();
     return { booking, club, customer, owner, log };
+  },
+});
+
+export const getKitchenOrderForNotification = internalQuery({
+  args: { orderId: v.id("kitchenOrders") },
+  handler: async (ctx, { orderId }) => {
+    const order = await ctx.db.get(orderId);
+    if (!order) return null;
+    const club = await ctx.db.get(order.clubId);
+    if (!club) return null;
+    const owner = await ctx.db.get(club.ownerId);
+    const table = await ctx.db.get(order.tableId);
+    return {
+      order,
+      club,
+      owner,
+      tableLabel: table?.label ?? "Table",
+    };
+  },
+});
+
+function formatKitchenItemSummary(
+  items: { name: string; qty: number }[],
+): string {
+  if (items.length === 0) return "Snacks";
+  const head = items
+    .slice(0, 3)
+    .map((i) => `${i.qty}× ${i.name}`)
+    .join(", ");
+  if (items.length > 3) return `${head}, +${items.length - 3} more`;
+  return head;
+}
+
+export const insertOwnerInboxNotification = internalMutation({
+  args: {
+    userId: v.id("users"),
+    kind: v.union(
+      v.literal("admin_broadcast"),
+      v.literal("kitchen_order_preparing"),
+      v.literal("kitchen_order_ready"),
+      v.literal("kitchen_order_served"),
+      v.literal("kitchen_item_unavailable"),
+    ),
+    title: v.string(),
+    body: v.string(),
+    kitchenOrderId: v.optional(v.id("kitchenOrders")),
+    adminNotificationId: v.optional(v.id("adminNotifications")),
+    createdAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("userInboxNotifications", {
+      userId: args.userId,
+      kind: args.kind,
+      title: args.title,
+      body: args.body,
+      kitchenOrderId: args.kitchenOrderId,
+      adminNotificationId: args.adminNotificationId,
+      isRead: false,
+      createdAt: args.createdAt,
+    });
+    return { ok: true as const };
+  },
+});
+
+/** Owner account push — kitchen tablet + floor device if both registered. */
+export const notifyKitchenNewOrder = internalAction({
+  args: { orderId: v.id("kitchenOrders") },
+  handler: async (ctx, { orderId }) => {
+    const row = await ctx.runQuery(
+      internal.notifications.getKitchenOrderForNotification,
+      { orderId },
+    );
+    if (!row?.owner) return;
+    const tokens = row.owner.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+    const summary = formatKitchenItemSummary(row.order.items);
+    const body = `${row.tableLabel}: ${summary}`;
+    await ctx.runAction(internal.notifications.deliverFcm, {
+      tokens,
+      title: "New Kitchen Order",
+      body,
+      data: { screen: "kitchen" },
+    });
+  },
+});
+
+/** Owner + floor staff devices — alert when chef advances an order. */
+export const notifyKitchenOrderStatus = internalAction({
+  args: {
+    orderId: v.id("kitchenOrders"),
+    status: v.union(
+      v.literal("preparing"),
+      v.literal("ready"),
+      v.literal("served"),
+    ),
+  },
+  handler: async (ctx, { orderId, status }) => {
+    const row = await ctx.runQuery(
+      internal.notifications.getKitchenOrderForNotification,
+      { orderId },
+    );
+    if (!row?.owner) return;
+    const summary = formatKitchenItemSummary(row.order.items);
+    const tablePart = row.tableLabel;
+    const copy: Record<
+      typeof status,
+      { title: string; body: string; kind: "kitchen_order_preparing" | "kitchen_order_ready" | "kitchen_order_served" }
+    > = {
+      preparing: {
+        title: "Kitchen Order Preparing",
+        body: `${tablePart} — ${summary}. Now preparing.`,
+        kind: "kitchen_order_preparing",
+      },
+      ready: {
+        title: "Kitchen Order Ready",
+        body: `${tablePart} — ${summary}. Ready to serve.`,
+        kind: "kitchen_order_ready",
+      },
+      served: {
+        title: "Kitchen Order Served",
+        body: `${tablePart} — ${summary}. Served.`,
+        kind: "kitchen_order_served",
+      },
+    };
+    const { title, body, kind } = copy[status];
+    const now = Date.now();
+
+    await ctx.runMutation(internal.notifications.insertOwnerInboxNotification, {
+      userId: row.owner._id,
+      kind,
+      title,
+      body,
+      kitchenOrderId: orderId,
+      createdAt: now,
+    });
+
+    const tokens = row.owner.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+    await ctx.runAction(internal.notifications.deliverFcm, {
+      tokens,
+      title,
+      body,
+      data: { screen: "kitchen" },
+    });
+  },
+});
+
+/** Owner + staff inbox + push when chef reports an order unavailable. */
+export const notifyKitchenOrderUnavailable = internalAction({
+  args: { orderId: v.id("kitchenOrders") },
+  handler: async (ctx, { orderId }) => {
+    const row = await ctx.runQuery(
+      internal.notifications.getKitchenOrderForNotification,
+      { orderId },
+    );
+    if (!row?.owner) return;
+
+    const summary = formatKitchenItemSummary(row.order.items);
+    const title = "Kitchen Item Unavailable";
+    const body = `${row.tableLabel}: Chef reports items unavailable (${summary}). Confirm in Kitchen.`;
+    const now = Date.now();
+
+    await ctx.runMutation(internal.notifications.insertOwnerInboxNotification, {
+      userId: row.owner._id,
+      kind: "kitchen_item_unavailable",
+      title,
+      body,
+      kitchenOrderId: orderId,
+      createdAt: now,
+    });
+
+    const tokens = row.owner.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+    await ctx.runAction(internal.notifications.deliverFcm, {
+      tokens,
+      title,
+      body,
+      data: { screen: "kitchen" },
+    });
+  },
+});
+
+/** @deprecated Use notifyKitchenOrderUnavailable */
+export const notifyKitchenItemUnavailable = internalAction({
+  args: {
+    orderId: v.id("kitchenOrders"),
+    itemIndex: v.number(),
+  },
+  handler: async (ctx, { orderId }) => {
+    await ctx.runAction(internal.notifications.notifyKitchenOrderUnavailable, {
+      orderId,
+    });
+  },
+});
+
+/** @deprecated Use notifyKitchenOrderStatus — kept for in-flight schedulers. */
+export const notifyKitchenOrderReady = internalAction({
+  args: { orderId: v.id("kitchenOrders") },
+  handler: async (ctx, { orderId }) => {
+    await ctx.runAction(internal.notifications.notifyKitchenOrderStatus, {
+      orderId,
+      status: "ready",
+    });
   },
 });
 
@@ -916,5 +1319,26 @@ export const sendRenewalConfirmationEmail = internalAction({
         newExpiryDate,
       },
     );
+  },
+});
+
+export const notifyOwnerStreamForceEnded = internalAction({
+  args: {
+    clubId: v.id("clubs"),
+    reason: v.string(),
+  },
+  handler: async (ctx, { clubId, reason }) => {
+    const owner = await ctx.runQuery(internal.notifications.getClubOwner, { clubId });
+    if (!owner) return;
+    const tokens = owner.fcmTokens ?? [];
+    if (tokens.length === 0) return;
+    const body =
+      reason.length > 120 ? `${reason.slice(0, 117)}…` : reason;
+    await ctx.runAction(internal.notifications.deliverFcm, {
+      tokens,
+      title: "Live stream ended by admin",
+      body: `Your broadcast was force-ended. Reason: ${body}`,
+      data: { screen: "livestream", endedReason: "admin_force_ended" },
+    });
   },
 });

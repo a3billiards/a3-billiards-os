@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -10,8 +10,9 @@ import {
 import {
   formatHhmm12h,
   STALE_SLOT_WARNING_MS,
+  buildBookableSlotTimes,
 } from "@a3/utils/availability";
-import { hhmmToMinutes } from "@a3/utils/timezone";
+import { useTranslation, getCurrentLanguage } from "@a3/i18n";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing, radius, layout } from "../theme/spacing";
@@ -34,31 +35,28 @@ export function TimeSlotGrid({
   bookableOpen,
   bookableClose,
 }: TimeSlotGridProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = getCurrentLanguage();
   const [staleBanner, setStaleBanner] = useState(false);
   const warnedRef = useRef(false);
 
   useEffect(() => {
     warnedRef.current = false;
     setStaleBanner(false);
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       if (!warnedRef.current) {
         warnedRef.current = true;
         setStaleBanner(true);
       }
     }, STALE_SLOT_WARNING_MS);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [availableSlots, requestedDurationMin, bookableOpen, bookableClose]);
 
-  const openMin = hhmmToMinutes(bookableOpen);
-  const closeMin = hhmmToMinutes(bookableClose);
-  const allSlots: string[] = [];
-  for (let m = openMin; m < closeMin; m += 30) {
-    const end = m + requestedDurationMin;
-    if (end > closeMin) break;
-    const hh = String(Math.floor(m / 60)).padStart(2, "0");
-    const mm = String(m % 60).padStart(2, "0");
-    allSlots.push(`${hh}:${mm}`);
-  }
+  const allSlots = buildBookableSlotTimes(
+    bookableOpen,
+    bookableClose,
+    requestedDurationMin,
+  );
 
   const availableSet = new Set(availableSlots ?? []);
 
@@ -67,29 +65,39 @@ export function TimeSlotGrid({
     onSelectTime(slot);
   };
 
+  const formatSlot = (slot: string) => formatHhmm12h(slot, locale);
+
   if (availableSlots === undefined) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={colors.accent.green} />
-        <Text style={styles.loadingText}>Loading slots…</Text>
+        <Text style={styles.loadingText}>{t("sharedUi.timeSlotGrid.loading")}</Text>
       </View>
     );
   }
 
   if (allSlots.length === 0) {
     return (
-      <Text style={styles.empty}>
-        No time slots for this date and duration.
-      </Text>
+      <Text style={styles.empty}>{t("sharedUi.timeSlotGrid.noSlots")}</Text>
     );
   }
 
   if (availableSlots.length === 0) {
     return (
-      <Text style={styles.empty}>
-        No available slots for this date and duration. Try a different date or
-        duration.
-      </Text>
+      <View style={styles.wrap}>
+        <Text style={styles.title}>{t("sharedUi.timeSlotGrid.pickStart")}</Text>
+        <Text style={styles.empty}>{t("sharedUi.timeSlotGrid.noTimesOpen")}</Text>
+        <View style={styles.grid}>
+          {allSlots.map((slot) => (
+            <View key={slot} style={[styles.slot, styles.slotDisabled]}>
+              <Text style={[styles.slotText, styles.slotTextDisabled]}>
+                {formatSlot(slot)}
+              </Text>
+              <Text style={styles.bookedHint}>{t("sharedUi.timeSlotGrid.unavailable")}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
     );
   }
 
@@ -97,13 +105,10 @@ export function TimeSlotGrid({
     <View style={styles.wrap}>
       {staleBanner ? (
         <View style={styles.banner}>
-          <Text style={styles.bannerText}>
-            Availability updates in real time — re-check your selection before
-            submitting.
-          </Text>
+          <Text style={styles.bannerText}>{t("sharedUi.timeSlotGrid.realtimeNote")}</Text>
         </View>
       ) : null}
-      <Text style={styles.title}>Pick a start time</Text>
+      <Text style={styles.title}>{t("sharedUi.timeSlotGrid.pickStart")}</Text>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.gridScroll}
@@ -131,10 +136,10 @@ export function TimeSlotGrid({
                     selected && styles.slotTextSelected,
                   ]}
                 >
-                  {formatHhmm12h(slot)}
+                  {formatSlot(slot)}
                 </Text>
                 {!isAvailable ? (
-                  <Text style={styles.bookedHint}>Unavailable</Text>
+                  <Text style={styles.bookedHint}>{t("sharedUi.timeSlotGrid.unavailable")}</Text>
                 ) : null}
               </Pressable>
             );

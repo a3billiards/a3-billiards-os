@@ -10,18 +10,22 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useMutation, useAction, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, typography, spacing, radius, layout, glass, iosKeyboardAvoidingProps, keyboardScrollDefaults } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import QRCode from "react-native-qrcode-svg";
+import { LanguagePicker, getCurrentLanguage, useTranslation } from "@a3/i18n";
 
 function formatMemberSince(createdAt: number): string {
-  return new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(
+  return new Intl.DateTimeFormat(getCurrentLanguage(), { month: "long", year: "numeric" }).format(
     new Date(createdAt),
   );
 }
@@ -38,8 +42,12 @@ function isValidEmailLoose(s: string): boolean {
 
 export default function ProfileScreen(): React.JSX.Element {
   const router = useRouter();
+  const { t, i18n } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const { signOut } = useAuthActions();
   const user = useQuery(api.users.getCurrentUser);
+  const hasLoginPassword = useQuery(api.customerAuth.hasLoginPassword);
+  const canCreateLoginPassword = useQuery(api.customerAuth.canCreateLoginPassword);
 
   const updateProfile = useMutation(api.users.updateCustomerProfile);
   const requestDeletion = useAction(api.deletionActions.requestCustomerDeletion);
@@ -91,7 +99,7 @@ export default function ProfileScreen(): React.JSX.Element {
     googleId && userEmail && String(userEmail).trim().length > 0,
   );
   const emailEditableGoogle = Boolean(googleId && !emailReadOnlyGoogle);
-  const isPasswordAccount = !googleId;
+  const isPasswordAccount = Boolean(hasLoginPassword) && !googleId;
   const canExportData = Boolean(userEmail && String(userEmail).trim().length > 0);
 
   const dirty = useMemo(() => {
@@ -162,9 +170,9 @@ export default function ProfileScreen(): React.JSX.Element {
       if (changedEmail) args.email = email.trim();
       await updateProfile(args);
       if (changedEmail && !changedName && !changedAge) {
-        Alert.alert("Email updated.");
+        Alert.alert(t("customerApp.profile.emailUpdated"));
       } else {
-        Alert.alert("Profile updated.");
+        Alert.alert(t("customerApp.profile.profileUpdated"));
       }
     } catch (e) {
       const parsed = parseConvexError(e as Error);
@@ -177,7 +185,7 @@ export default function ProfileScreen(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [user, canSave, name, age, email, updateProfile]);
+  }, [user, canSave, name, age, email, updateProfile, t]);
 
   const onConfirmExport = useCallback(async () => {
     if (!user?.email) return;
@@ -186,20 +194,20 @@ export default function ProfileScreen(): React.JSX.Element {
       await requestDataExport();
       setSheet(null);
       Alert.alert(
-        "Export requested",
-        `Export requested. Check ${user.email} within 72 hours.`,
+        t("customerApp.profile.exportRequested"),
+        t("customerApp.profile.exportRequestedBody", { email: user.email }),
       );
     } catch (e) {
       const raw = (e as Error).message;
       if (raw.includes("RATE_001")) {
-        Alert.alert("You can only request a data export once every 24 hours.");
+        Alert.alert(t("customerApp.profile.exportRateLimit"));
       } else {
         Alert.alert(parseConvexError(e as Error).message);
       }
     } finally {
       setExportLoading(false);
     }
-  }, [user?.email, requestDataExport]);
+  }, [user?.email, requestDataExport, t]);
 
   const runDeletion = useCallback(async () => {
     setDeleteLoading(true);
@@ -211,27 +219,26 @@ export default function ProfileScreen(): React.JSX.Element {
       });
       setSheet("deleteSuccess");
       setDeleteConfirmText("");
-    } catch {
-      Alert.alert("Something went wrong. Please try again.");
+    } catch (e) {
+      Alert.alert(parseConvexError(e as Error).message || t("customerApp.profile.deletionFailed"));
     } finally {
       setDeleteLoading(false);
     }
-  }, [requestDeletion, user?.email]);
+  }, [requestDeletion, user?.email, t]);
 
-  const finishDeletionSignOut = useCallback(async () => {
-    try {
-      await signOut();
-    } catch {
-      /* ignore */
-    }
-    router.replace("/login");
-  }, [signOut, router]);
+  const finishDeletionSignOut = useCallback(() => {
+    setSheet(null);
+    router.replace({
+      pathname: "/account-blocked",
+      params: { reason: "deletion" },
+    });
+  }, [router]);
 
   const onSignOut = useCallback(() => {
-    Alert.alert("Sign out", "Sign out of your account?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("customerApp.profile.signOut"), t("customerApp.profile.signOutConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Sign out",
+        text: t("customerApp.profile.signOut"),
         style: "destructive",
         onPress: async () => {
           try {
@@ -243,74 +250,95 @@ export default function ProfileScreen(): React.JSX.Element {
         },
       },
     ]);
-  }, [signOut, router]);
+  }, [signOut, router, t]);
 
   if (user === undefined) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent.green} />
-        </View>
-      </SafeAreaView>
+      <GlassPageBackground>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <View style={styles.center}>
+            <ActivityIndicator color={glass.ctaBg} />
+          </View>
+        </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   if (user === null) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.center}>
-          <Text style={styles.muted}>Sign in to manage your profile.</Text>
-        </View>
-      </SafeAreaView>
+      <GlassPageBackground>
+        <SafeAreaView style={styles.safe} edges={["top"]}>
+          <View style={styles.center}>
+            <Text style={styles.muted}>{t("customerApp.profile.signInRequired")}</Text>
+          </View>
+        </SafeAreaView>
+      </GlassPageBackground>
     );
   }
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.screenTitle}>Profile</Text>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        {...keyboardScrollDefaults}
+      >
+        <Text style={styles.screenTitle}>{t("customerApp.profile.title")}</Text>
+
+        <View style={styles.card}>
+          <LanguagePicker />
+        </View>
 
         <View style={styles.hero}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
           <Text style={styles.heroName}>{user.name}</Text>
-          <Text style={styles.heroMeta}>Customer</Text>
-          <Text style={styles.heroMeta}>Member since {formatMemberSince(user.createdAt)}</Text>
+          <Text style={styles.heroMeta}>{t("customerApp.profile.customerRole")}</Text>
+          <Text style={styles.heroMeta}>
+            {t("customerApp.profile.memberSince", {
+              date: formatMemberSince(user.createdAt),
+            })}
+          </Text>
         </View>
 
-        <Text style={styles.sectionLabel}>Personal Info</Text>
+        <Text style={styles.sectionLabel}>{t("customerApp.profile.personalInfo")}</Text>
         <View style={styles.card}>
           <FieldRow
-            label="Name"
+            label={t("customerApp.profile.name")}
             value={name}
             onPress={() => openSheet("name")}
             error={fieldErrors.name}
           />
           <View style={styles.divider} />
           <FieldRow
-            label="Age"
+            label={t("customerApp.profile.age")}
             value={age}
             onPress={() => openSheet("age")}
             error={fieldErrors.age}
-            hint="Age must be 18 or older."
+            hint={t("customerApp.profile.ageHint")}
           />
           <View style={styles.divider} />
           {emailReadOnlyGoogle ? (
             <>
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.rowLabel}>Email</Text>
+                  <Text style={styles.rowLabel}>{t("customerApp.profile.email")}</Text>
                   <Text style={styles.rowValue}>{user.email}</Text>
-                  <Text style={styles.lockNote}>🔒 Managed by Google</Text>
+                  <Text style={styles.lockNote}>{t("customerApp.profile.managedByGoogle")}</Text>
                 </View>
               </View>
             </>
           ) : (
             <FieldRow
-              label="Email"
+              label={t("customerApp.profile.email")}
               value={email || (emailEditableGoogle ? "" : user.email ?? "")}
-              placeholder={emailEditableGoogle ? "Add an email address" : undefined}
+              placeholder={
+                emailEditableGoogle ? t("customerApp.profile.addEmailPlaceholder") : undefined
+              }
               onPress={() => openSheet("email")}
               error={fieldErrors.email}
             />
@@ -318,15 +346,18 @@ export default function ProfileScreen(): React.JSX.Element {
           <View style={styles.divider} />
           <Pressable
             onLongPress={() =>
-              Alert.alert("Phone number", "Contact support to update your phone number.")
+              Alert.alert(
+                t("customerApp.profile.phoneAlertTitle"),
+                t("customerApp.profile.phoneAlertMessage"),
+              )
             }
             delayLongPress={400}
           >
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rowLabel}>Phone</Text>
+                <Text style={styles.rowLabel}>{t("customerApp.profile.phone")}</Text>
                 <Text style={styles.rowValue}>{formatPhoneDisplay(user.phone)}</Text>
-                <Text style={styles.lockNote}>🔒 Phone number cannot be changed.</Text>
+                <Text style={styles.lockNote}>{t("customerApp.profile.phoneLocked")}</Text>
               </View>
             </View>
           </Pressable>
@@ -343,24 +374,65 @@ export default function ProfileScreen(): React.JSX.Element {
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.saveBtnText}>Save Changes</Text>
+              <Text style={styles.saveBtnText}>{t("customerApp.profile.saveChanges")}</Text>
             )}
           </Pressable>
         ) : null}
 
-        {isPasswordAccount ? (
+        {canCreateLoginPassword || isPasswordAccount ? (
           <>
-            <Text style={[styles.sectionLabel, { marginTop: spacing[4] }]}>Account Security</Text>
+            <Text style={[styles.sectionLabel, { marginTop: spacing[4] }]}>
+              {t("customerApp.profile.accountSecurity")}
+            </Text>
             <View style={styles.card}>
-              <Pressable style={styles.linkRow} onPress={() => router.push("/change-password")}>
-                <Text style={styles.rowLabel}>Change Password</Text>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
+              {canCreateLoginPassword ? (
+                <Pressable
+                  style={styles.linkRow}
+                  onPress={() => router.push("/set-password")}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowLabel}>
+                      {t("customerApp.profile.createLoginPassword")}
+                    </Text>
+                    <Text style={styles.subtitle}>
+                      {t("customerApp.profile.createLoginPasswordHint")}
+                    </Text>
+                  </View>
+                  <Text style={styles.chevron}>›</Text>
+                </Pressable>
+              ) : null}
+              {canCreateLoginPassword && isPasswordAccount ? (
+                <View style={styles.divider} />
+              ) : null}
+              {isPasswordAccount ? (
+                <Pressable
+                  style={styles.linkRow}
+                  onPress={() => router.push("/change-password")}
+                >
+                  <Text style={styles.rowLabel}>{t("customerApp.profile.changePassword")}</Text>
+                  <Text style={styles.chevron}>›</Text>
+                </Pressable>
+              ) : null}
             </View>
           </>
         ) : null}
 
-        <Text style={[styles.sectionLabel, { marginTop: spacing[4] }]}>Data & Privacy</Text>
+        <Text style={[styles.sectionLabel, { marginTop: spacing[4] }]}>
+          {t("customerApp.help.title")}
+        </Text>
+        <View style={styles.card}>
+          <Pressable style={styles.linkRow} onPress={() => router.push("/help")}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>{t("customerApp.help.profileLink")}</Text>
+              <Text style={styles.subtitle}>{t("customerApp.help.profileLinkHint")}</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
+
+        <Text style={[styles.sectionLabel, { marginTop: spacing[4] }]}>
+          {t("customerApp.profile.dataPrivacy")}
+        </Text>
         <View style={styles.card}>
           <Pressable
             style={[styles.linkRow, !canExportData && styles.rowDisabled]}
@@ -369,12 +441,12 @@ export default function ProfileScreen(): React.JSX.Element {
           >
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, !canExportData && styles.textDisabled]}>
-                Download My Data
+                {t("customerApp.profile.downloadMyData")}
               </Text>
               <Text style={styles.subtitle}>
                 {canExportData
-                  ? "Receive a JSON export of your data via email"
-                  : "Add an email address to request your data"}
+                  ? t("customerApp.profile.exportViaEmail")
+                  : t("customerApp.profile.addEmailForExport")}
               </Text>
             </View>
             <Text style={[styles.chevron, !canExportData && styles.textDisabled]}>›</Text>
@@ -382,14 +454,32 @@ export default function ProfileScreen(): React.JSX.Element {
           <View style={styles.divider} />
           <Pressable style={styles.linkRow} onPress={() => setSheet("delete1")}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.deleteLabel}>Delete Account</Text>
-              <Text style={styles.subtitle}>Permanently delete your account after 30 days</Text>
+              <Text style={styles.deleteLabel}>{t("customerApp.profile.deleteAccount")}</Text>
+              <Text style={styles.subtitle}>{t("customerApp.profile.deleteAccountSubtitle")}</Text>
             </View>
           </Pressable>
         </View>
 
+        {user?._id ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>{t("customerApp.profile.checkInCode")}</Text>
+            <Text style={styles.subtitle}>{t("customerApp.profile.checkInCodeHint", { id: user._id })}</Text>
+            <View style={styles.qrWrap}>
+              <QRCode
+                value={`a3customer:${user._id}`}
+                size={180}
+                backgroundColor={colors.bg.secondary}
+                color={colors.text.primary}
+              />
+            </View>
+            <Text selectable style={styles.checkInPayload}>
+              {`a3customer:${user._id}`}
+            </Text>
+          </View>
+        ) : null}
+
         <Pressable style={styles.signOut} onPress={onSignOut}>
-          <Text style={styles.signOutText}>Sign Out</Text>
+          <Text style={styles.signOutText}>{t("customerApp.profile.signOut")}</Text>
         </Pressable>
         <View style={{ height: spacing[8] }} />
       </ScrollView>
@@ -397,27 +487,27 @@ export default function ProfileScreen(): React.JSX.Element {
       <Modal transparent visible={sheet !== null} animationType="slide">
         <Pressable style={styles.modalScrim} onPress={() => sheet !== "deleteSuccess" && setSheet(null)}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            {...iosKeyboardAvoidingProps}
             style={{ flex: 1, justifyContent: "flex-end" }}
           >
             <Pressable onPress={(e) => e.stopPropagation()}>
               <View style={styles.sheet}>
                 {sheet === "name" ? (
                   <>
-                    <Text style={styles.sheetTitle}>Edit name</Text>
+                    <Text style={styles.sheetTitle}>{t("customerApp.profile.editName")}</Text>
                     <TextInput
                       style={styles.input}
                       value={sheetDraft}
                       onChangeText={setSheetDraft}
-                      placeholder="Your name"
+                      placeholder={t("customerApp.profile.yourName")}
                       placeholderTextColor={colors.text.tertiary}
                     />
                     <View style={styles.sheetActions}>
                       <Pressable style={styles.sheetSecondary} onPress={() => setSheet(null)}>
-                        <Text style={styles.sheetSecondaryText}>Cancel</Text>
+                        <Text style={styles.sheetSecondaryText}>{t("common.cancel")}</Text>
                       </Pressable>
                       <Pressable style={styles.sheetPrimary} onPress={applySheetFixed}>
-                        <Text style={styles.sheetPrimaryText}>Save</Text>
+                        <Text style={styles.sheetPrimaryText}>{t("common.save")}</Text>
                       </Pressable>
                     </View>
                   </>
@@ -425,21 +515,21 @@ export default function ProfileScreen(): React.JSX.Element {
 
                 {sheet === "age" ? (
                   <>
-                    <Text style={styles.sheetTitle}>Edit age</Text>
+                    <Text style={styles.sheetTitle}>{t("customerApp.profile.editAge")}</Text>
                     <TextInput
                       style={styles.input}
                       value={sheetDraft}
-                      onChangeText={(t) => setSheetDraft(t.replace(/[^0-9]/g, ""))}
+                      onChangeText={(text) => setSheetDraft(text.replace(/[^0-9]/g, ""))}
                       keyboardType="number-pad"
                       placeholderTextColor={colors.text.tertiary}
                     />
-                    <Text style={styles.hint}>Age must be 18 or older.</Text>
+                    <Text style={styles.hint}>{t("customerApp.profile.ageHint")}</Text>
                     <View style={styles.sheetActions}>
                       <Pressable style={styles.sheetSecondary} onPress={() => setSheet(null)}>
-                        <Text style={styles.sheetSecondaryText}>Cancel</Text>
+                        <Text style={styles.sheetSecondaryText}>{t("common.cancel")}</Text>
                       </Pressable>
                       <Pressable style={styles.sheetPrimary} onPress={applySheetFixed}>
-                        <Text style={styles.sheetPrimaryText}>Save</Text>
+                        <Text style={styles.sheetPrimaryText}>{t("common.save")}</Text>
                       </Pressable>
                     </View>
                   </>
@@ -448,7 +538,9 @@ export default function ProfileScreen(): React.JSX.Element {
                 {sheet === "email" ? (
                   <>
                     <Text style={styles.sheetTitle}>
-                      {emailEditableGoogle ? "Add email" : "Edit email"}
+                      {emailEditableGoogle
+                        ? t("customerApp.profile.addEmail")
+                        : t("customerApp.profile.editEmail")}
                     </Text>
                     <TextInput
                       style={styles.input}
@@ -460,10 +552,10 @@ export default function ProfileScreen(): React.JSX.Element {
                     />
                     <View style={styles.sheetActions}>
                       <Pressable style={styles.sheetSecondary} onPress={() => setSheet(null)}>
-                        <Text style={styles.sheetSecondaryText}>Cancel</Text>
+                        <Text style={styles.sheetSecondaryText}>{t("common.cancel")}</Text>
                       </Pressable>
                       <Pressable style={styles.sheetPrimary} onPress={applySheetFixed}>
-                        <Text style={styles.sheetPrimaryText}>Save</Text>
+                        <Text style={styles.sheetPrimaryText}>{t("common.save")}</Text>
                       </Pressable>
                     </View>
                   </>
@@ -471,18 +563,16 @@ export default function ProfileScreen(): React.JSX.Element {
 
                 {sheet === "exportConfirm" ? (
                   <>
-                    <Text style={styles.sheetTitle}>Request Data Export</Text>
+                    <Text style={styles.sheetTitle}>{t("customerApp.profile.requestDataExport")}</Text>
                     <Text style={styles.sheetBody}>
-                      A JSON file containing your personal data will be sent to {user.email} within
-                      72 hours.
+                      {t("customerApp.profile.exportBody", { email: user.email })}
                     </Text>
                     <Text style={styles.sheetBodySmall}>
-                      Name, phone, email, age, session history summary, booking history, complaint
-                      count
+                      {t("customerApp.profile.exportFieldsList")}
                     </Text>
                     <View style={styles.sheetActions}>
                       <Pressable style={styles.sheetSecondary} onPress={() => setSheet(null)}>
-                        <Text style={styles.sheetSecondaryText}>Cancel</Text>
+                        <Text style={styles.sheetSecondaryText}>{t("common.cancel")}</Text>
                       </Pressable>
                       <Pressable
                         style={styles.sheetPrimary}
@@ -492,7 +582,9 @@ export default function ProfileScreen(): React.JSX.Element {
                         {exportLoading ? (
                           <ActivityIndicator color="#fff" />
                         ) : (
-                          <Text style={styles.sheetPrimaryText}>Request Export</Text>
+                          <Text style={styles.sheetPrimaryText}>
+                            {t("customerApp.profile.requestExport")}
+                          </Text>
                         )}
                       </Pressable>
                     </View>
@@ -501,27 +593,21 @@ export default function ProfileScreen(): React.JSX.Element {
 
                 {sheet === "delete1" ? (
                   <>
-                    <Text style={styles.sheetTitle}>Delete Your Account?</Text>
-                    <Text style={styles.bullet}>• Your login will be blocked immediately</Text>
-                    <Text style={styles.bullet}>• Active bookings will be automatically cancelled</Text>
-                    <Text style={styles.bullet}>• Your data will be permanently deleted after 30 days</Text>
-                    <Text style={styles.bullet}>
-                      • In-progress sessions and credit balances are unaffected
-                    </Text>
-                    <Text style={styles.bullet}>
-                      • You can cancel this within 30 days using the link in the confirmation email
-                    </Text>
+                    <Text style={styles.sheetTitle}>{t("customerApp.profile.deleteTitle")}</Text>
+                    <Text style={styles.bullet}>{t("customerApp.profile.deleteBulletLogin")}</Text>
+                    <Text style={styles.bullet}>{t("customerApp.profile.deleteBulletBookings")}</Text>
+                    <Text style={styles.bullet}>{t("customerApp.profile.deleteBulletData")}</Text>
+                    <Text style={styles.bullet}>{t("customerApp.profile.deleteBulletSessions")}</Text>
+                    <Text style={styles.bullet}>{t("customerApp.profile.deleteBulletGrace")}</Text>
                     <View style={styles.warnBanner}>
-                      <Text style={styles.warnText}>
-                        ⚠ This action cannot be undone after the 30-day grace period.
-                      </Text>
+                      <Text style={styles.warnText}>{t("customerApp.profile.deleteWarning")}</Text>
                     </View>
                     <View style={styles.sheetActions}>
                       <Pressable style={styles.sheetSecondary} onPress={() => setSheet(null)}>
-                        <Text style={styles.sheetSecondaryText}>Cancel</Text>
+                        <Text style={styles.sheetSecondaryText}>{t("common.cancel")}</Text>
                       </Pressable>
                       <Pressable style={styles.sheetPrimary} onPress={() => setSheet("delete2")}>
-                        <Text style={styles.sheetPrimaryText}>Continue</Text>
+                        <Text style={styles.sheetPrimaryText}>{t("customerApp.profile.continue")}</Text>
                       </Pressable>
                     </View>
                   </>
@@ -529,14 +615,14 @@ export default function ProfileScreen(): React.JSX.Element {
 
                 {sheet === "delete2" ? (
                   <>
-                    <Text style={styles.sheetTitle}>Confirm Account Deletion</Text>
-                    <Text style={styles.hint}>Type DELETE to confirm</Text>
+                    <Text style={styles.sheetTitle}>{t("customerApp.profile.confirmDeletion")}</Text>
+                    <Text style={styles.hint}>{t("customerApp.profile.typeDelete")}</Text>
                     <TextInput
                       style={styles.input}
                       value={deleteConfirmText}
-                      onChangeText={(t) => setDeleteConfirmText(t.toUpperCase())}
+                      onChangeText={(text) => setDeleteConfirmText(text.toUpperCase())}
                       autoCapitalize="characters"
-                      placeholder="DELETE"
+                      placeholder={t("customerApp.profile.deletePlaceholder")}
                       placeholderTextColor={colors.text.tertiary}
                     />
                     <Pressable
@@ -552,12 +638,14 @@ export default function ProfileScreen(): React.JSX.Element {
                       {deleteLoading ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text style={styles.dangerBtnText}>Delete My Account</Text>
+                        <Text style={styles.dangerBtnText}>
+                          {t("customerApp.profile.deleteMyAccount")}
+                        </Text>
                       )}
                     </Pressable>
                     <Pressable style={styles.sheetSecondary} onPress={() => setSheet("delete1")}>
                       <Text style={[styles.sheetSecondaryText, { textAlign: "center", marginTop: 8 }]}>
-                        Back
+                        {t("customerApp.profile.back")}
                       </Text>
                     </Pressable>
                   </>
@@ -566,14 +654,14 @@ export default function ProfileScreen(): React.JSX.Element {
                 {sheet === "deleteSuccess" ? (
                   <View style={{ alignItems: "center", gap: spacing[3] }}>
                     <Text style={styles.successIcon}>✉️</Text>
-                    <Text style={styles.sheetTitle}>Account Deletion Requested</Text>
+                    <Text style={styles.sheetTitle}>{t("customerApp.profile.deletionRequested")}</Text>
                     <Text style={styles.sheetBody}>
                       {deletionMeta?.hadEmail
-                        ? `Your account will be deleted in 30 days. A confirmation email has been sent to ${user.email} with a link to cancel if you change your mind.`
-                        : "Your account will be deleted in 30 days. Note: You have no email on file, so no cancellation link was sent."}
+                        ? t("customerApp.profile.deletionWithEmail", { email: user.email })
+                        : t("customerApp.profile.deletionNoEmail")}
                     </Text>
                     <Pressable style={styles.sheetPrimary} onPress={() => void finishDeletionSignOut()}>
-                      <Text style={styles.sheetPrimaryText}>Sign Out</Text>
+                      <Text style={styles.sheetPrimaryText}>{t("customerApp.profile.signOut")}</Text>
                     </Pressable>
                   </View>
                 ) : null}
@@ -583,6 +671,7 @@ export default function ProfileScreen(): React.JSX.Element {
         </Pressable>
       </Modal>
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
@@ -627,7 +716,9 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.iconTileBg,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing[2],
@@ -643,8 +734,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   card: {
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
     overflow: "hidden",
   },
   row: {
@@ -662,7 +755,7 @@ const styles = StyleSheet.create({
   },
   rowDisabled: { opacity: 0.45 },
   textDisabled: { color: colors.status.disabled },
-  divider: { height: 1, backgroundColor: colors.border.subtle, marginLeft: spacing[3] },
+  divider: { height: 1, backgroundColor: colors.border.subtle, marginStart: spacing[3] },
   rowLabel: { ...typography.caption, color: colors.text.secondary, marginBottom: 4 },
   rowValue: { ...typography.body, color: colors.text.primary },
   placeholder: { color: colors.text.secondary },
@@ -673,7 +766,7 @@ const styles = StyleSheet.create({
   editGlyph: { fontSize: 16, color: colors.text.secondary },
   saveBtn: {
     marginTop: spacing[3],
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     paddingVertical: spacing[3],
     borderRadius: radius.md,
     alignItems: "center",
@@ -689,13 +782,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   signOutText: { ...typography.body, color: colors.text.primary, fontWeight: "600" },
+  checkInPayload: {
+    marginTop: spacing[2],
+    fontFamily: "monospace",
+    fontSize: 12,
+    color: colors.accent.green,
+    textAlign: "center",
+  },
+  qrWrap: {
+    alignItems: "center",
+    marginTop: spacing[3],
+    marginBottom: spacing[2],
+    padding: spacing[3],
+    backgroundColor: colors.bg.tertiary,
+    borderRadius: radius.md,
+    alignSelf: "center",
+  },
   modalScrim: {
     flex: 1,
     backgroundColor: colors.overlay.scrim,
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.tabPillBg,
+    borderTopWidth: 1,
+    borderTopColor: glass.tabPillBorder,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     padding: spacing[4],
@@ -713,7 +824,9 @@ const styles = StyleSheet.create({
   },
   warnText: { color: colors.accent.amber, ...typography.caption },
   input: {
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
     borderRadius: radius.md,
     padding: spacing[3],
     color: colors.text.primary,
@@ -731,7 +844,9 @@ const styles = StyleSheet.create({
   sheetPrimaryText: { color: "#fff", fontWeight: "600" },
   sheetSecondary: {
     flex: 1,
-    backgroundColor: colors.bg.secondary,
+    backgroundColor: glass.inputBg,
+    borderWidth: 1,
+    borderColor: glass.inputBorder,
     paddingVertical: spacing[3],
     borderRadius: radius.md,
     alignItems: "center",

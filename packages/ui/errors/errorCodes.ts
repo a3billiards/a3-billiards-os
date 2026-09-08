@@ -12,6 +12,9 @@ export const ERROR_CODES = {
     AUTH_006: "Account pending deletion",
     AUTH_008: "No club found for owner account",
     AUTH_007: "Must be 18 or older",
+    AUTH_009: "No account found for this phone",
+    AUTH_010: "No password login configured for this admin account",
+    ADMIN_001: "This account is an admin — use the Admin app",
     MFA_001: "Not an admin",
     PASSCODE_001: "Invalid passcode",
     PASSCODE_002: "Passcode not configured",
@@ -20,6 +23,7 @@ export const ERROR_CODES = {
     AUTH_005: "Consent not given",
     GOOGLE_AUTH_001: "Audience mismatch or invalid Google ID token",
     GOOGLE_AUTH_NEW_USER: "No account found for this Google user",
+    OWNER_001: "This Google account is not registered as an owner",
     SESSION_001: "Table is already occupied",
     SESSION_002: "Table lock invalid, expired, or held by another device — please retry",  // retryable
     SESSION_003: "Table is inactive",
@@ -60,13 +64,24 @@ export const ERROR_CODES = {
     DATA_001: "Required field missing",
     DATA_002: "Invalid data format",
     EMAIL_001: "Transactional email send failed",
+    PUSH_001: "Push notifications are not configured on the server (Firebase)",
     DATA_003: "Resource not found",
     DELETION_001: "Owner has active sessions — cannot delete",
     DELETION_002: "Owner has unpaid credits — cannot delete",
     DELETION_003: "Owner subscription still active — cannot delete",
     PROMOTE_001: "Customers cannot be promoted. Register via Onboarding Website.",
     PROMOTE_002: "User is already an admin.",
+    PROMOTE_003: "Owner must have email+password login before admin promotion",
+    DEMOTE_001: "Cannot demote your own account",
+    DEMOTE_002: "User is not an admin",
+    DEMOTE_003: "Cannot demote a super admin",
     FORCE_001: "Session not found or not active",
+    LIVESTREAM_001: "A stream is already live for this club",
+    LIVESTREAM_002: "AWS IVS API call failed",
+    LIVESTREAM_003: "No stream is currently live for this club",
+    LIVESTREAM_004: "This stream is not currently active",
+    SUPPORT_001: "Subject must be 3–120 characters",
+    SUPPORT_002: "Message must be 10–2000 characters",
     UNKNOWN: "An unexpected error occurred",
   } as const;
    
@@ -80,12 +95,16 @@ export const ERROR_CODES = {
     retryable: boolean;
   }
    
-  /** Parses a Convex error "CODE_NNN: message" into a structured AppError */
+  /** Parses a Convex error "CODE_NNN: message" into a structured AppError (code may appear mid-string). */
   export function parseConvexError(error: Error): AppError {
-    const match = error.message.match(/^([A-Z_]+_\d{3,}): (.+)/);
+    const match = error.message.match(/([A-Z_]+_\d{3,}):\s*([^\n]+)/);
     if (!match) return { code: "UNKNOWN", message: error.message, retryable: false };
     const [, code, message] = match;
-    return { code: code as ErrorCode, message, retryable: RETRYABLE.has(code) };
+    return {
+      code: code as ErrorCode,
+      message: message.trim(),
+      retryable: RETRYABLE.has(code),
+    };
   }
    
   export function isRetryable(code: string): boolean {

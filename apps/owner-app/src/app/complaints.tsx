@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Switch,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -19,7 +20,15 @@ import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
-import { getActiveRoleId } from "../lib/activeRoleStorage";
+import { PhoneInput } from "@a3/ui/components";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { DEFAULT_PHONE_E164, isValidE164, normalizeE164 } from "@a3/utils/phone";
+import { useTranslation, getCurrentLanguage } from "@a3/i18n";
+import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../lib/StaffRoleContext";
+import { TabAccessDenied } from "../components/TabAccessDenied";
+import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ownerTabBarTotalInset } from "../theme/ownerShell";
 
 type ComplaintType =
   | "violent_behaviour"
@@ -33,20 +42,6 @@ const TYPE_ORDER: ComplaintType[] = [
   "runaway_without_payment",
   "late_credit_payment",
 ];
-
-const TYPE_LABELS: Record<ComplaintType, string> = {
-  violent_behaviour: "Violent Behaviour",
-  theft: "Theft",
-  runaway_without_payment: "Runaway Without Payment",
-  late_credit_payment: "Late Credit Payment",
-};
-
-const TYPE_SUB: Record<ComplaintType, string> = {
-  violent_behaviour: "Physical altercation or threatening conduct",
-  theft: "Suspected or confirmed theft of property",
-  runaway_without_payment: "Left without settling the bill",
-  late_credit_payment: "Outstanding credit balance not settled",
-};
 
 function badgeStyle(t: ComplaintType): { bg: string; fg: string } {
   switch (t) {
@@ -70,25 +65,28 @@ function initials(name: string): string {
   return (p[0]![0]! + p[p.length - 1]![0]!).toUpperCase();
 }
 
-function formatSessionDate(endTime: number): string {
-  return new Intl.DateTimeFormat("en-GB", {
+function formatSessionDate(endTime: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(new Date(endTime));
 }
 
-function formatRelativeTime(createdAt: number): string {
+function formatRelativeTime(
+  createdAt: number,
+  tr: (key: string, opts?: { count?: number }) => string,
+): string {
   const sec = Math.floor((Date.now() - createdAt) / 1000);
-  if (sec < 60) return "just now";
+  if (sec < 60) return tr("ownerApp.complaints.justNow");
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} min ago`;
+  if (min < 60) return tr("ownerApp.complaints.minAgo", { count: min });
   const hr = Math.floor(min / 60);
-  if (hr < 48) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
+  if (hr < 48) return tr("ownerApp.complaints.hourAgo", { count: hr });
   const day = Math.floor(hr / 24);
-  if (day < 60) return `${day} day${day === 1 ? "" : "s"} ago`;
+  if (day < 60) return tr("ownerApp.complaints.dayAgo", { count: day });
   const mo = Math.floor(day / 30);
-  return `${mo} month${mo === 1 ? "" : "s"} ago`;
+  return tr("ownerApp.complaints.monthAgo", { count: mo });
 }
 
 type EnrichedComplaint = {
@@ -105,41 +103,55 @@ type EnrichedComplaint = {
 };
 
 export default function ComplaintsScreen(): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = getCurrentLanguage();
   const router = useRouter();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
 
-  const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
-  useEffect(() => {
-    void getActiveRoleId().then((v) => {
-      if (v) setRoleId(v as Id<"staffRoles">);
-    });
-  }, []);
+  const { roleId, canAccessTab } = useStaffRole();
+  const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
+  const complaintsEnabled = useStaffTabQueriesEnabled("complaints");
 
   const access = useQuery(
     api.complaints.getComplaintsTabAccess,
-    clubId ? { clubId, roleId } : "skip",
+    clubId && complaintsEnabled ? { clubId, roleId: queryRoleId } : "skip",
   );
 
   const list = useQuery(
     api.complaints.getClubComplaints,
-    clubId ? { clubId, roleId } : "skip",
+    clubId && complaintsEnabled ? { clubId, roleId: queryRoleId } : "skip",
   );
 
   const [segment, setSegment] = useState<"active" | "retracted">("active");
+  const [listSearchQuery, setListSearchQuery] = useState("");
   const [fileOpen, setFileOpen] = useState(false);
   const [fileStep, setFileStep] = useState<1 | 2>(1);
-  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneInput, setPhoneInput] = useState(DEFAULT_PHONE_E164);
   const [debouncedPhone, setDebouncedPhone] = useState("");
+  const [nameQuery, setNameQuery] = useState("");
+  const [debouncedNameQuery, setDebouncedNameQuery] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setDebouncedPhone(phoneInput.trim()), 300);
     return () => clearTimeout(t);
   }, [phoneInput]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedNameQuery(nameQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [nameQuery]);
 
-  const phoneReady = /^\+91\d{10}$/.test(debouncedPhone);
+  const phoneReady = isValidE164(normalizeE164(debouncedPhone));
   const search = useQuery(
     api.complaints.searchCustomerByPhone,
     phoneReady ? { phone: debouncedPhone } : "skip",
+  );
+  const nameSearch = useQuery(
+    api.ownerCustomerLookup.searchCustomersByName,
+    clubId && debouncedNameQuery.length >= 2
+      ? { clubId, nameQuery: debouncedNameQuery }
+      : "skip",
   );
 
   const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(null);
@@ -153,8 +165,8 @@ export default function ComplaintsScreen(): React.JSX.Element {
 
   const recentSessions = useQuery(
     api.complaints.getRecentCustomerSessionsForComplaint,
-    clubId && selectedUserId && linkSession
-      ? { clubId, customerId: selectedUserId, roleId }
+    clubId && selectedUserId && linkSession && complaintsEnabled
+      ? { clubId, customerId: selectedUserId, roleId: queryRoleId }
       : "skip",
   );
 
@@ -177,10 +189,24 @@ export default function ComplaintsScreen(): React.JSX.Element {
 
   const rows = segment === "active" ? activeRows : retractedRows;
 
+  const filteredRows = useMemo(() => {
+    const q = listSearchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (c) =>
+        c.customer.name.toLowerCase().includes(q) ||
+        (c.customer.phone?.toLowerCase().includes(q) ?? false),
+    );
+  }, [rows, listSearchQuery]);
+
+  const { refreshing, onRefresh } = usePullToRefresh();
+
   const resetFileSheet = useCallback(() => {
     setFileStep(1);
-    setPhoneInput("");
+    setPhoneInput(DEFAULT_PHONE_E164);
     setDebouncedPhone("");
+    setNameQuery("");
+    setDebouncedNameQuery("");
     setSelectedUserId(null);
     setSelectedName("");
     setComplaintType(null);
@@ -203,7 +229,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
     if (!clubId || !selectedUserId || !complaintType) return;
     const d = details.trim();
     if (!d) {
-      Alert.alert("Missing details", "Please describe the incident.");
+      Alert.alert(t("ownerApp.complaints.missingDetails"), t("ownerApp.complaints.describeRequired"));
       return;
     }
     setSubmitting(true);
@@ -214,12 +240,12 @@ export default function ComplaintsScreen(): React.JSX.Element {
         type: complaintType,
         description: d,
         sessionId: linkSession ? selectedSessionId : undefined,
-        roleId,
+        roleId: queryRoleId,
       });
       closeFile();
-      Alert.alert("Done", `Complaint filed against ${selectedName}.`);
+      Alert.alert(t("ownerApp.complaints.done"), t("ownerApp.complaints.filedAgainst", { name: selectedName }));
     } catch (e) {
-      Alert.alert("Error", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.complaints.error"), parseConvexError(e as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -230,17 +256,18 @@ export default function ComplaintsScreen(): React.JSX.Element {
     details,
     linkSession,
     selectedSessionId,
-    roleId,
+    queryRoleId,
     fileComplaint,
     closeFile,
     selectedName,
+    t,
   ]);
 
   const onConfirmRetract = useCallback(async () => {
     if (!retractTarget) return;
     const reason = retractReason.trim();
     if (reason.length > 500) {
-      Alert.alert("Too long", "Reason must be at most 500 characters.");
+      Alert.alert(t("ownerApp.complaints.tooLong"), t("ownerApp.complaints.reasonMaxLength"));
       return;
     }
     setSubmitting(true);
@@ -248,19 +275,39 @@ export default function ComplaintsScreen(): React.JSX.Element {
       await retractComplaint({
         complaintId: retractTarget._id,
         dismissalReason: reason.length > 0 ? reason : undefined,
-        roleId,
+        roleId: queryRoleId,
       });
       setRetractTarget(null);
       setRetractReason("");
-      Alert.alert("Done", "Complaint retracted.");
+      Alert.alert(t("ownerApp.complaints.done"), t("ownerApp.complaints.complaintRetracted"));
     } catch (e) {
-      Alert.alert("Error", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.complaints.error"), parseConvexError(e as Error).message);
     } finally {
       setSubmitting(false);
     }
-  }, [retractTarget, retractReason, roleId, retractComplaint]);
+  }, [retractTarget, retractReason, queryRoleId, retractComplaint, t]);
 
-  if (dashboard === undefined || access === undefined) {
+  if (dashboard === undefined) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ActivityIndicator size="large" color={colors.accent.green} />
+      </SafeAreaView>
+    );
+  }
+
+  if (dashboard === null) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <OwnerNoClubPlaceholder />
+      </SafeAreaView>
+    );
+  }
+
+  if (roleId !== undefined && !canAccessTab("complaints")) {
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.complaints")} />;
+  }
+
+  if (access === undefined) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <ActivityIndicator size="large" color={colors.accent.green} />
@@ -273,18 +320,16 @@ export default function ComplaintsScreen(): React.JSX.Element {
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <Pressable
           onPress={() =>
-            router.canGoBack() ? router.back() : router.replace("/(tabs)/slots")
+            router.canGoBack() ? router.back() : router.replace("/(tabs)/home")
           }
           style={styles.backRow}
         >
           <MaterialIcons name="arrow-back" size={22} color={colors.text.primary} />
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.backText}>{t("ownerApp.complaints.back")}</Text>
         </Pressable>
         <View style={styles.deniedBox}>
           <MaterialIcons name="lock" size={48} color={colors.text.secondary} />
-          <Text style={styles.deniedTitle}>
-            Your current role does not have access to the Complaints tab.
-          </Text>
+          <Text style={styles.deniedTitle}>{t("ownerApp.complaints.noAccess")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -296,21 +341,23 @@ export default function ComplaintsScreen(): React.JSX.Element {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Complaints</Text>
+          <Text style={styles.title}>{t("ownerApp.complaints.title")}</Text>
           <View style={styles.countRow}>
             <View style={[styles.pill, styles.pillActive]}>
-              <Text style={styles.pillTxtActive}>{activeRows.length} Active</Text>
+              <Text style={styles.pillTxtActive}>
+                {t("ownerApp.complaints.activeCount", { count: activeRows.length })}
+              </Text>
             </View>
             <View style={[styles.pill, styles.pillRetracted]}>
               <Text style={styles.pillTxtRetracted}>
-                {retractedRows.length} Retracted
+                {t("ownerApp.complaints.retractedCount", { count: retractedRows.length })}
               </Text>
             </View>
           </View>
         </View>
         {canFile ? (
           <Pressable style={styles.fileBtn} onPress={openFile}>
-            <Text style={styles.fileBtnTxt}>+ File Complaint</Text>
+            <Text style={styles.fileBtnTxt}>{t("ownerApp.complaints.fileComplaint")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -321,7 +368,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
           onPress={() => setSegment("active")}
         >
           <Text style={[styles.segTxt, segment === "active" && styles.segTxtOn]}>
-            Active
+            {t("ownerApp.complaints.active")}
           </Text>
         </Pressable>
         <Pressable
@@ -331,18 +378,32 @@ export default function ComplaintsScreen(): React.JSX.Element {
           <Text
             style={[styles.segTxt, segment === "retracted" && styles.segTxtOn]}
           >
-            Retracted
+            {t("ownerApp.complaints.retracted")}
           </Text>
         </Pressable>
       </View>
 
+      <TextInput
+        style={styles.searchInput}
+        value={listSearchQuery}
+        onChangeText={setListSearchQuery}
+        placeholder={t("ownerApp.slots.customerNamePlaceholder")}
+        placeholderTextColor={colors.text.tertiary}
+        autoCapitalize="words"
+        autoCorrect={false}
+        clearButtonMode="while-editing"
+      />
+
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {list === undefined ? (
           <ActivityIndicator color={colors.accent.green} style={{ marginTop: 24 }} />
-        ) : rows.length === 0 ? (
+        ) : filteredRows.length === 0 ? (
           <View style={styles.empty}>
             <MaterialIcons
               name={segment === "active" ? "inbox" : "history"}
@@ -351,12 +412,12 @@ export default function ComplaintsScreen(): React.JSX.Element {
             />
             <Text style={styles.emptyTxt}>
               {segment === "active"
-                ? "No active complaints filed by your club."
-                : "No retracted complaints."}
+                ? t("ownerApp.complaints.emptyActive")
+                : t("ownerApp.complaints.emptyRetracted")}
             </Text>
           </View>
         ) : (
-          rows.map((c) => {
+          filteredRows.map((c) => {
             const expanded = expandedDesc[c._id] === true;
             const muted = c.status === "retracted";
             const bs = muted
@@ -387,18 +448,24 @@ export default function ComplaintsScreen(): React.JSX.Element {
                 </Text>
                 {c.description.length > 120 ? (
                   <Pressable onPress={() => setExpandedDesc((m) => ({ ...m, [c._id]: !expanded }))}>
-                    <Text style={styles.more}>{expanded ? "Show less" : "Show more"}</Text>
+                    <Text style={styles.more}>
+                      {expanded ? t("ownerApp.complaints.showLess") : t("ownerApp.complaints.showMore")}
+                    </Text>
                   </Pressable>
                 ) : null}
-                <Text style={styles.filed}>Filed {formatRelativeTime(c.createdAt)}</Text>
+                <Text style={styles.filed}>
+                  {t("ownerApp.complaints.filed", { time: formatRelativeTime(c.createdAt, t) })}
+                </Text>
                 {c.status === "retracted" && c.removedAt != null ? (
                   <Text style={styles.filed}>
-                    Retracted {formatRelativeTime(c.removedAt)}
+                    {t("ownerApp.complaints.retractedAt", {
+                      time: formatRelativeTime(c.removedAt, t),
+                    })}
                   </Text>
                 ) : null}
                 {c.dismissalReason ? (
                   <Text style={styles.reason}>
-                    Reason: {c.dismissalReason}
+                    {t("ownerApp.complaints.reason", { text: c.dismissalReason })}
                   </Text>
                 ) : null}
                 {c.status === "active" && canFile ? (
@@ -407,16 +474,16 @@ export default function ComplaintsScreen(): React.JSX.Element {
                       style={styles.retractBtn}
                       onPress={() => setRetractTarget(c)}
                     >
-                      <Text style={styles.retractBtnTxt}>Retract</Text>
+                      <Text style={styles.retractBtnTxt}>{t("ownerApp.complaints.retract")}</Text>
                     </Pressable>
                   </View>
                 ) : c.status === "active" && !canFile ? (
                   <View style={styles.lockRow}>
                     <MaterialIcons name="lock" size={16} color={colors.text.secondary} />
-                    <Text style={styles.lockTxt}>Owner only</Text>
+                    <Text style={styles.lockTxt}>{t("ownerApp.complaints.ownerOnly")}</Text>
                   </View>
                 ) : (
-                  <Text style={styles.retractedLbl}>Retracted</Text>
+                  <Text style={styles.retractedLbl}>{t("ownerApp.complaints.retractedLabel")}</Text>
                 )}
               </View>
             );
@@ -428,19 +495,20 @@ export default function ComplaintsScreen(): React.JSX.Element {
         <Pressable style={styles.scrim} onPress={closeFile}>
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation?.()}>
             <Text style={styles.sheetTitle}>
-              {fileStep === 1 ? "Find customer" : "Complaint details"}
+              {fileStep === 1
+                ? t("ownerApp.complaints.findCustomer")
+                : t("ownerApp.complaints.complaintDetails")}
             </Text>
             {fileStep === 1 ? (
               <>
-                <Text style={styles.lbl}>Enter customer phone number</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="+91xxxxxxxxxx"
-                  placeholderTextColor={colors.text.tertiary}
-                  keyboardType="phone-pad"
+                <Text style={styles.lbl}>{t("ownerApp.complaints.enterPhone")}</Text>
+                <PhoneInput
                   value={phoneInput}
-                  onChangeText={setPhoneInput}
-                  autoCapitalize="none"
+                  onChangeValue={setPhoneInput}
+                  countryCodeLabel={t("auth.phone.countryCode")}
+                  selectCountryLabel={t("auth.phone.selectCountry")}
+                  accessibilityLabel={t("auth.phone.number")}
+                  inputStyle={styles.input}
                 />
                 {search === undefined && phoneReady ? (
                   <ActivityIndicator color={colors.accent.green} />
@@ -454,42 +522,69 @@ export default function ComplaintsScreen(): React.JSX.Element {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.custName}>{search.user.name}</Text>
                       <Text style={styles.phone}>{search.user.phone}</Text>
-                      {search.user.activeComplaintCount > 0 ? (
-                        <Text style={styles.warnSmall}>
-                          {"\u26A0"} {search.user.activeComplaintCount} existing complaint(s)
-                        </Text>
-                      ) : null}
                     </View>
+                    <Pressable
+                      style={styles.primaryBtn}
+                      onPress={() => {
+                        setSelectedUserId(search.user._id);
+                        setSelectedName(search.user.name);
+                        setFileStep(2);
+                      }}
+                    >
+                      <Text style={styles.primaryBtnTxt}>{t("common.next")}</Text>
+                    </Pressable>
                   </View>
                 ) : null}
-                <Pressable
-                  style={[
-                    styles.primaryBtn,
-                    (!search?.ok || !phoneReady) && styles.btnDisabled,
-                  ]}
-                  disabled={!search?.ok || !phoneReady}
-                  onPress={() => {
-                    if (search?.ok) {
-                      setSelectedUserId(search.user._id);
-                      setSelectedName(search.user.name);
+
+                <Text style={[styles.lbl, { marginTop: spacing[4] }]}>
+                  {t("ownerApp.slots.customerNameSearch")}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={nameQuery}
+                  onChangeText={setNameQuery}
+                  placeholder={t("ownerApp.slots.customerNamePlaceholder")}
+                  placeholderTextColor={colors.text.tertiary}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+                {nameSearch === undefined && debouncedNameQuery.length >= 2 ? (
+                  <ActivityIndicator color={colors.accent.green} />
+                ) : null}
+                {nameSearch?.users.map((user) => (
+                  <Pressable
+                    key={user._id}
+                    style={styles.foundCard}
+                    onPress={() => {
+                      setSelectedUserId(user._id);
+                      setSelectedName(user.name);
                       setFileStep(2);
-                    }
-                  }}
-                >
-                  <Text style={styles.primaryBtnTxt}>Next</Text>
-                </Pressable>
+                    }}
+                  >
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarTxt}>{initials(user.name)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.custName}>{user.name}</Text>
+                      {user.phone ? (
+                        <Text style={styles.phone}>{user.phone}</Text>
+                      ) : null}
+                    </View>
+                    <MaterialIcons name="chevron-right" size={22} color={colors.text.secondary} />
+                  </Pressable>
+                ))}
               </>
             ) : (
               <>
-                <Text style={styles.lbl}>Type</Text>
+                <Text style={styles.lbl}>{t("common.typeLabel")}</Text>
                 <View style={styles.grid2}>
-                  {TYPE_ORDER.map((t) => {
-                    const sel = complaintType === t;
-                    const b = badgeStyle(t);
+                  {TYPE_ORDER.map((typeKey) => {
+                    const sel = complaintType === typeKey;
+                    const b = badgeStyle(typeKey);
                     return (
                       <Pressable
-                        key={t}
-                        onPress={() => setComplaintType(t)}
+                        key={typeKey}
+                        onPress={() => setComplaintType(typeKey)}
                         style={[
                           styles.typeCard,
                           {
@@ -498,23 +593,27 @@ export default function ComplaintsScreen(): React.JSX.Element {
                           },
                         ]}
                       >
-                        <Text style={styles.typeCardTitle}>{TYPE_LABELS[t]}</Text>
-                        <Text style={styles.typeCardSub}>{TYPE_SUB[t]}</Text>
+                        <Text style={styles.typeCardTitle}>
+                          {t(`ownerApp.complaints.types.${typeKey}`)}
+                        </Text>
+                        <Text style={styles.typeCardSub}>
+                          {t(`ownerApp.complaints.typeSubs.${typeKey}`)}
+                        </Text>
                       </Pressable>
                     );
                   })}
                 </View>
-                <Text style={styles.lbl}>Details</Text>
+                <Text style={styles.lbl}>{t("common.detailsLabel")}</Text>
                 <TextInput
                   style={[styles.input, styles.multiline]}
-                  placeholder="Describe the incident..."
+                  placeholder={t("ownerApp.complaints.describeIncident")}
                   placeholderTextColor={colors.text.tertiary}
                   multiline
                   value={details}
                   onChangeText={setDetails}
                 />
                 <View style={styles.linkRow}>
-                  <Text style={styles.lbl}>Link to a session?</Text>
+                  <Text style={styles.lbl}>{t("ownerApp.complaints.linkSession")}</Text>
                   <Switch value={linkSession} onValueChange={setLinkSession} />
                 </View>
                 {linkSession && selectedUserId && clubId ? (
@@ -532,7 +631,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
                           onPress={() => setSelectedSessionId(s.sessionId)}
                         >
                           <Text style={styles.sessionTxt}>
-                            {s.tableLabel} · {formatSessionDate(s.endTime)}
+                            {s.tableLabel} · {formatSessionDate(s.endTime, locale)}
                             {s.billTotal != null
                               ? ` · ${s.currency} ${s.billTotal.toFixed(0)}`
                               : ""}
@@ -547,7 +646,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
                     style={styles.secondaryBtn}
                     onPress={() => setFileStep(1)}
                   >
-                    <Text style={styles.secondaryBtnTxt}>Back</Text>
+                    <Text style={styles.secondaryBtnTxt}>{t("ownerApp.complaints.back")}</Text>
                   </Pressable>
                   <Pressable
                     style={[
@@ -560,14 +659,14 @@ export default function ComplaintsScreen(): React.JSX.Element {
                     {submitting ? (
                       <ActivityIndicator color={colors.bg.primary} />
                     ) : (
-                      <Text style={styles.primaryBtnTxt}>File Complaint</Text>
+                      <Text style={styles.primaryBtnTxt}>{t("ownerApp.complaints.submit")}</Text>
                     )}
                   </Pressable>
                 </View>
               </>
             )}
             <Pressable onPress={closeFile} style={styles.cancelTxtWrap}>
-              <Text style={styles.cancelTxt}>Cancel</Text>
+              <Text style={styles.cancelTxt}>{t("common.cancel")}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -576,16 +675,17 @@ export default function ComplaintsScreen(): React.JSX.Element {
       <Modal visible={retractTarget !== null} transparent animationType="fade">
         <Pressable style={styles.scrim} onPress={() => !submitting && setRetractTarget(null)}>
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation?.()}>
-            <Text style={styles.sheetTitle}>Retract Complaint?</Text>
+            <Text style={styles.sheetTitle}>{t("ownerApp.complaints.retractTitle")}</Text>
             <Text style={styles.modalBody}>
-              This will remove the {retractTarget?.typeLabel} flag from{" "}
-              {retractTarget?.customer.name}&apos;s record. Other clubs will no longer see this
-              complaint.
+              {t("ownerApp.complaints.retractModalBody", {
+                type: retractTarget?.typeLabel ?? "",
+                name: retractTarget?.customer.name ?? "",
+              })}
             </Text>
-            <Text style={styles.lbl}>Reason (optional)</Text>
+            <Text style={styles.lbl}>{t("ownerApp.complaints.retractReason")}</Text>
             <TextInput
               style={[styles.input, styles.multiline]}
-              placeholder="Reason…"
+              placeholder={t("common.reasonPlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               multiline
               maxLength={500}
@@ -599,7 +699,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
                 onPress={() => setRetractTarget(null)}
                 disabled={submitting}
               >
-                <Text style={styles.secondaryBtnTxt}>Cancel</Text>
+                <Text style={styles.secondaryBtnTxt}>{t("common.cancel")}</Text>
               </Pressable>
               <Pressable
                 style={[styles.dangerBtn, submitting && styles.btnDisabled]}
@@ -609,7 +709,7 @@ export default function ComplaintsScreen(): React.JSX.Element {
                 {submitting ? (
                   <ActivityIndicator color={colors.text.primary} />
                 ) : (
-                  <Text style={styles.dangerBtnTxt}>Confirm Retract</Text>
+                  <Text style={styles.dangerBtnTxt}>{t("common.confirm")}</Text>
                 )}
               </Pressable>
             </View>
@@ -680,6 +780,15 @@ const styles = StyleSheet.create({
   segBtnOn: { backgroundColor: colors.bg.tertiary },
   segTxt: { ...typography.labelSmall, color: colors.text.secondary },
   segTxtOn: { color: colors.text.primary, fontWeight: "600" },
+  searchInput: {
+    marginHorizontal: spacing[6],
+    marginTop: spacing[3],
+    backgroundColor: colors.bg.secondary,
+    borderRadius: radius.md,
+    padding: spacing[3],
+    color: colors.text.primary,
+    ...typography.body,
+  },
   scroll: { padding: spacing[6], paddingBottom: spacing[16] },
   empty: { alignItems: "center", marginTop: spacing[10], gap: spacing[3] },
   emptyTxt: { ...typography.body, color: colors.text.secondary, textAlign: "center" },

@@ -5,22 +5,18 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useAction } from "convex/react";
-import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { LoginLanguagePicker, useTranslation } from "@a3/i18n";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll } from "@a3/ui/components";
+import { MaterialIcons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
-  const router = useRouter();
+  const { t } = useTranslation();
   const { signIn } = useAuthActions();
-  const generateMfa = useAction(api.mfaActions.generateMfaCode);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,6 +28,13 @@ export default function LoginScreen() {
 
   const canSubmit = email.trim().length > 0 && password.length >= 8 && !loading;
 
+  /**
+   * After signIn() succeeds, the Convex Auth JWT must propagate to the client
+   * before any authenticated action will resolve. AdminAuthShell (in _layout)
+   * watches `useConvexAuth().isAuthenticated` and `user.adminMfaVerifiedAt` and
+   * redirects to `/mfa`, where `generateMfaCode` is dispatched on mount. Calling
+   * `generateMfa()` here would race the JWT propagation and throw AUTH_001.
+   */
   const handleLogin = useCallback(async () => {
     if (!canSubmit) return;
     setError(null);
@@ -46,130 +49,142 @@ export default function LoginScreen() {
       });
 
       if (!signingIn) {
-        setError("Sign-in failed. Check your email and password.");
+        setError(t("auth.admin.login.signInFailed"));
         setLoading(false);
         return;
       }
-
-      await generateMfa();
-
-      router.replace("/mfa");
+      // Leave loading=true; AdminAuthShell will redirect to /mfa once auth + role check resolve.
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
         setFrozen(true);
-        setError("This account is frozen. Contact support.");
+        setError(t("auth.admin.login.frozen"));
       } else if (appError.code === "AUTH_006") {
-        setError("This account is pending deletion.");
+        setError(t("auth.admin.login.pendingDeletion"));
+      } else if (appError.code === "AUTH_010") {
+        setError(appError.message);
       } else if (
         appError.code === "AUTH_001" ||
         appError.code === "UNKNOWN"
       ) {
-        setError("Invalid email or password.");
+        setError(t("auth.admin.login.invalidCredentials"));
       } else {
         setError(appError.message);
       }
       setLoading(false);
     }
-  }, [canSubmit, email, password, signIn, generateMfa, router]);
+  }, [canSubmit, email, password, signIn, t]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.container}>
-          <Text style={styles.logo}>A3</Text>
-          <Text style={styles.title}>Admin Panel</Text>
-          <Text style={styles.subtitle}>
-            Sign in to manage your billiards network
-          </Text>
+    <GlassPageBackground>
+      <KeyboardFormScroll contentContainerStyle={styles.scroll}>
+          <View style={styles.container}>
+            <LoginLanguagePicker />
+            <View style={styles.logoTile}>
+              <Text style={styles.logoText}>A3</Text>
+            </View>
+            <Text style={styles.title}>{t("auth.admin.login.title")}</Text>
+            <Text style={styles.subtitle}>{t("auth.admin.login.subtitle")}</Text>
 
-          <View style={styles.form}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="admin@example.com"
-              placeholderTextColor={colors.text.tertiary}
-              autoCapitalize="none"
-              autoComplete="email"
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-              editable={!loading}
-              accessibilityLabel="Email address"
-            />
-
-            <Text style={[styles.label, { marginTop: spacing[4] }]}>
-              Password
-            </Text>
-            <TextInput
-              ref={passwordRef}
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor={colors.text.tertiary}
-              secureTextEntry
-              textContentType="password"
-              returnKeyType="go"
-              onSubmitEditing={handleLogin}
-              editable={!loading}
-              accessibilityLabel="Password"
-            />
-
-            {error !== null && (
-              <View
-                style={styles.errorBox}
-                accessibilityRole="alert"
-                accessibilityLiveRegion="polite"
-              >
-                <Text style={styles.errorDot}>Error</Text>
-                <Text style={styles.errorText}>{error}</Text>
+            <LiquidGlassCard style={styles.form} padding={24}>
+              <Text style={styles.label}>{t("auth.admin.login.email")}</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons
+                  name="mail-outline"
+                  size={18}
+                  color={glass.textMuted}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder={t("auth.admin.login.emailPlaceholder")}
+                  placeholderTextColor="rgba(148,163,184,0.45)"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  editable={!loading && !frozen}
+                  accessibilityLabel={t("auth.admin.login.email")}
+                />
               </View>
-            )}
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.button,
-                !canSubmit && styles.buttonDisabled,
-                pressed && canSubmit && styles.buttonPressed,
-              ]}
-              onPress={handleLogin}
-              disabled={!canSubmit}
-              accessibilityRole="button"
-              accessibilityLabel="Sign in"
-              accessibilityState={{ disabled: !canSubmit }}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.bg.primary} />
-              ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
+              <Text style={[styles.label, { marginTop: spacing[4] }]}>
+                {t("auth.admin.login.password")}
+              </Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons
+                  name="lock-outline"
+                  size={18}
+                  color={glass.textMuted}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  ref={passwordRef}
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder={t("auth.admin.login.passwordPlaceholder")}
+                  placeholderTextColor="rgba(148,163,184,0.45)"
+                  secureTextEntry
+                  textContentType="password"
+                  returnKeyType="go"
+                  onSubmitEditing={handleLogin}
+                  editable={!loading && !frozen}
+                  accessibilityLabel={t("auth.admin.login.password")}
+                />
+              </View>
+
+              {error !== null && (
+                <View
+                  style={styles.errorBox}
+                  accessibilityRole="alert"
+                  accessibilityLiveRegion="polite"
+                >
+                  <MaterialIcons
+                    name="error-outline"
+                    size={16}
+                    color={colors.status.error}
+                  />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
               )}
-            </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  (!canSubmit || frozen) && styles.buttonDisabled,
+                  pressed && canSubmit && !frozen && styles.buttonPressed,
+                ]}
+                onPress={handleLogin}
+                disabled={!canSubmit || frozen}
+                accessibilityRole="button"
+                accessibilityLabel={t("auth.admin.login.signIn")}
+                accessibilityState={{ disabled: !canSubmit || frozen }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text style={styles.buttonText}>{t("auth.admin.login.signIn")}</Text>
+                )}
+              </Pressable>
+            </LiquidGlassCard>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardFormScroll>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: colors.bg.primary,
-  },
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing[8],
   },
   container: {
     alignItems: "center",
@@ -177,64 +192,79 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
   },
-  logo: {
-    ...typography.heading1,
-    fontSize: 48,
-    color: colors.accent.green,
-    letterSpacing: 4,
-    marginBottom: spacing[1],
+  logoTile: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[3],
+  },
+  logoText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: glass.textPrimary,
+    letterSpacing: 2,
   },
   title: {
     ...typography.heading2,
-    color: colors.text.primary,
+    color: glass.textPrimary,
     marginBottom: spacing[1],
   },
   subtitle: {
     ...typography.body,
-    color: colors.text.secondary,
+    color: glass.textMuted,
     textAlign: "center",
-    marginBottom: spacing[8],
+    marginBottom: spacing[6],
   },
   form: {
     width: "100%",
   },
   label: {
     ...typography.label,
-    color: colors.text.secondary,
-    marginBottom: spacing[1.5],
+    color: glass.textMuted,
+    marginBottom: spacing[2],
   },
-  input: {
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
     height: layout.inputHeight,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border.default,
-    paddingHorizontal: spacing[4],
+    borderColor: glass.cardBorder,
+    paddingHorizontal: spacing[3],
+  },
+  inputIcon: { marginRight: spacing[2] },
+  input: {
+    flex: 1,
+    height: "100%",
     ...typography.body,
-    color: colors.text.primary,
+    color: glass.textPrimary,
   },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing[2],
     backgroundColor: "rgba(244,67,54,0.12)",
+    borderColor: "rgba(244,67,54,0.4)",
+    borderWidth: 1,
     borderRadius: radius.md,
     paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
+    paddingHorizontal: spacing[3],
     marginTop: spacing[4],
-  },
-  errorDot: {
-    ...typography.labelSmall,
-    color: colors.status.error,
-    marginRight: spacing[2],
   },
   errorText: {
     ...typography.bodySmall,
-    color: colors.status.error,
+    color: "#fca5a5",
     flex: 1,
   },
   button: {
     height: layout.buttonHeight,
-    backgroundColor: colors.accent.green,
+    backgroundColor: "#bfdbfe",
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -244,11 +274,10 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     backgroundColor: colors.status.disabled,
   },
-  buttonPressed: {
-    opacity: 0.85,
-  },
+  buttonPressed: { opacity: 0.85 },
   buttonText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: "#0f172a",
+    fontWeight: "700",
   },
 });

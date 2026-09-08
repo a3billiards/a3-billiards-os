@@ -1,0 +1,523 @@
+import { useState, useRef, useCallback, useEffect } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+  Linking,
+} from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useAction } from "convex/react";
+import { api } from "@a3/convex/_generated/api";
+import { colors, typography, spacing, radius, layout, glass } from "@a3/ui/theme";
+import { parseConvexError } from "@a3/ui/errors";
+import { GlassPageBackground, LiquidGlassCard, KeyboardFormScroll, PhoneInput } from "@a3/ui/components";
+import { usePostLoginNavigation } from "@a3/ui/hooks";
+import { DEFAULT_PHONE_E164, isValidE164 } from "@a3/utils/phone";
+import { resolveGoogleIdTokenForConvexAuth } from "../lib/googleIdToken";
+import { useTranslation } from "@a3/i18n";
+
+const PRIVACY_URL = "https://a3billiards.com/privacy";
+const TOS_URL = "https://a3billiards.com/terms";
+
+/**
+ * Owner Google registration (TDD §3.2): consent + phone + age, then Convex session.
+ */
+export default function OwnerRegisterScreen() {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    googleId?: string;
+    googleEmail?: string;
+    googleName?: string;
+  }>();
+
+  const { signIn } = useAuthActions();
+  const { schedulePostLogin } = usePostLoginNavigation();
+  const completeOwnerReg = useAction(
+    api.googleAuthActions.completeOwnerGoogleRegistration,
+  );
+
+  const [name, setName] = useState(params.googleName ?? "");
+  const [email, setEmail] = useState(params.googleEmail ?? "");
+  const [phone, setPhone] = useState(DEFAULT_PHONE_E164);
+  const [age, setAge] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const ageRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (!params.googleId) {
+      router.replace("/login");
+    }
+  }, [params.googleId, router]);
+
+  const parsedAge = Number(age);
+  const ageValid = age.length > 0 && Number.isInteger(parsedAge) && parsedAge > 0;
+  const phoneValid = isValidE164(phone.replace(/\s/g, ""));
+  const emailValid = email.trim().length > 0 && email.includes("@");
+  const nameValid = name.trim().length > 0;
+
+  const canSubmit =
+    Boolean(params.googleId) &&
+    nameValid &&
+    emailValid &&
+    phoneValid &&
+    ageValid &&
+    consent &&
+    !loading;
+
+  const handleSubmit = useCallback(async () => {
+    try {
+      if (!canSubmit || !params.googleId) return;
+      setError(null);
+
+      if (parsedAge < 18) {
+        setError(t("auth.owner.register.mustBe18"));
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const normalizedPhone = phone.replace(/\s/g, "");
+
+        try {
+          await completeOwnerReg({
+            googleId: params.googleId,
+            email: email.trim().toLowerCase(),
+            name: name.trim(),
+            phone: normalizedPhone,
+            age: parsedAge,
+            consentGiven: true,
+          });
+        } catch (regErr) {
+          console.error(
+            "[OwnerRegister] completeOwnerGoogleRegistration failed",
+            regErr,
+            regErr instanceof Error ? regErr.stack : undefined,
+          );
+          throw regErr;
+        }
+
+        let idToken: string;
+        try {
+          idToken = await resolveGoogleIdTokenForConvexAuth();
+        } catch (tokenErr) {
+          console.error(
+            "[OwnerRegister] resolveGoogleIdTokenForConvexAuth failed",
+            tokenErr,
+            tokenErr instanceof Error ? tokenErr.stack : undefined,
+          );
+          throw tokenErr;
+        }
+
+        let signingIn: boolean;
+        try {
+          const out = await signIn("googleOwner", { idToken });
+          signingIn = out.signingIn;
+          if (!signingIn) {
+            console.error(
+              "[OwnerRegister] signIn(googleOwner) returned signingIn: false",
+              { idTokenLength: idToken.length },
+            );
+          }
+        } catch (signErr) {
+          console.error(
+            "[OwnerRegister] signIn(googleOwner) threw",
+            signErr,
+            signErr instanceof Error ? signErr.stack : undefined,
+          );
+          throw signErr;
+        }
+
+        if (!signingIn) {
+          throw new Error(
+            "GOOGLE_AUTH_001: Could not establish session after registration",
+          );
+        }
+
+        schedulePostLogin();
+      } catch (e) {
+        let serialized = "";
+        try {
+          serialized = JSON.stringify(
+            e,
+            Object.getOwnPropertyNames(Object(e ?? {})),
+          );
+        } catch {
+          serialized = "<non-serializable>";
+        }
+        console.error("[OwnerRegister] submit failed", {
+          err: e,
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+          serialized,
+        });
+        const appError = parseConvexError(e as Error);
+        switch (appError.code) {
+          case "AUTH_005":
+            setError(t("auth.owner.register.mustAgreeConsent"));
+            break;
+          case "AUTH_007":
+            setError(t("auth.owner.register.mustBe18"));
+            break;
+          case "OTP_006":
+          case "OTP_007":
+            setError(t("auth.owner.register.phoneCannotRegister"));
+            break;
+          case "CLUB_003":
+            setError(t("auth.owner.register.emailAlreadyRegistered"));
+            break;
+          case "GOOGLE_AUTH_001":
+            setError(t("auth.owner.register.googleSessionFailed"));
+            break;
+          default:
+            setError(appError.message || t("auth.owner.register.registrationFailed"));
+        }
+      } finally {
+        setLoading(false);
+      }
+    } catch (outer) {
+      console.error("[OwnerRegister] unexpected outer failure", outer);
+    }
+  }, [
+    canSubmit,
+    parsedAge,
+    phone,
+    params.googleId,
+    email,
+    name,
+    completeOwnerReg,
+    signIn,
+    router,
+    t,
+  ]);
+
+  if (!params.googleId) {
+    return null;
+  }
+
+  return (
+    <GlassPageBackground>
+    <KeyboardFormScroll contentContainerStyle={styles.scroll}>
+        <View style={styles.container}>
+          <View style={styles.logoTile}>
+            <Text style={styles.logoText}>{t("auth.owner.register.logo")}</Text>
+          </View>
+          <Text style={styles.title}>{t("auth.owner.register.title")}</Text>
+          <Text style={styles.subtitle}>{t("auth.owner.register.subtitle")}</Text>
+
+          <LiquidGlassCard style={styles.formCard} padding={20}>
+          <View style={styles.form}>
+            <Text style={styles.label}>{t("auth.owner.register.fullName")}</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder={t("auth.owner.register.fullNamePlaceholder")}
+              placeholderTextColor={colors.text.tertiary}
+              autoCapitalize="words"
+              autoComplete="name"
+              textContentType="name"
+              returnKeyType="next"
+              onSubmitEditing={() => emailRef.current?.focus()}
+              editable={!loading}
+              accessibilityLabel={t("auth.owner.register.fullName")}
+            />
+
+            <Text style={[styles.label, styles.fieldGap]}>{t("auth.owner.register.email")}</Text>
+            <TextInput
+              ref={emailRef}
+              style={[styles.input, styles.inputDisabled]}
+              value={email}
+              onChangeText={setEmail}
+              placeholder={t("auth.owner.register.emailPlaceholder")}
+              placeholderTextColor={colors.text.tertiary}
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              returnKeyType="next"
+              onSubmitEditing={() => phoneRef.current?.focus()}
+              editable={false}
+              accessibilityLabel={t("auth.owner.register.email")}
+            />
+
+            <Text style={[styles.label, styles.fieldGap]}>{t("auth.owner.register.phone")}</Text>
+            <PhoneInput
+              inputRef={phoneRef}
+              value={phone}
+              onChangeValue={setPhone}
+              editable={!loading}
+              returnKeyType="next"
+              onSubmitEditing={() => ageRef.current?.focus()}
+              countryCodeLabel={t("auth.phone.countryCode")}
+              selectCountryLabel={t("auth.phone.selectCountry")}
+              accessibilityLabel={t("auth.phone.number")}
+              inputStyle={styles.input}
+            />
+            <Text style={styles.hint}>{t("auth.owner.register.phoneHint")}</Text>
+
+            <Text style={[styles.label, styles.fieldGap]}>{t("auth.owner.register.age")}</Text>
+            <TextInput
+              ref={ageRef}
+              style={styles.input}
+              value={age}
+              onChangeText={(txt) => setAge(txt.replace(/\D/g, ""))}
+              placeholder={t("auth.owner.register.agePlaceholder")}
+              placeholderTextColor={colors.text.tertiary}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              editable={!loading}
+              accessibilityLabel={t("auth.owner.register.age")}
+            />
+
+            <Pressable
+              style={styles.consentRow}
+              onPress={() => setConsent((prev) => !prev)}
+              disabled={loading}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: consent }}
+              accessibilityLabel={`${t("auth.owner.register.consentPrefix")} ${t("auth.owner.register.privacyPolicy")} ${t("auth.owner.register.and")} ${t("auth.owner.register.termsOfService")}`}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  consent && styles.checkboxChecked,
+                ]}
+              >
+                {consent && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={styles.consentText}>
+                {t("auth.owner.register.consentPrefix")}{" "}
+                <Text
+                  style={styles.consentLink}
+                  onPress={() => void Linking.openURL(PRIVACY_URL).catch(() => {})}
+                  accessibilityRole="link"
+                >
+                  {t("auth.owner.register.privacyPolicy")}
+                </Text>{" "}
+                {t("auth.owner.register.and")}{" "}
+                <Text
+                  style={styles.consentLink}
+                  onPress={() => void Linking.openURL(TOS_URL).catch(() => {})}
+                  accessibilityRole="link"
+                >
+                  {t("auth.owner.register.termsOfService")}
+                </Text>
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                !canSubmit && styles.buttonDisabled,
+                pressed && canSubmit && styles.pressed,
+              ]}
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+              accessibilityRole="button"
+              accessibilityLabel={t("auth.owner.register.createAccount")}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.bg.primary} />
+              ) : (
+                <Text style={styles.primaryButtonText}>{t("auth.owner.register.createAccount")}</Text>
+              )}
+            </Pressable>
+          </View>
+
+          {error !== null && (
+            <View
+              style={styles.errorBox}
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+            >
+              <Text style={styles.errorLabel}>{t("auth.owner.register.error")}</Text>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+          </LiquidGlassCard>
+
+          <View style={styles.loginRow}>
+            <Text style={styles.loginText}>{t("auth.owner.register.alreadyHaveAccount")} </Text>
+            <Pressable
+              onPress={() => router.replace("/login")}
+              disabled={loading}
+              hitSlop={8}
+              accessibilityRole="link"
+            >
+              <Text style={styles.loginLink}>{t("auth.owner.register.signIn")}</Text>
+            </Pressable>
+          </View>
+        </View>
+    </KeyboardFormScroll>
+    </GlassPageBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing[8],
+  },
+  container: {
+    alignItems: "center",
+    width: "100%",
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: "center",
+  },
+  logoTile: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[3],
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: glass.textPrimary,
+    letterSpacing: 2,
+  },
+  title: {
+    ...typography.heading2,
+    color: glass.textPrimary,
+    marginBottom: spacing[1],
+  },
+  subtitle: {
+    ...typography.body,
+    color: glass.textMuted,
+    textAlign: "center",
+    marginBottom: spacing[5],
+  },
+  formCard: { width: "100%" },
+  form: { width: "100%" },
+  label: {
+    ...typography.label,
+    color: glass.textMuted,
+    marginBottom: spacing[2],
+  },
+  fieldGap: { marginTop: spacing[4] },
+  input: {
+    height: layout.inputHeight,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    paddingHorizontal: spacing[4],
+    ...typography.body,
+    color: glass.textPrimary,
+  },
+  inputDisabled: { opacity: 0.6 },
+  hint: {
+    ...typography.bodySmall,
+    color: glass.textLabel,
+    marginTop: spacing[1],
+  },
+  consentRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: spacing[6],
+    minHeight: layout.touchTarget,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.xs,
+    borderWidth: 2,
+    borderColor: glass.cardBorder,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginEnd: spacing[3],
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: "#86efac",
+    borderColor: "#86efac",
+  },
+  checkmark: {
+    color: "#052e16",
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+  consentText: {
+    ...typography.bodySmall,
+    color: glass.textMuted,
+    flex: 1,
+    paddingTop: 2,
+  },
+  consentLink: {
+    color: "#86efac",
+    textDecorationLine: "underline",
+  },
+  primaryButton: {
+    height: layout.buttonHeight,
+    backgroundColor: "#86efac",
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: spacing[6],
+    minHeight: layout.touchTarget,
+  },
+  primaryButtonText: {
+    ...typography.buttonLarge,
+    color: "#052e16",
+    fontWeight: "700",
+  },
+  buttonDisabled: { backgroundColor: colors.status.disabled, opacity: 0.7 },
+  pressed: { opacity: 0.85 },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(244,67,54,0.12)",
+    borderColor: "rgba(244,67,54,0.4)",
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[4],
+    width: "100%",
+  },
+  errorLabel: {
+    ...typography.labelSmall,
+    color: colors.status.error,
+    marginRight: spacing[2],
+  },
+  errorText: {
+    ...typography.bodySmall,
+    color: "#fca5a5",
+    flex: 1,
+  },
+  loginRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing[6],
+  },
+  loginText: {
+    ...typography.body,
+    color: glass.textMuted,
+  },
+  loginLink: {
+    ...typography.label,
+    color: "#86efac",
+    fontWeight: "700",
+  },
+});

@@ -7,6 +7,7 @@ import type { Doc } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { requireOwner, requireViewer } from "./model/viewer";
 import { bookingAppliesToTable } from "./model/sessionRate";
+import { bookingWindowMs, effectiveBookingDurationMin } from "./model/bookingDuration";
 import {
   dateYmdInTimeZone,
   zonedWallTimeToUtcMs,
@@ -14,19 +15,6 @@ import {
 
 const TWO_H_MS = 2 * 60 * 60 * 1000;
 const SIXTY_MIN_MS = 60 * 60 * 1000;
-
-function bookingUtcWindow(
-  booking: Doc<"bookings">,
-  clubTimeZone: string,
-): { startMs: number; endMs: number } {
-  const startMs = zonedWallTimeToUtcMs(
-    booking.requestedDate,
-    booking.requestedStartTime,
-    clubTimeZone,
-  );
-  const endMs = startMs + booking.requestedDurationMin * 60_000;
-  return { startMs, endMs };
-}
 
 function formatBookedTime(startMs: number, clubTimeZone: string): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -42,9 +30,13 @@ export const getSlotDashboard = query({
   handler: async (ctx) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
-    const club = await ctx.db.get(owner.clubId);
+    if (owner.clubId === null) {
+      return null;
+    }
+    const clubId = owner.clubId;
+    const club = await ctx.db.get(clubId);
     if (!club) {
-      throw new Error("DATA_003: Club not found");
+      return null;
     }
 
     const now = Date.now();
@@ -52,13 +44,13 @@ export const getSlotDashboard = query({
 
     const tables = await ctx.db
       .query("tables")
-      .withIndex("by_club", (q) => q.eq("clubId", owner.clubId))
+      .withIndex("by_club", (q) => q.eq("clubId", clubId))
       .collect();
 
     const todaysBookings = await ctx.db
       .query("bookings")
       .withIndex("by_club_date", (q) =>
-        q.eq("clubId", owner.clubId).eq("requestedDate", todayYmd),
+        q.eq("clubId", clubId).eq("requestedDate", todayYmd),
       )
       .collect();
 
@@ -76,29 +68,97 @@ export const getSlotDashboard = query({
 
     const bookingTagByTableId: Record<
       string,
-      { label: string; startMs: number }
+      {
+        label: string;
+        startMs: number;
+        durationMin: number;
+        openEnded: boolean;
+      }
     > = {};
 
     for (const table of tables) {
       for (const b of confirmed) {
         if (!bookingAppliesToTable(b, table)) continue;
-        const { startMs, endMs } = bookingUtcWindow(b, club.timezone);
+        const { startMs, endMs } = bookingWindowMs(
+          b,
+          club.timezone,
+          club.minBillMinutes,
+        );
         const overlapsNext2h = endMs > now && startMs < now + TWO_H_MS;
         if (overlapsNext2h) {
+          const durationMin = effectiveBookingDurationMin(b, club.minBillMinutes);
+          const openEnded = b.openEnded === true;
           bookingTagByTableId[table._id] = {
-            label: `Booked ${formatBookedTime(startMs, club.timezone)}`,
+            label: `${formatBookedTime(startMs, club.timezone)} · ${openEnded ? "Open" : `${durationMin}m`}`,
             startMs,
+            durationMin,
+            openEnded,
           };
           break;
         }
       }
     }
 
+    type ActiveSessionMeta = {
+      sessionId: import("./_generated/dataModel").Id<"sessions">;
+      startTime: number;
+      isGuest: boolean;
+      customerName: string;
+      playerCount: number;
+      playMode: "casual" | "versus";
+      losersPay: boolean;
+      assignedPlayDurationMin: number | null;
+      assignedPlayOpenEnded: boolean;
+      plannedEndTime: number | null;
+    };
+
+    const activeSessionByTableId: Record<string, ActiveSessionMeta> = {};
+    for (const t of tables) {
+      if (t.currentSessionId === undefined) continue;
+      const s = await ctx.db.get(t.currentSessionId);
+      if (!s || s.status !== "active") continue;
+      const participantList = s.participants ?? [];
+      const playerCount =
+        participantList.length > 0
+          ? participantList.length
+          : s.isGuest
+            ? 1
+            : 1;
+      let customerName: string;
+      if (participantList.length > 1) {
+        const primary =
+          participantList.find((p) => p.customerId === s.customerId) ??
+          participantList[0];
+        customerName = `${primary?.displayName ?? "Group"} +${participantList.length - 1}`;
+      } else if (s.isGuest) {
+        customerName = (s.guestName ?? "").trim() || "Walk-in";
+      } else if (s.customerId) {
+        const u = await ctx.db.get(s.customerId);
+        customerName = u?.name ?? "[Deleted Customer]";
+      } else {
+        customerName = "Customer";
+      }
+      activeSessionByTableId[t._id] = {
+        sessionId: s._id,
+        startTime: s.startTime,
+        isGuest: s.isGuest,
+        customerName,
+        playerCount,
+        playMode: s.playMode ?? "casual",
+        losersPay: s.losersPay === true,
+        assignedPlayDurationMin: s.assignedPlayDurationMin ?? null,
+        assignedPlayOpenEnded: s.assignedPlayOpenEnded === true,
+        plannedEndTime: s.plannedEndTime ?? null,
+      };
+    }
+
     return {
-      clubId: owner.clubId,
+      clubId,
+      clubName: club.name,
       currency: club.currency,
       timezone: club.timezone,
       bookingSettingsEnabled: club.bookingSettings.enabled,
+      slotDurationOptions: club.bookingSettings.slotDurationOptions,
       todayYmd,
       bookingSummary: {
         pending: pendingCount,
@@ -114,6 +174,7 @@ export const getSlotDashboard = query({
         currentSessionId: t.currentSessionId,
       })),
       bookingTagByTableId,
+      activeSessionByTableId,
     };
   },
 });
@@ -123,13 +184,17 @@ export const getWalkInBookingConflict = query({
   handler: async (ctx, { tableId }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
-    const club = await ctx.db.get(owner.clubId);
+    if (owner.clubId === null) {
+      return { hasConflict: false as const };
+    }
+    const clubId = owner.clubId;
+    const club = await ctx.db.get(clubId);
     if (!club) {
       throw new Error("DATA_003: Club not found");
     }
 
     const table = await ctx.db.get(tableId);
-    if (!table || table.clubId !== owner.clubId) {
+    if (!table || table.clubId !== clubId) {
       throw new Error("DATA_003: Table not found");
     }
 
@@ -139,14 +204,18 @@ export const getWalkInBookingConflict = query({
     const todays = await ctx.db
       .query("bookings")
       .withIndex("by_club_date", (q) =>
-        q.eq("clubId", owner.clubId).eq("requestedDate", todayYmd),
+        q.eq("clubId", clubId).eq("requestedDate", todayYmd),
       )
       .collect();
     const confirmed = todays.filter((b) => b.status === "confirmed");
 
     for (const b of confirmed) {
       if (!bookingAppliesToTable(b, table)) continue;
-      const { startMs, endMs } = bookingUtcWindow(b, club.timezone);
+      const { startMs, endMs } = bookingWindowMs(
+        b,
+        club.timezone,
+        club.minBillMinutes,
+      );
       const overlapsNext60m = endMs > now && startMs < now + SIXTY_MIN_MS;
       if (overlapsNext60m) {
         return {

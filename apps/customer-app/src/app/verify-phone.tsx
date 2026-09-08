@@ -6,19 +6,20 @@ import {
   Pressable,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import {
   useAction,
   useConvexAuth,
-  useMutation,
   useQuery,
 } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { colors, typography, spacing, radius, layout, glass, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { useTranslation } from "@a3/i18n";
+import { parseOtpAttemptsRemaining, parseOtpLockoutSeconds } from "@a3/utils/otp";
 
 const PIN_LENGTH = 6;
 const RESEND_COOLDOWN_SEC = 60;
@@ -33,12 +34,16 @@ type ScreenMode =
   | "verifying";  // verifyOtp call in flight
 
 export default function VerifyPhoneScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
-  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const rawPhone = useLocalSearchParams<{ phone: string }>().phone;
+  // Expo Router can URL-encode '+' as '%2B' — decode it back to E.164
+  const phone = Array.isArray(rawPhone)
+    ? decodeURIComponent(rawPhone[0] ?? "")
+    : decodeURIComponent(rawPhone ?? "");
   const { isAuthenticated } = useConvexAuth();
   const sendOtp = useAction(api.otp.sendOtp);
   const verifyOtp = useAction(api.otp.verifyOtp);
-  const updateUser = useMutation(api.users.updateUser);
   const currentUser = useQuery(
     api.users.getCurrentUser,
     isAuthenticated ? {} : "skip",
@@ -53,13 +58,23 @@ export default function VerifyPhoneScreen() {
   const inputs = useRef<(TextInput | null)[]>([]);
   const sentInitial = useRef(false);
 
-  // ── Auto-send OTP on mount ──
+  // ── Auto-send OTP on mount (wait for current user when signed in — sendOtp needs verificationUserId) ──
   useEffect(() => {
-    if (!phone || sentInitial.current) return;
+    if (sentInitial.current) return;
+    if (!phone) {
+      sentInitial.current = true;
+      setError(t("auth.customer.verifyPhone.missingPhone"));
+      setMode("input");
+      return;
+    }
+    if (isAuthenticated && currentUser === undefined) return;
+
     sentInitial.current = true;
 
     setMode("sending");
-    sendOtp({ phone })
+    const verificationUserId =
+      isAuthenticated && currentUser != null ? currentUser._id : undefined;
+    sendOtp({ phone, verificationUserId })
       .then(() => {
         setResendCooldown(RESEND_COOLDOWN_SEC);
         setMode("input");
@@ -73,7 +88,7 @@ export default function VerifyPhoneScreen() {
           setMode("input");
         }
       });
-  }, [phone, sendOtp]);
+  }, [phone, sendOtp, isAuthenticated, currentUser, t]);
 
   // ── Resend cooldown timer (60s between sends) ──
   useEffect(() => {
@@ -161,27 +176,41 @@ export default function VerifyPhoneScreen() {
     setMode("verifying");
 
     try {
+      const userIdForOtp =
+        isAuthenticated && currentUser != null ? currentUser._id : undefined;
+
       await verifyOtp({
         phone,
         code,
-        userId: currentUser?._id,
+        userId: userIdForOtp,
       });
-      await updateUser({ phone });
-      router.replace("/(tabs)/discover");
+
+      // `verifyOtp` already persists `phone` (if missing) + `phoneVerified=true`
+      // on the user. Calling `updateUser({ phone })` here is redundant and
+      // hits PERM_001 because `phoneVerified` is now true on a customer.
+
+      router.replace("/(tabs)/home");
     } catch (e) {
       const appError = parseConvexError(e as Error);
       switch (appError.code) {
-        case "OTP_001":
-          setLockCountdown(LOCKOUT_SEC);
+        case "OTP_001": {
+          const lockSec = parseOtpLockoutSeconds(appError.message) ?? LOCKOUT_SEC;
+          setLockCountdown(lockSec);
           setMode("locked");
           setError(null);
           break;
+        }
         case "OTP_002":
           if (appError.message.toLowerCase().includes("expired")) {
             setMode("expired");
             setError(null);
           } else {
-            setError("Incorrect code. Check and try again.");
+            const remaining = parseOtpAttemptsRemaining(appError.message);
+            setError(
+              remaining !== null
+                ? t("auth.customer.verifyPhone.incorrectCodeRemaining", { remaining })
+                : appError.message,
+            );
             setMode("input");
           }
           break;
@@ -201,12 +230,11 @@ export default function VerifyPhoneScreen() {
     phone,
     verifyOtp,
     code,
-    updateUser,
     router,
     resetDigits,
-    currentUser?._id,
     isAuthenticated,
     currentUser,
+    t,
   ]);
 
   // ── Auto-submit when all 6 digits entered ──
@@ -225,7 +253,9 @@ export default function VerifyPhoneScreen() {
     setMode("sending");
 
     try {
-      await sendOtp({ phone });
+      const verificationUserId =
+        isAuthenticated && currentUser != null ? currentUser._id : undefined;
+      await sendOtp({ phone, verificationUserId });
       setResendCooldown(RESEND_COOLDOWN_SEC);
       setLockCountdown(0);
       setMode("input");
@@ -239,7 +269,7 @@ export default function VerifyPhoneScreen() {
         setMode("input");
       }
     }
-  }, [resendCooldown, phone, mode, sendOtp, resetDigits]);
+  }, [resendCooldown, phone, mode, sendOtp, resetDigits, isAuthenticated, currentUser]);
 
   const maskedPhone = phone
     ? `${phone.slice(0, 4)}••••${phone.slice(-3)}`
@@ -256,15 +286,13 @@ export default function VerifyPhoneScreen() {
     mode === "input" || mode === "expired";
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <GlassPageBackground>
+    <KeyboardAvoidingView style={styles.flex} {...iosKeyboardAvoidingProps}>
       <View style={styles.container}>
         <Text style={styles.logo}>A3</Text>
-        <Text style={styles.title}>Verify Phone</Text>
+        <Text style={styles.title}>{t("auth.customer.verifyPhone.title")}</Text>
         <Text style={styles.subtitle}>
-          Enter the 6-digit code sent via WhatsApp to{"\n"}
+          {t("auth.customer.verifyPhone.subtitle")}{"\n"}
           <Text style={styles.phoneBold}>{maskedPhone}</Text>
         </Text>
 
@@ -272,13 +300,13 @@ export default function VerifyPhoneScreen() {
         {mode === "locked" && (
           <View style={styles.lockBox}>
             <Text style={styles.lockIcon}>⏳</Text>
-            <Text style={styles.lockTitle}>Too many failed attempts</Text>
+            <Text style={styles.lockTitle}>{t("auth.customer.verifyPhone.lockedTitle")}</Text>
             <Text style={styles.lockTimer}>
-              Try again in {formatCountdown(lockCountdown)}
+              {t("auth.customer.verifyPhone.tryAgainIn", {
+                time: formatCountdown(lockCountdown),
+              })}
             </Text>
-            <Text style={styles.lockHint}>
-              Request a new code after the cooldown ends.
-            </Text>
+            <Text style={styles.lockHint}>{t("auth.customer.verifyPhone.lockedHint")}</Text>
           </View>
         )}
 
@@ -286,11 +314,8 @@ export default function VerifyPhoneScreen() {
         {mode === "rateLimited" && (
           <View style={styles.lockBox}>
             <Text style={styles.lockIcon}>🚫</Text>
-            <Text style={styles.lockTitle}>Too many attempts</Text>
-            <Text style={styles.lockHint}>
-              You've reached the maximum OTP requests this hour.{"\n"}
-              Try again in 1 hour.
-            </Text>
+            <Text style={styles.lockTitle}>{t("auth.customer.verifyPhone.rateLimitedTitle")}</Text>
+            <Text style={styles.lockHint}>{t("auth.customer.verifyPhone.rateLimitedBody")}</Text>
           </View>
         )}
 
@@ -298,20 +323,16 @@ export default function VerifyPhoneScreen() {
         {mode === "expired" && (
           <View style={styles.lockBox}>
             <Text style={styles.lockIcon}>⏰</Text>
-            <Text style={styles.lockTitle}>Code expired</Text>
-            <Text style={styles.lockHint}>
-              Your verification code has expired. Request a new one.
-            </Text>
+            <Text style={styles.lockTitle}>{t("auth.customer.verifyPhone.expiredTitle")}</Text>
+            <Text style={styles.lockHint}>{t("auth.customer.verifyPhone.expiredHint")}</Text>
           </View>
         )}
 
         {/* ── Sending spinner ── */}
         {mode === "sending" && (
           <View style={styles.sendingBox}>
-            <ActivityIndicator size="large" color={colors.accent.green} />
-            <Text style={styles.sendingText}>
-              Sending verification code…
-            </Text>
+            <ActivityIndicator size="large" color={glass.ctaBg} />
+            <Text style={styles.sendingText}>{t("auth.customer.verifyPhone.sending")}</Text>
           </View>
         )}
 
@@ -339,7 +360,10 @@ export default function VerifyPhoneScreen() {
                   maxLength={i === 0 ? PIN_LENGTH : 1}
                   autoFocus={i === 0}
                   editable={mode === "input"}
-                  accessibilityLabel={`Digit ${i + 1} of ${PIN_LENGTH}`}
+                  accessibilityLabel={t("auth.customer.verifyPhone.digitAccessibility", {
+                    index: i + 1,
+                    total: PIN_LENGTH,
+                  })}
                   selectTextOnFocus
                 />
               ))}
@@ -347,7 +371,7 @@ export default function VerifyPhoneScreen() {
 
             {mode === "verifying" && (
               <ActivityIndicator
-                color={colors.accent.green}
+                color={glass.ctaBg}
                 style={{ marginTop: spacing[4] }}
               />
             )}
@@ -361,7 +385,7 @@ export default function VerifyPhoneScreen() {
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
-            <Text style={styles.errorLabel}>Error</Text>
+            <Text style={styles.errorLabel}>{t("auth.customer.verifyPhone.errorLabel")}</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -384,8 +408,8 @@ export default function VerifyPhoneScreen() {
             accessibilityRole="button"
             accessibilityLabel={
               resendCooldown > 0
-                ? `Resend code available in ${resendCooldown} seconds`
-                : "Resend code"
+                ? t("auth.customer.verifyPhone.resendAvailableIn", { seconds: resendCooldown })
+                : t("auth.customer.verifyPhone.resendCode")
             }
           >
             <Text
@@ -399,10 +423,10 @@ export default function VerifyPhoneScreen() {
               ]}
             >
               {mode === "expired"
-                ? "Send New Code"
+                ? t("auth.customer.verifyPhone.sendNewCode")
                 : resendCooldown > 0
-                  ? `Resend code in ${resendCooldown}s`
-                  : "Resend Code"}
+                  ? t("auth.customer.verifyPhone.resendCodeIn", { seconds: resendCooldown })
+                  : t("auth.customer.verifyPhone.resendCode")}
             </Text>
           </Pressable>
         )}
@@ -413,24 +437,25 @@ export default function VerifyPhoneScreen() {
             style={styles.resendButtonPrimary}
             onPress={handleResend}
             accessibilityRole="button"
-            accessibilityLabel="Send new code"
+            accessibilityLabel={t("auth.customer.verifyPhone.sendNewCode")}
           >
-            <Text style={styles.resendButtonPrimaryText}>Send New Code</Text>
+            <Text style={styles.resendButtonPrimaryText}>
+              {t("auth.customer.verifyPhone.sendNewCode")}
+            </Text>
           </Pressable>
         )}
 
         {inputVisible && (
-          <Text style={styles.hint}>
-            Your account is inactive until phone verification is complete.
-          </Text>
+          <Text style={styles.hint}>{t("auth.customer.verifyPhone.inactiveHint")}</Text>
         )}
       </View>
     </KeyboardAvoidingView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg.primary },
+  flex: { flex: 1, backgroundColor: "transparent" },
   container: {
     flex: 1,
     alignItems: "center",
@@ -443,7 +468,7 @@ const styles = StyleSheet.create({
   logo: {
     ...typography.heading1,
     fontSize: 48,
-    color: colors.accent.green,
+    color: glass.ctaBg,
     letterSpacing: 4,
     marginBottom: spacing[1],
   },
@@ -469,22 +494,24 @@ const styles = StyleSheet.create({
   codeBox: {
     width: 48,
     height: 56,
-    backgroundColor: colors.bg.tertiary,
+    backgroundColor: glass.inputBg,
     borderRadius: radius.md,
     borderWidth: 2,
-    borderColor: colors.border.default,
+    borderColor: glass.inputBorder,
     textAlign: "center",
     ...typography.monoLarge,
     color: colors.text.primary,
   },
-  codeBoxFilled: { borderColor: colors.accent.green },
+  codeBoxFilled: { borderColor: glass.inputBorderFocus },
   codeBoxError: { borderColor: colors.status.error },
 
   // ── Lock / rate limit / expired states ──
   lockBox: {
     alignItems: "center",
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.lg,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+    borderRadius: glass.cardRadiusSmall,
     paddingVertical: spacing[8],
     paddingHorizontal: spacing[6],
     width: "100%",
@@ -546,13 +573,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
   },
   resendDisabled: { opacity: 0.5 },
-  resendText: { ...typography.label, color: colors.accent.green },
+  resendText: { ...typography.label, color: glass.ctaBg },
   resendTextDisabled: { color: colors.text.secondary },
 
   // ── Resend (prominent button for expired / post-lock) ──
   resendButtonPrimary: {
     height: layout.buttonHeight,
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -562,7 +589,7 @@ const styles = StyleSheet.create({
   },
   resendButtonPrimaryText: {
     ...typography.buttonLarge,
-    color: colors.bg.primary,
+    color: glass.ctaText,
   },
   pressed: { opacity: 0.85 },
 

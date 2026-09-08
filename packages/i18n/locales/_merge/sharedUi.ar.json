@@ -1,0 +1,194 @@
+{
+  "passcodeGate": {
+    "title": "الإعدادات",
+    "subtitle": "أدخل رمز مرور الإعدادات المكوّن من 6 أرقام للمتابعة.",
+    "invalidFormat": "أدخل رمز مرور الإعدادات المكوّن من 6 أرقام.",
+    "invalidPasscode": "رمز مرور غير صالح.",
+    "unlock": "فتح",
+    "cancel": "إلغاء"
+  },
+  "tablePicker": {
+    "title": "أي طاولة؟",
+    "empty": "لا توجد طاولات نشطة لهذا النوع. اطلب من النادي التحقق من إعداد الطاولات في الإعدادات."
+  },
+  "tableTypeSelect": {
+    "customName": "اسم النوع المخصص",
+    "custom": "مخصص"
+  },
+  "timeSlotGrid": {
+    "loading": "جارٍ تحميل الفترات…",
+    "noSlots": "لا توجد فترات زمنية لهذا التاريخ والمدة.",
+    "pickStart": "اختر وقت البدء",
+    "noTimesOpen": "لا توجد أوقات متاحة لهذا التاريخ والمدة. جرّب تاريخًا آخر أو جلسة أقصر أو نوع طاولة مختلف.",
+    "unavailable": "غير متاح",
+    "realtimeNote": "يتم تحديث التوفر في الوقت الفعلي — أعد التحقق من اختيارك قبل الإرسال."
+  },
+  "dateStrip": {
+    "heading": "متى تريد اللعب؟",
+    "today": "اليوم",
+    "noBookableDates": "لا توجد تواريخ قابلة للحجز خلال {{maxAdvanceDays}} يومًا القادمة. قد يحتاج النادي إلى تحديث أيام أو ساعات الحجز في الإعدادات."
+  },
+  "tableTypePicker": {
+    "heading": "ما نوع الطاولة؟",
+    "oneTable": "طاولة واحدة متاحة",
+    "tablesAvailable": "{{count}} طاولات متاحة",
+    "ratePerMin": "{{rate}}/دقيقة"
+  },
+  "tableGrid": {
+    "tableFallback": "طاولة",
+    "disabled": "معطّلة",
+    "occupied": "مشغولة",
+    "free": "متاحة",
+    "a11yTable": "{{label}}، {{status}}{{tag}}"
+  },
+  "clubCard": {
+    "hoursNotSet": "لم يتم تحديد ساعات العمل",
+    "kmAway": "{{km}} كم",
+    "moreAmenities": "+{{overflow}} المزيد",
+    "bookableOnline": "قابل للحجز عبر الإنترنت"
+  },
+  "liveStreamCard": {
+    "watchA11y": "مشاهدة البث المباشر من {{clubName}}",
+    "liveBadge": "LIVE",
+    "viewer": "{{count}} مشاهد",
+    "viewers": "{{count}} مشاهدين"
+  },
+  "complaintBanner": {
+    "warning": "⚠ لدى العميل شكوى/شكاوى نشطة",
+    "filedBy": "مقدّمة من {{clubName}}",
+    "justNow": "الآن",
+    "minAgo": "منذ {{min}} دقيقة",
+    "hoursAgo": "منذ {{hr}} ساعة",
+    "hoursAgo_other": "منذ {{hr}} ساعات",
+    "daysAgo": "منذ {{day}} يوم",
+    "daysAgo_other": "منذ {{day}} أيام",
+    "monthsAgo": "منذ {{mo}} شهر",
+    "monthsAgo_other": "منذ {{mo}} أشهر",
+    "advisory": "هذا تحذير إرشادي. يمكنك المتابعة أو إلغاء الجلسة.",
+    "cancel": "إلغاء",
+    "acknowledge": "إقرار والمتابعة"
+  },
+  "snackPicker": {
+    "counterTitle": "وجبات خفيفة من الكاونتر",
+    "counterDesc": "جاهزة عند مكتب الدفع — تُضاف إلى الفاتورة فقط.",
+    "counterEmpty": "لا توجد وجبات خفيفة من الكاونتر في القائمة. أضفها من الوجبات الخفيفة ← الكاونتر.",
+    "kitchenTitle": "أصناف المطبخ",
+    "kitchenDesc": "تُرسل إلى شاشة المطبخ للتحضير.",
+    "kitchenEmpty": "لا توجد أصناف مطبخ في القائمة. أضفها من الوجبات الخفيفة ← المطبخ.",
+    "unableTitle": "تعذّر إضافة الأصناف",
+    "unableBody": "لم يعد بإمكان تعديل هذه الجلسة.",
+    "addFailed": "تعذّرت إضافة الأصناف.",
+    "addFailedTitle": "فشل إضافة الأصناف",
+    "addToBill": "إضافة إلى الفاتورة",
+    "heading": "ماذا تضيف لهذه الطاولة؟",
+    "counterSnack": "وجبة خفيفة من الكاونتر",
+    "counterSnackDesc": "رقائق، مشروبات، إلخ عند الكاونتر — فاتورة فقط، بدون مطبخ.",
+    "kitchenItem": "صنف مطبخ",
+    "kitchenItemDesc": "طعام يُحضّر في المطبخ — يظهر على شاشة المطبخ.",
+    "cancel": "إلغاء",
+    "changeType": "← تغيير النوع",
+    "loadingMenu": "جارٍ تحميل القائمة...",
+    "each": "لكل",
+    "decreaseA11y": "تقليل {{name}}",
+    "increaseA11y": "زيادة {{name}}",
+    "subtotal": "المجموع الفرعي",
+    "adding": "جارٍ الإضافة...",
+    "addToBillButton": "إضافة إلى الفاتورة"
+  },
+  "bookingCard": {
+    "customerFallback": "عميل",
+    "tableLabel": "الطاولة: {{label}}",
+    "reasonLabel": "السبب: {{reason}}",
+    "estimated": "تقديري {{amount}}",
+    "requestedTable": "الطاولة المطلوبة: {{label}}",
+    "assignedTable": "المُعيَّنة: {{label}}",
+    "statsAtClub": "في هذا النادي: {{bookings}} حجز، {{noShows}} عدم حضور | على مستوى المنصة: {{platformBookings}} حجز، {{platformNoShows}} عدم حضور",
+    "cancel": "إلغاء",
+    "approve": "موافقة",
+    "reject": "رفض",
+    "startSession": "بدء الجلسة",
+    "statusPending": "قيد الانتظار",
+    "statusConfirmed": "مؤكد",
+    "statusDeclined": "مرفوض",
+    "statusCancelled": "ملغى",
+    "statusCancelledByClub": "ألغاه النادي",
+    "statusExpired": "منتهٍ",
+    "statusCompleted": "مكتمل",
+    "awaitingApproval": "بانتظار الموافقة",
+    "duration30": "30 دقيقة",
+    "duration1Hour": "ساعة واحدة",
+    "durationHours": "{{count}} ساعات",
+    "durationMinutes": "{{min}} دقيقة"
+  },
+  "passwordStrength": {
+    "weak": "ضعيفة",
+    "good": "جيدة",
+    "strong": "قوية",
+    "hint": "8 أحرف على الأقل مع حرف كبير وحرف صغير ورقم ورمز خاص.",
+    "minLength": "يجب أن تتكون كلمة المرور من {{min}} أحرف على الأقل.",
+    "uppercase": "يجب أن تتضمن كلمة المرور حرفًا كبيرًا واحدًا على الأقل.",
+    "lowercase": "يجب أن تتضمن كلمة المرور حرفًا صغيرًا واحدًا على الأقل.",
+    "number": "يجب أن تتضمن كلمة المرور رقمًا واحدًا على الأقل.",
+    "special": "يجب أن تتضمن كلمة المرور رمزًا خاصًا واحدًا على الأقل."
+  },
+  "shareExport": {
+    "tooLargeTitle": "التصدير كبير جدًا",
+    "tooLargeBody": "الملف كبير جدًا لمشاركته كنص على هذا الجهاز. يرجى تقليل نطاق التصفية والمحاولة مرة أخرى.",
+    "shareTitle": "مشاركة التصدير",
+    "saveShare": "حفظ ومشاركة الملف",
+    "savedTitle": "تم الحفظ",
+    "savedBody": "تم حفظ التصدير. ثبّت مدير ملفات أو تطبيق جداول بيانات لفتحه.",
+    "failedTitle": "فشل التصدير",
+    "couldNotShare": "تعذّرت مشاركة الملف المحفوظ.",
+    "couldNotOpenSheet": "تعذّر فتح ورقة المشاركة.",
+    "shareAsText": "مشاركة كنص",
+    "cancel": "إلغاء",
+    "readyTitle": "التصدير جاهز",
+    "readyBody": "اختر كيفية حفظ أو مشاركة بياناتك."
+  },
+  "financialDateRange": {
+    "datesInTz": "التواريخ بتوقيت {{tzAbbr}}",
+    "from": "من",
+    "to": "إلى",
+    "fromDate": "تاريخ البدء",
+    "toDate": "تاريخ الانتهاء",
+    "done": "تم",
+    "last7Days": "آخر 7 أيام",
+    "last30Days": "آخر 30 يومًا",
+    "thisMonth": "هذا الشهر",
+    "lastMonth": "الشهر الماضي",
+    "endBeforeStart": "لا يمكن أن يكون تاريخ الانتهاء قبل تاريخ البدء.",
+    "largeRangeWarning": "قد تستغرق نطاقات التاريخ الكبيرة لحظة للتحميل."
+  },
+  "timeField": {
+    "pickTime": "اختر الوقت",
+    "done": "تم",
+    "pickATime": "اختر وقتًا"
+  },
+  "safeLocationPicker": {
+    "mapUnavailable": "الخريطة غير متاحة",
+    "fallbackInstructions": "افتح خرائط Google، ابحث عن عنوان ناديك، اضغط مطولًا على الدبوس، وانسخ الإحداثيات الظاهرة في الأسفل.",
+    "latitude": "خط العرض",
+    "longitude": "خط الطول",
+    "latError": "يجب أن يكون خط العرض رقمًا بين -90 و 90.",
+    "lngError": "يجب أن يكون خط الطول رقمًا بين -180 و 180.",
+    "useCoordinates": "استخدام هذه الإحداثيات"
+  },
+  "safeBarChart": {
+    "noData": "لا توجد بيانات لعرضها لهذه الفترة.",
+    "unavailable": "الرسم البياني غير متاح. يرجى المحاولة مرة أخرى."
+  },
+  "broadcastPermissions": {
+    "cameraMic": "يلزم الوصول إلى الكاميرا والميكروفون للبث المباشر.",
+    "cameraOnly": "يلزم الوصول إلى الكاميرا للبث المباشر.",
+    "micOnly": "يلزم الوصول إلى الميكروفون لتضمين الصوت في البث."
+  },
+  "placeholders": {
+    "offlineScreen": "OfflineScreen",
+    "passcodeSetupModal": "PasscodeSetupModal",
+    "billModal": "BillModal",
+    "networkGuard": "NetworkGuard",
+    "sessionTimer": "SessionTimer",
+    "userSelector": "UserSelector"
+  }
+}

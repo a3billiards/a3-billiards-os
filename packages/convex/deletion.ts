@@ -17,7 +17,15 @@ import {
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
-const EXPORT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/** Default 5 min for dev/testing; set OWNER_EXPORT_COOLDOWN_MS=86400000 in production Convex env. */
+function ownerExportCooldownMs(): number {
+  const raw = process.env.OWNER_EXPORT_COOLDOWN_MS;
+  if (raw !== undefined && /^\d+$/.test(raw)) {
+    return Number(raw);
+  }
+  return 5 * 60 * 1000;
+}
 
 /** SHA-256 hex of UTF-8 string; matches Node `createHash("sha256").update(s, "utf8").digest("hex")`. */
 async function sha256Utf8Hex(input: string): Promise<string> {
@@ -112,6 +120,35 @@ async function deleteClubScopedData(
     .collect();
   for (const s of snacks) {
     await ctx.db.delete(s._id);
+  }
+
+  const documents = await ctx.db
+    .query("clubDocuments")
+    .withIndex("by_club", (q) => q.eq("clubId", clubId))
+    .collect();
+  for (const doc of documents) {
+    await ctx.storage.delete(doc.imageFileId);
+    await ctx.db.delete(doc._id);
+  }
+
+  const gstSettings = await ctx.db
+    .query("gstSettings")
+    .withIndex("by_club", (q) => q.eq("clubId", clubId))
+    .collect();
+  for (const g of gstSettings) {
+    await ctx.db.delete(g._id);
+  }
+
+  for (const status of ["pending", "preparing", "ready", "served"] as const) {
+    const kitchenOrders = await ctx.db
+      .query("kitchenOrders")
+      .withIndex("by_club_status", (q) =>
+        q.eq("clubId", clubId).eq("status", status),
+      )
+      .collect();
+    for (const ko of kitchenOrders) {
+      await ctx.db.delete(ko._id);
+    }
   }
 
   const roles = await ctx.db
@@ -529,7 +566,7 @@ export const enqueueCustomerDataExport = internalMutation({
       .query("dataExportRequests")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .collect();
-    const recent = prior.filter((r) => r.requestedAt > now - EXPORT_COOLDOWN_MS);
+    const recent = prior.filter((r) => r.requestedAt > now - ownerExportCooldownMs());
     if (recent.length > 0) {
       throw new Error(
         "RATE_001: You can only request a data export once every 24 hours.",
@@ -553,17 +590,25 @@ export const enqueueOwnerDataExport = internalMutation({
     }
     const now = Date.now();
     const last = u.ownerDataExportRequestedAt;
-    if (last !== undefined && now - last < EXPORT_COOLDOWN_MS) {
+    const cooldown = ownerExportCooldownMs();
+    if (last !== undefined && now - last < cooldown) {
+      const minsLeft = Math.ceil((cooldown - (now - last)) / 60_000);
       throw new Error(
-        "EXPORT_001: You can request one data export every 24 hours. Please try again later.",
+        `EXPORT_001: Please wait ${minsLeft} minute${minsLeft === 1 ? "" : "s"} before requesting another export.`,
       );
     }
-    await ctx.db.patch(userId, { ownerDataExportRequestedAt: now });
     await ctx.scheduler.runAfter(
       0,
       internal.deletionActions.generateAndSendDataExport,
       { userId },
     );
+  },
+});
+
+export const markOwnerDataExportCompleted = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await ctx.db.patch(userId, { ownerDataExportRequestedAt: Date.now() });
   },
 });
 

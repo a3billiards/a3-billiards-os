@@ -89,4 +89,33 @@ crons.daily(
   internal.sessions.archiveIfFirstOfMonth,
 );
 
+// ─── 8. Stale live stream cleanup ────────────────────────────────────────────
+// Runs every 30 minutes.
+// Closes liveStreams rows still status='live' with startedAt older than 8 hours.
+// Final safety net if owner End Stream and EventBridge webhook both fail (TDD v1.9 §7).
+crons.interval(
+  "closeStaleLiveStreams",
+  { minutes: 30 },
+  internal.livestream.closeStaleLiveStreams,
+);
+
+// ─── 9. Live stream viewer count refresh ─────────────────────────────────────
+// Runs every 30 seconds while streams are live.
+// Updates currentViewerCount (and peak) so owner, customer, and admin UIs stay current.
+crons.interval(
+  "refreshLiveViewerCounts",
+  { seconds: 30 },
+  internal.livestreamActions.refreshAllLiveViewerCounts,
+);
+
+// ─── 10. Rate-limit counter cleanup ──────────────────────────────────────────
+// Runs daily at 03:30 UTC.
+// Deletes expired rows from the generic `rateLimits` table (fixed-window counters)
+// so the table stays small. Batched inside the handler to bound work per run.
+crons.daily(
+  "rateLimitCleanup",
+  { hourUTC: 3, minuteUTC: 30 },
+  internal.rateLimit.cleanupExpiredRateLimits,
+);
+
 export default crons;

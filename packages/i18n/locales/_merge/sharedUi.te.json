@@ -1,0 +1,194 @@
+{
+  "passcodeGate": {
+    "title": "సెట్టింగ్‌లు",
+    "subtitle": "కొనసాగించడానికి మీ 6-అంకెల సెట్టింగ్‌ల పాస్‌కోడ్ నమోదు చేయండి.",
+    "invalidFormat": "మీ 6-అంకెల సెట్టింగ్‌ల పాస్‌కోడ్ నమోదు చేయండి.",
+    "invalidPasscode": "చెల్లని పాస్‌కోడ్.",
+    "unlock": "అన్‌లాక్",
+    "cancel": "రద్దు చేయి"
+  },
+  "tablePicker": {
+    "title": "ఏ టేబుల్?",
+    "empty": "ఈ రకానికి సక్రియ టేబుల్‌లు లేవు. సెట్టింగ్‌లలో టేబుల్ సెటప్ తనిఖీ చేయమని క్లబ్‌ను అడగండి."
+  },
+  "tableTypeSelect": {
+    "customName": "కస్టమ్ రకం పేరు",
+    "custom": "కస్టమ్"
+  },
+  "timeSlotGrid": {
+    "loading": "స్లాట్‌లు లోడ్ అవుతున్నాయి…",
+    "noSlots": "ఈ తేదీ మరియు వ్యవధికి సమయ స్లాట్‌లు లేవు.",
+    "pickStart": "ప్రారంభ సమయం ఎంచుకోండి",
+    "noTimesOpen": "ఈ తేదీ మరియు వ్యవధికి సమయాలు అందుబాటులో లేవు. మరొక తేదీ, చిన్న సెషన్ లేదా వేరే టేబుల్ రకం ప్రయత్నించండి.",
+    "unavailable": "అందుబాటులో లేదు",
+    "realtimeNote": "లభ్యత రియల్ టైమ్‌లో అప్‌డేట్ అవుతుంది — సమర్పించే ముందు మీ ఎంపికను మళ్లీ తనిఖీ చేయండి."
+  },
+  "dateStrip": {
+    "heading": "మీరు ఎప్పుడు ఆడాలనుకుంటున్నారు?",
+    "today": "ఈరోజు",
+    "noBookableDates": "తదుపరి {{maxAdvanceDays}} రోజులలో బుక్ చేయగల తేదీలు లేవు. సెట్టింగ్‌లలో బుక్ చేయగల రోజులు లేదా గంటలను అప్‌డేట్ చేయాల్సి రావచ్చు."
+  },
+  "tableTypePicker": {
+    "heading": "ఏ రకం టేబుల్?",
+    "oneTable": "1 టేబుల్ అందుబాటులో",
+    "tablesAvailable": "{{count}} టేబుల్‌లు అందుబాటులో",
+    "ratePerMin": "{{rate}}/నిమి"
+  },
+  "tableGrid": {
+    "tableFallback": "టేబుల్",
+    "disabled": "నిష్క్రియం",
+    "occupied": "ఆక్రమించబడింది",
+    "free": "ఖాళీ",
+    "a11yTable": "{{label}}, {{status}}{{tag}}"
+  },
+  "clubCard": {
+    "hoursNotSet": "గంటలు సెట్ చేయలేదు",
+    "kmAway": "{{km}} కి.మీ",
+    "moreAmenities": "+{{overflow}} మరిన్ని",
+    "bookableOnline": "ఆన్‌లైన్‌లో బుక్ చేయవచ్చు"
+  },
+  "liveStreamCard": {
+    "watchA11y": "{{clubName}} నుండి లైవ్ స్ట్రీమ్ చూడండి",
+    "liveBadge": "LIVE",
+    "viewer": "{{count}} వీక్షకుడు",
+    "viewers": "{{count}} వీక్షకులు"
+  },
+  "complaintBanner": {
+    "warning": "⚠ కస్టమర్‌కు సక్రియ ఫిర్యాదు(లు) ఉన్నాయి",
+    "filedBy": "{{clubName}} ద్వారా దాఖలు",
+    "justNow": "ఇప్పుడే",
+    "minAgo": "{{min}} నిమి క్రితం",
+    "hoursAgo": "{{hr}} గంట క్రితం",
+    "hoursAgo_other": "{{hr}} గంటల క్రితం",
+    "daysAgo": "{{day}} రోజు క్రితం",
+    "daysAgo_other": "{{day}} రోజుల క్రితం",
+    "monthsAgo": "{{mo}} నెల క్రితం",
+    "monthsAgo_other": "{{mo}} నెలల క్రితం",
+    "advisory": "ఇది సలహా హెచ్చరిక. మీరు కొనసాగించవచ్చు లేదా సెషన్ రద్దు చేయవచ్చు.",
+    "cancel": "రద్దు చేయి",
+    "acknowledge": "అంగీకరించి కొనసాగించు"
+  },
+  "snackPicker": {
+    "counterTitle": "కౌంటర్ స్నాక్స్",
+    "counterDesc": "క్యాష్ డెస్క్ వద్ద సిద్ధం — బిల్‌లో మాత్రమే జోడించబడుతుంది.",
+    "counterEmpty": "మెనూలో కౌంటర్ స్నాక్స్ లేవు. స్నాక్స్ → కౌంటర్ కింద జోడించండి.",
+    "kitchenTitle": "వంటగది అంశాలు",
+    "kitchenDesc": "తయారీ కోసం వంటగది డిస్‌ప్లేకు పంపబడుతుంది.",
+    "kitchenEmpty": "మెనూలో వంటగది అంశాలు లేవు. స్నాక్స్ → వంటగది కింద జోడించండి.",
+    "unableTitle": "అంశాలు జోడించలేకపోయాం",
+    "unableBody": "ఈ సెషన్‌ను ఇక మార్చలేము.",
+    "addFailed": "అంశాలు జోడించలేకపోయాం.",
+    "addFailedTitle": "అంశాలు జోడించడం విఫలమైంది",
+    "addToBill": "బిల్‌లో జోడించు",
+    "heading": "ఈ టేబుల్‌కు మీరు ఏమి జోడిస్తున్నారు?",
+    "counterSnack": "కౌంటర్ స్నాక్",
+    "counterSnackDesc": "చిప్స్, పానీయాలు మొదలైనవి క్యాష్ కౌంటర్ వద్ద — బిల్ మాత్రమే, వంటగది లేదు.",
+    "kitchenItem": "వంటగది అంశం",
+    "kitchenItemDesc": "వంటగదిలో తయారు చేసిన ఆహారం — వంటగది డిస్‌ప్లేలో కనిపిస్తుంది.",
+    "cancel": "రద్దు చేయి",
+    "changeType": "← రకం మార్చు",
+    "loadingMenu": "మెనూ లోడ్ అవుతోంది...",
+    "each": "ప్రతి",
+    "decreaseA11y": "{{name}} తగ్గించు",
+    "increaseA11y": "{{name}} పెంచు",
+    "subtotal": "ఉపమొత్తం",
+    "adding": "జోడిస్తోంది...",
+    "addToBillButton": "బిల్‌లో జోడించు"
+  },
+  "bookingCard": {
+    "customerFallback": "కస్టమర్",
+    "tableLabel": "టేబుల్: {{label}}",
+    "reasonLabel": "కారణం: {{reason}}",
+    "estimated": "అంచనా {{amount}}",
+    "requestedTable": "అభ్యర్థించిన టేబుల్: {{label}}",
+    "assignedTable": "కేటాయించబడింది: {{label}}",
+    "statsAtClub": "ఈ క్లబ్‌లో: {{bookings}} బుకింగ్‌లు, {{noShows}} నో-షో | ప్లాట్‌ఫారమ్-వ్యాప్తంగా: {{platformBookings}} బుకింగ్‌లు, {{platformNoShows}} నో-షో",
+    "cancel": "రద్దు చేయి",
+    "approve": "ఆమోదించు",
+    "reject": "తిరస్కరించు",
+    "startSession": "సెషన్ ప్రారంభించు",
+    "statusPending": "పెండింగ్",
+    "statusConfirmed": "నిర్ధారించబడింది",
+    "statusDeclined": "తిరస్కరించబడింది",
+    "statusCancelled": "రద్దు",
+    "statusCancelledByClub": "క్లబ్ రద్దు చేసింది",
+    "statusExpired": "గడువు ముగిసింది",
+    "statusCompleted": "పూర్తయింది",
+    "awaitingApproval": "ఆమోదం కోసం వేచి ఉంది",
+    "duration30": "30 నిమి",
+    "duration1Hour": "1 గంట",
+    "durationHours": "{{count}} గంటలు",
+    "durationMinutes": "{{min}} నిమి"
+  },
+  "passwordStrength": {
+    "weak": "బలహీనం",
+    "good": "మంచిది",
+    "strong": "బలమైనది",
+    "hint": "కనీసం 8 అక్షరాలు, పెద్ద మరియు చిన్న అక్షరం, ఒక సంఖ్య మరియు ప్రత్యేక అక్షరం.",
+    "minLength": "పాస్‌వర్డ్ కనీసం {{min}} అక్షరాలు ఉండాలి.",
+    "uppercase": "పాస్‌వర్డ్‌లో కనీసం ఒక పెద్ద అక్షరం ఉండాలి.",
+    "lowercase": "పాస్‌వర్డ్‌లో కనీసం ఒక చిన్న అక్షరం ఉండాలి.",
+    "number": "పాస్‌వర్డ్‌లో కనీసం ఒక సంఖ్య ఉండాలి.",
+    "special": "పాస్‌వర్డ్‌లో కనీసం ఒక ప్రత్యేక అక్షరం ఉండాలి."
+  },
+  "shareExport": {
+    "tooLargeTitle": "ఎగుమతి చాలా పెద్దది",
+    "tooLargeBody": "ఈ పరికరంలో టెక్స్ట్‌గా షేర్ చేయడానికి ఫైల్ చాలా పెద్దది. దయచేసి మీ ఫిల్టర్ పరిధిని తగ్గించి మళ్లీ ప్రయత్నించండి.",
+    "shareTitle": "ఎగుమతి షేర్ చేయి",
+    "saveShare": "ఫైల్ సేవ్ చేసి షేర్ చేయి",
+    "savedTitle": "సేవ్ చేయబడింది",
+    "savedBody": "ఎగుమతి సేవ్ చేయబడింది. తెరవడానికి ఫైల్ మేనేజర్ లేదా స్ప్రెడ్‌షీట్ యాప్ ఇన్‌స్టాల్ చేయండి.",
+    "failedTitle": "ఎగుమతి విఫలమైంది",
+    "couldNotShare": "సేవ్ చేసిన ఫైల్ షేర్ చేయలేకపోయాం.",
+    "couldNotOpenSheet": "షేర్ షీట్ తెరవలేకపోయాం.",
+    "shareAsText": "టెక్స్ట్‌గా షేర్ చేయి",
+    "cancel": "రద్దు చేయి",
+    "readyTitle": "ఎగుమతి సిద్ధం",
+    "readyBody": "మీ డేటాను ఎలా సేవ్ చేయాలి లేదా షేర్ చేయాలి ఎంచుకోండి."
+  },
+  "financialDateRange": {
+    "datesInTz": "{{tzAbbr}} లో తేదీలు",
+    "from": "నుండి",
+    "to": "వరకు",
+    "fromDate": "ప్రారంభ తేదీ",
+    "toDate": "ముగింపు తేదీ",
+    "done": "పూర్తి",
+    "last7Days": "గత 7 రోజులు",
+    "last30Days": "గత 30 రోజులు",
+    "thisMonth": "ఈ నెల",
+    "lastMonth": "గత నెల",
+    "endBeforeStart": "ముగింపు తేదీ ప్రారంభ తేదీకి ముందు ఉండకూడదు.",
+    "largeRangeWarning": "పెద్ద తేదీ పరిధులు లోడ్ అవ్వడానికి కొంత సమయం పట్టవచ్చు."
+  },
+  "timeField": {
+    "pickTime": "సమయం ఎంచుకోండి",
+    "done": "పూర్తి",
+    "pickATime": "ఒక సమయం ఎంచుకోండి"
+  },
+  "safeLocationPicker": {
+    "mapUnavailable": "మ్యాప్ అందుబాటులో లేదు",
+    "fallbackInstructions": "Google Maps తెరవండి, మీ క్లబ్ చిరునామా వెతకండి, పిన్‌పై లాంగ్ ప్రెస్ చేయండి, కింద చూపిన కోఆర్డినేట్‌లను కాపీ చేయండి.",
+    "latitude": "అక్షాంశం",
+    "longitude": "రేఖాంశం",
+    "latError": "అక్షాంశం -90 మరియు 90 మధ్య సంఖ్య అయి ఉండాలి.",
+    "lngError": "రేఖాంశం -180 మరియు 180 మధ్య సంఖ్య అయి ఉండాలి.",
+    "useCoordinates": "ఈ కోఆర్డినేట్‌లను ఉపయోగించు"
+  },
+  "safeBarChart": {
+    "noData": "ఈ కాలంలో ప్రదర్శించడానికి డేటా లేదు.",
+    "unavailable": "చార్ట్ అందుబాటులో లేదు. దయచేసి మళ్లీ ప్రయత్నించండి."
+  },
+  "broadcastPermissions": {
+    "cameraMic": "లైవ్ కావడానికి కెమెరా మరియు మైక్రోఫోన్ యాక్సెస్ అవసరం.",
+    "cameraOnly": "లైవ్ కావడానికి కెమెరా యాక్సెస్ అవసరం.",
+    "micOnly": "ప్రసారంలో ఆడియో చేర్చడానికి మైక్రోఫోన్ యాక్సెస్ అవసరం."
+  },
+  "placeholders": {
+    "offlineScreen": "OfflineScreen",
+    "passcodeSetupModal": "PasscodeSetupModal",
+    "billModal": "BillModal",
+    "networkGuard": "NetworkGuard",
+    "sessionTimer": "SessionTimer",
+    "userSelector": "UserSelector"
+  }
+}

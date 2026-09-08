@@ -1,0 +1,88 @@
+en.json keys before: 1095
+en.json keys after: 2132
+new keys added to en.json: 1037
+sample added keys (first 30):
+  common.tabs.customer.home
+  common.tabs.customer.discover
+  common.tabs.customer.live
+  common.tabs.customer.bookings
+  common.tabs.customer.history
+  common.tabs.customer.profile
+  common.tabs.owner.home
+  common.tabs.owner.slots
+  common.tabs.owner.snacks
+  common.tabs.owner.financials
+  common.tabs.owner.complaints
+  common.tabs.owner.bookings
+  common.tabs.owner.documents
+  common.tabs.owner.kitchen
+  common.tabs.owner.loyalty
+  common.tabs.owner.livestream
+  common.tabs.owner.settings
+  common.tabs.admin.index
+  common.tabs.admin.users
+  common.tabs.admin.complaints
+  common.tabs.admin.live-moderation
+  common.tabs.admin.audit
+  common.tabs.admin.notifications
+  common.language.language
+  common.language.selectLanguage
+  common.language.languageHint
+  common.config.missingConvexTitle
+  common.config.missingConvexBody
+  common.subscription.endedTitle
+  common.subscription.endedBody
+
+parity issues: 0
+
+english fallbacks used: 1135
+  [ar] ownerApp.settings.content.exportClubMembers
+  [ar] ownerApp.settings.content.exportMembersTitle
+  [ar] ownerApp.settings.content.exportMembersBody
+  [ar] ownerApp.settings.content.exportDownload
+  [ar] ownerApp.settings.content.exportingMembers
+  [ar] ownerApp.settings.content.changeAccountPassword
+  [ar] ownerApp.settings.content.changeSettingsPasscode
+  [ar] ownerApp.settings.content.downloadMyData
+  [ar] ownerApp.settings.content.addEmailFirst
+  [ar] ownerApp.settings.content.requestDataExportTitle
+  [ar] ownerApp.settings.content.requestDataExportBody
+  [ar] ownerApp.settings.content.requestSubmitted
+  [ar] ownerApp.settings.content.showClubInSearch
+  [ar] ownerApp.settings.content.discoverable
+  [ar] ownerApp.settings.content.hidden
+  [ar] ownerApp.settings.content.descriptionMax
+  [ar] ownerApp.settings.content.saveDescription
+  [ar] ownerApp.settings.content.photos
+  [ar] ownerApp.settings.content.uploading
+  [ar] ownerApp.settings.content.addPhoto
+  [ar] ownerApp.settings.content.amenities
+  [ar] ownerApp.settings.content.customAmenities
+  [ar] ownerApp.settings.content.customAmenityPlaceholder
+  [ar] ownerApp.settings.content.addAmenity
+  [ar] ownerApp.settings.content.saveAmenities
+  [ar] ownerApp.settings.content.operatingHours
+  [ar] ownerApp.settings.content.opens
+  [ar] ownerApp.settings.content.closes
+  [ar] ownerApp.settings.content.timeTo
+  [ar] ownerApp.settings.content.saveOperatingHours
+  [ar] ownerApp.settings.content.bookableHoursMustBeWithin
+  [ar] ownerApp.settings.content.locationPin
+  [ar] ownerApp.settings.content.locationSaved
+  [ar] ownerApp.settings.content.saveLocation
+  [ar] ownerApp.settings.content.manageTables
+  [ar] ownerApp.settings.content.addTable
+  [ar] ownerApp.settings.content.tableActive
+  [ar] ownerApp.settings.content.tableDisabled
+  [ar] ownerApp.settings.content.acceptOnlineBookings
+  [ar] ownerApp.settings.content.bookingsEnabledDesc
+  [ar] ownerApp.settings.content.bookingsDisabledDesc
+  [ar] ownerApp.settings.content.requireBookingCoupon
+  [ar] ownerApp.settings.content.couponDescription
+  [ar] ownerApp.settings.content.bookingCouponCode
+  [ar] ownerApp.settings.content.saveCouponSettings
+  [ar] ownerApp.settings.content.maxAdvanceDays
+  [ar] ownerApp.settings.content.maxAdvanceDaysNote
+  [ar] ownerApp.settings.content.minAdvanceMinutes
+  [ar] ownerApp.settings.content.minAdvanceMinutesNote
+  [ar] ownerApp.settings.content.approvalDeadline

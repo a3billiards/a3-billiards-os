@@ -7,6 +7,8 @@ import {
   Image,
   Platform,
 } from "react-native";
+import { useTranslation } from "@a3/i18n";
+import { formatHhmm12h, localizedTableTypeLabel } from "@a3/utils/clubDisplay";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing } from "../theme/spacing";
@@ -27,32 +29,27 @@ export interface ClubCardProps {
   onPress: () => void;
 }
 
-function to12h(hhmm: string): string {
-  const [hStr, mStr] = hhmm.split(":");
-  const h = Number(hStr);
-  const m = Number(mStr);
-  const period = h >= 12 ? "PM" : "AM";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
-function formatDistance(km: number): string {
-  if (km < 10) return `${km.toFixed(1)} km`;
-  return `${Math.round(km)} km`;
+function formatDistanceKm(km: number): string {
+  if (km < 10) return km.toFixed(1);
+  return String(Math.round(km));
 }
 
 function hoursSummary(
   oh: ClubSearchResult["operatingHours"],
+  locale: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
 ): { label: string; isSet: boolean } {
-  if (!oh) return { label: "Hours not set", isSet: false };
+  if (!oh) return { label: t("sharedUi.clubCard.hoursNotSet"), isSet: false };
   return {
-    label: `${to12h(oh.open)} – ${to12h(oh.close)}`,
+    label: `${formatHhmm12h(oh.open, locale)} – ${formatHhmm12h(oh.close, locale)}`,
     isSet: true,
   };
 }
 
 export function ClubCard({ club, onPress }: ClubCardProps): React.JSX.Element {
-  const { label: hoursLabel, isSet: hoursOk } = hoursSummary(club.operatingHours);
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language || "en";
+  const { label: hoursLabel, isSet: hoursOk } = hoursSummary(club.operatingHours, locale, t);
   const types = club.tableTypes;
   const maxChips = 3;
   const shown = types.slice(0, maxChips);
@@ -81,25 +78,29 @@ export function ClubCard({ club, onPress }: ClubCardProps): React.JSX.Element {
         </Text>
         {club.distanceKm !== null ? (
           <View style={styles.distBadge}>
-            <Text style={styles.distText}>{formatDistance(club.distanceKm)}</Text>
+            <Text style={styles.distText}>
+              {t("sharedUi.clubCard.kmAway", { km: formatDistanceKm(club.distanceKm) })}
+            </Text>
           </View>
         ) : null}
         <View style={styles.chipRow}>
-          {shown.map((t) => (
-            <View key={t} style={styles.chip}>
-              <Text style={styles.chipText}>{t}</Text>
+          {shown.map((tableType) => (
+            <View key={tableType} style={styles.chip}>
+              <Text style={styles.chipText}>{localizedTableTypeLabel(tableType, t)}</Text>
             </View>
           ))}
           {overflow > 0 ? (
             <View style={styles.chip}>
-              <Text style={styles.chipText}>+{overflow} more</Text>
+              <Text style={styles.chipText}>
+                {t("sharedUi.clubCard.moreAmenities", { overflow })}
+              </Text>
             </View>
           ) : null}
         </View>
         <Text style={[styles.hours, !hoursOk && styles.hoursMuted]}>{hoursLabel}</Text>
         {club.bookingEnabled ? (
           <View style={styles.bookBadge}>
-            <Text style={styles.bookBadgeText}>Bookable Online</Text>
+            <Text style={styles.bookBadgeText}>{t("sharedUi.clubCard.bookableOnline")}</Text>
           </View>
         ) : null}
       </View>

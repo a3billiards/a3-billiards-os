@@ -4,14 +4,24 @@
   "packageManager": "pnpm@9.15.9",
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
+    "prestart": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/stop-expo-dev.ps1",
+    "start": "expo start --dev-client --tunnel",
+    "start:lan": "expo start --dev-client --lan",
     "android": "expo run:android",
+    "android:prebuild": "expo prebuild --platform android --clean",
+    "android:dev-prebuild": "powershell -NoProfile -Command \"$env:EAS_BUILD_PROFILE='development'; npx expo prebuild --platform android --clean\"",
+    "android:apk": "powershell -NoProfile -Command \"$env:SENTRY_DISABLE_AUTO_UPLOAD='true'; Set-Location android; .\\gradlew.bat assembleRelease\"",
+    "android:dev-apk": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/build-dev-apk.ps1 -App owner-app",
+    "android:preview-apk": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/build-preview-apk.ps1 -App owner-app",
+    "build:apk": "eas build --profile preview --platform android",
+    "build:dev-apk": "eas build --profile development --platform android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
   },
   "dependencies": {
     "@a3/convex": "workspace:*",
+    "@a3/i18n": "workspace:*",
     "@a3/ui": "workspace:*",
     "@a3/utils": "workspace:*",
     "@convex-dev/auth": "0.0.68",
@@ -19,15 +29,23 @@
     "@react-native-community/datetimepicker": "8.6.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@sentry/react-native": "~7.11.0",
+    "amazon-ivs-react-native-broadcast": "^1.2.1",
     "convex": "^1.13.0",
     "expo": "~55.0.15",
+    "expo-build-properties": "~55.0.5",
+    "expo-camera": "~55.0.0",
     "expo-constants": "~55.0.14",
     "expo-dev-client": "~55.0.27",
+    "expo-document-picker": "~55.0.0",
+    "expo-file-system": "~55.0.16",
     "expo-font": "~55.0.6",
-    "expo-image-picker": "~17.0.10",
+    "expo-image-picker": "~55.0.18",
     "expo-linking": "~55.0.13",
+    "expo-localization": "~55.0.8",
+    "expo-notifications": "~55.0.10",
     "expo-router": "~55.0.12",
     "expo-secure-store": "~55.0.13",
+    "expo-sharing": "~55.0.7",
     "expo-splash-screen": "~55.0.18",
     "expo-status-bar": "~55.0.5",
     "posthog-react-native": "^3.3.0",
@@ -35,22 +53,23 @@
     "react-dom": "19.2.0",
     "react-native": "0.83.4",
     "react-native-gifted-charts": "^1.4.76",
-    "react-native-maps": "1.20.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.23.0",
     "react-native-svg": "15.15.3",
     "react-native-web": "~0.21.0",
+    "react-native-webview": "13.16.0",
     "typescript": "^5.4.0"
   },
   "devDependencies": {
-    "@types/react": "~19.2.10"
+    "@expo/ngrok": "^4.1.0",
+    "@types/react": "~19.2.10",
+    "eslint": "^9.18.0",
+    "eslint-config-expo": "^55.0.0"
   },
   "expo": {
     "install": {
       "exclude": [
-        "@react-native-community/datetimepicker",
-        "expo-image-picker",
-        "react-native-maps"
+        "@react-native-community/datetimepicker"
       ]
     }
   }

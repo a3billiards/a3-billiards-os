@@ -16,7 +16,8 @@
         "EAS_SKIP_AUTO_FINGERPRINT": "1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "298504132090-6slnps79adihgacaim1u7t83du55p6ei.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "789966085899-a560s93gv2jklcufdmlm2gdssfap0fk7.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "298504132090-q48tflnsi3ulnbnvl5e04njcnbgs984b.apps.googleusercontent.com",
         "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_xxxxxxxxx",
         "EXPO_PUBLIC_SENTRY_DSN": "https://xxxx@sentry.io/xxxx"
       }
@@ -29,9 +30,11 @@
         "buildType": "apk"
       },
       "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "298504132090-6slnps79adihgacaim1u7t83du55p6ei.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "789966085899-a560s93gv2jklcufdmlm2gdssfap0fk7.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "298504132090-q48tflnsi3ulnbnvl5e04njcnbgs984b.apps.googleusercontent.com",
         "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_xxxxxxxxx",
         "EXPO_PUBLIC_SENTRY_DSN": "https://xxxx@sentry.io/xxxx"
       }
@@ -42,7 +45,8 @@
       "env": {
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_CONVEX_URL": "https://ardent-albatross-880.convex.cloud",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "298504132090-6slnps79adihgacaim1u7t83du55p6ei.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "789966085899-a560s93gv2jklcufdmlm2gdssfap0fk7.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "298504132090-q48tflnsi3ulnbnvl5e04njcnbgs984b.apps.googleusercontent.com",
         "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_xxxxxxxxx",
         "EXPO_PUBLIC_SENTRY_DSN": "https://xxxx@sentry.io/xxxx"
       }

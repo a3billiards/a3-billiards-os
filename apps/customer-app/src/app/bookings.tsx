@@ -7,14 +7,17 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { api } from "@a3/convex/_generated/api";
-import { BookingCard } from "@a3/ui/components";
-import { colors, spacing, typography, radius, layout } from "@a3/ui/theme";
+import { BookingCard, GlassPageBackground } from "@a3/ui/components";
+import { colors, spacing, typography, radius, layout, glass } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 
 type Segment = "upcoming" | "history";
 type CustomerBookingLog = {
@@ -33,6 +36,8 @@ type CustomerBookingLog = {
   thumbnailPhotoUrl?: string | null;
   cancellationWindowMin?: number;
   isLateCancellationNow?: boolean;
+  needsPayment?: boolean;
+  canPay?: boolean;
 };
 
 const UPCOMING = new Set(["pending_approval", "confirmed"]);
@@ -49,6 +54,8 @@ function bookingMs(dateYmd: string, hhmm: string): number {
 }
 
 export default function MyBookingsScreen() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const [segment, setSegment] = useState<Segment>("upcoming");
   const user = useQuery(api.users.getCurrentUser);
@@ -56,12 +63,12 @@ export default function MyBookingsScreen() {
     api.bookings.getCustomerBookings,
     user?._id ? { customerId: user._id } : "skip",
   );
-  const logsData = (logs ?? []) as CustomerBookingLog[];
   const cancelBooking = useMutation(api.bookings.cancelBooking);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
     if (!logs) return { upcoming: [], history: [] } as const;
+    const logsData = logs as CustomerBookingLog[];
     const upcoming = logsData
       .filter((x) => UPCOMING.has(x.status))
       .sort(
@@ -77,28 +84,50 @@ export default function MyBookingsScreen() {
           bookingMs(a.requestedDate, a.requestedStartTime),
       );
     return { upcoming, history } as const;
-  }, [logs, logsData]);
+  }, [logs]);
 
   const handleCancel = async (log: CustomerBookingLog) => {
-    const title = "Cancel Booking?";
+    const title = t("customerApp.myBookings.cancelTitle");
     const body =
       log.status === "pending_approval"
-        ? `Your booking request at ${log.clubName} will be withdrawn.`
+        ? t("customerApp.myBookings.cancelPendingBody", { clubName: log.clubName })
         : log.isLateCancellationNow
-          ? `This is a late cancellation. Cancelling within ${log.cancellationWindowMin ?? 30} minutes of your booking time may affect your booking record.`
-          : `Your confirmed booking at ${log.clubName} on ${log.requestedDate} at ${log.requestedStartTime} will be cancelled.`;
+          ? t("customerApp.myBookings.cancelLateBody", {
+              minutes: log.cancellationWindowMin ?? 30,
+            })
+          : t("customerApp.myBookings.cancelConfirmedBody", {
+              clubName: log.clubName,
+              date: log.requestedDate,
+              time: log.requestedStartTime,
+            });
     Alert.alert(title, body, [
-      { text: "Keep Booking", style: "cancel" },
+      { text: t("customerApp.myBookings.keepBooking"), style: "cancel" },
       {
-        text: "Cancel Booking",
+        text: t("customerApp.myBookings.cancelBooking"),
         style: "destructive",
         onPress: async () => {
           try {
             setBusyId(log.bookingId);
             await cancelBooking({ bookingId: log.bookingId, clubId: log.clubId });
-            Alert.alert("Booking cancelled");
+            Alert.alert(t("customerApp.myBookings.cancelledSuccess"));
           } catch (e) {
-            Alert.alert(parseConvexError(e as Error).message);
+            const raw = (e as Error).message ?? "";
+            if (raw.includes("BOOKING_005")) {
+              Alert.alert(
+                t("customerApp.myBookings.cancelLimitTitle"),
+                t("customerApp.myBookings.cancelLimitBody"),
+              );
+            } else if (raw.includes("BOOKING_007")) {
+              Alert.alert(
+                t("customerApp.myBookings.alreadyCancelled"),
+                t("customerApp.myBookings.alreadyCancelledBody"),
+              );
+            } else {
+              Alert.alert(
+                t("customerApp.myBookings.couldNotCancel"),
+                parseConvexError(e as Error).message,
+              );
+            }
           } finally {
             setBusyId(null);
           }
@@ -110,9 +139,10 @@ export default function MyBookingsScreen() {
   const list = segment === "upcoming" ? sorted.upcoming : sorted.history;
 
   return (
+    <GlassPageBackground>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Bookings</Text>
+        <Text style={styles.title}>{t("customerApp.myBookings.title")}</Text>
       </View>
       <View style={styles.segmented}>
         <Pressable
@@ -120,7 +150,7 @@ export default function MyBookingsScreen() {
           onPress={() => setSegment("upcoming")}
         >
           <Text style={[styles.segText, segment === "upcoming" && styles.segTextActive]}>
-            Upcoming
+            {t("customerApp.myBookings.upcoming")}
           </Text>
         </Pressable>
         <Pressable
@@ -128,33 +158,38 @@ export default function MyBookingsScreen() {
           onPress={() => setSegment("history")}
         >
           <Text style={[styles.segText, segment === "history" && styles.segTextActive]}>
-            History
+            {t("customerApp.myBookings.history")}
           </Text>
         </Pressable>
       </View>
 
       {logs === undefined ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.accent.green} />
+          <ActivityIndicator color={glass.ctaBg} />
         </View>
       ) : list.length === 0 ? (
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyText}>
             {segment === "upcoming"
-              ? "No upcoming bookings. Discover clubs to book a table."
-              : "No past bookings yet."}
+              ? t("customerApp.myBookings.emptyUpcoming")
+              : t("customerApp.myBookings.emptyHistory")}
           </Text>
           {segment === "upcoming" ? (
             <Pressable
               style={styles.discoverBtn}
               onPress={() => router.push("/(tabs)/discover")}
             >
-              <Text style={styles.discoverBtnText}>Discover Clubs</Text>
+              <Text style={styles.discoverBtnText}>{t("customerApp.myBookings.discoverClubs")}</Text>
             </Pressable>
           ) : null}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
           {list.map((log: CustomerBookingLog) => (
             <BookingCard
               key={log.bookingId}
@@ -180,6 +215,7 @@ export default function MyBookingsScreen() {
                 confirmedTableLabel: log.confirmedTableLabel,
                 rejectionReason: log.rejectionReason,
                 thumbnailPhotoUrl: log.thumbnailPhotoUrl,
+                needsPayment: log.needsPayment === true,
               }}
               onPress={() => router.push(`/booking/${log.bookingId}`)}
               onCancel={
@@ -194,25 +230,26 @@ export default function MyBookingsScreen() {
         </ScrollView>
       )}
     </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
+  safe: { flex: 1, backgroundColor: "transparent" },
   header: { paddingHorizontal: spacing[6], paddingTop: spacing[6], paddingBottom: spacing[3] },
   title: { fontSize: 24, lineHeight: 32, fontWeight: "300", color: colors.text.primary },
   segmented: {
     marginHorizontal: spacing[6],
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: colors.bg.secondary,
+    borderColor: glass.inputBorder,
+    backgroundColor: glass.inputBg,
     padding: spacing[1],
     flexDirection: "row",
     gap: spacing[1],
   },
   segBtn: { flex: 1, minHeight: 40, borderRadius: radius.lg, alignItems: "center", justifyContent: "center" },
-  segBtnActive: { backgroundColor: colors.bg.tertiary },
+  segBtnActive: { backgroundColor: glass.cardBg, borderWidth: 1, borderColor: glass.cardBorder },
   segText: { ...typography.labelSmall, color: colors.text.secondary },
   segTextActive: { color: colors.text.primary },
   list: { paddingHorizontal: spacing[6], paddingTop: spacing[4], paddingBottom: spacing[8], gap: spacing[3] },
@@ -222,7 +259,7 @@ const styles = StyleSheet.create({
   discoverBtn: {
     minHeight: layout.buttonHeight,
     borderRadius: radius.md,
-    backgroundColor: colors.accent.green,
+    backgroundColor: glass.ctaBg,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing[4],

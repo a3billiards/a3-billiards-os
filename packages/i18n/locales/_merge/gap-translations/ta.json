@@ -1,0 +1,478 @@
+{
+  "adminApp": {
+    "bookings": {
+      "estimatedCost": "மதிப்பீடு {{amount}}"
+    },
+    "complaints": {
+      "dateFormatHint": "YYYY-MM-DD",
+      "statusActive": "செயலில்"
+    },
+    "moderation": {
+      "live": "LIVE"
+    },
+    "notifications": {
+      "messageLabel": "செய்தி",
+      "required": " *"
+    },
+    "roles": {
+      "admin": "நிர்வாகி"
+    },
+    "userProfile": {
+      "actionsSection": "செயல்கள்",
+      "club": "கிளப்: {{name}}",
+      "confirmPlaceholder": "CONFIRM",
+      "namePlaceholder": "பெயர்",
+      "phonePlaceholder": "+919876543210"
+    },
+    "users": {
+      "filterAdmins": "நிர்வாகிகள்"
+    }
+  },
+  "auth": {
+    "admin": {
+      "login": {
+        "emailPlaceholder": "admin@example.com"
+      }
+    },
+    "customer": {
+      "register": {
+        "agePlaceholder": "18",
+        "emailOptional": "(விரும்பினால்)",
+        "emailPlaceholder": "you@example.com",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      }
+    },
+    "owner": {
+      "changePasscode": {
+        "ok": "சரி"
+      },
+      "login": {
+        "emailPlaceholder": "owner@example.com",
+        "logo": "A3"
+      },
+      "passcode": {
+        "ok": "சரி"
+      },
+      "register": {
+        "agePlaceholder": "18",
+        "emailPlaceholder": "you@example.com",
+        "logo": "A3",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      },
+      "verifyPhone": {
+        "logo": "A3"
+      }
+    },
+    "phone": {
+      "countryCode": "நாட்டுக் குறியீடு",
+      "number": "தொலைபேசி எண்",
+      "selectCountry": "நாட்டைத் தேர்ந்தெடுக்கவும்"
+    }
+  },
+  "common": {
+    "amenityPresets": {
+      "ac": "AC",
+      "lounge": "லவுஞ்ச்",
+      "parking": "பார்க்கிங்",
+      "wifi": "WiFi"
+    },
+    "arrowSeparator": " → ",
+    "chartMonths": {
+      "dec": "Dec",
+      "feb": "Feb",
+      "jan": "Jan",
+      "mar": "Mar",
+      "nov": "Nov",
+      "oct": "Oct"
+    },
+    "confirmKeyword": "CONFIRM",
+    "deleteKeyword": "DELETE",
+    "detailsLabel": "விவரங்கள்",
+    "emDash": "—",
+    "inbox": {
+      "alertLater": "பின்னர்",
+      "alertView": "காண்க",
+      "bellAccessibility": "அறிவிப்புகள்",
+      "empty": "இன்னும் அறிவிப்புகள் இல்லை.",
+      "fromAdmin": "A3 Billiards",
+      "loadMore": "மேலும் ஏற்று",
+      "markAllRead": "அனைத்தையும் படித்ததாகக் குறி",
+      "subtitle": "A3 Billiards-இலிருந்து செய்திகள்",
+      "title": "அறிவிப்புகள்"
+    },
+    "loadingEllipsis": "…",
+    "logoA3": "A3",
+    "mapsClubFallback": "கிளப்",
+    "minSuffix": " நிமி",
+    "ok": "சரி",
+    "passcodeMask": "••••••",
+    "passwordMask": "••••••••",
+    "placeholderOtp": "000000",
+    "placeholderZero": "0",
+    "pushChannelName": "A3 Billiards",
+    "questionMark": "?",
+    "slotDurationChips": {
+      "min30": "30 நிமி"
+    },
+    "tableTypes": {
+      "americanPool": "American Pool",
+      "eightBall": "8-Ball",
+      "frenchBilliards": "French Billiards",
+      "nineBall": "9-Ball",
+      "snooker": "Snooker"
+    },
+    "tabs": {
+      "admin": {
+        "audit": "தணிக்கை",
+        "live-moderation": "நேரலை"
+      },
+      "customer": {
+        "live": "நேரலை"
+      },
+      "owner": {
+        "documents": "ஆவணங்கள்",
+        "financials": "நிதி",
+        "livestream": "நேரலை",
+        "snacks": "சிற்றுண்டி"
+      }
+    },
+    "timesSeparator": " × ",
+    "typeLabel": "வகை"
+  },
+  "customerApp": {
+    "booking": {
+      "durations": {
+        "chipFallback": "{{count}}நி",
+        "d120": {
+          "chip": "2ம"
+        },
+        "d180": {
+          "chip": "3ம"
+        },
+        "d30": {
+          "chip": "30நி",
+          "summary": "30 நிமிடம்"
+        },
+        "d60": {
+          "chip": "1ம"
+        },
+        "summaryFallback": "{{count}} நிமிடம்"
+      },
+      "emDash": "—",
+      "noDatesAvailable": "முன்பதிவு செய்யக்கூடிய தேதிகள் இல்லை. கிளப் தங்கள் அட்டவணையைப் புதுப்பிக்க வேண்டியிருக்கலாம்.",
+      "noTablesEmpty": "இந்த வகைக்கு செயலில் உள்ள மேசைகள் இல்லை. அமைப்புகளில் மேசை அமைப்பைச் சரிபார்க்க கிளப்பிடம் கேளுங்கள்.",
+      "notesCounter": "{{count}}/200",
+      "pickDate": "நீங்கள் எப்போது விளையாட விரும்புகிறீர்கள்?",
+      "steps": {
+        "date": "தேதி",
+        "table": "மேசை",
+        "type": "வகை"
+      },
+      "summaryDate": "தேதி",
+      "summaryTable": "மேசை",
+      "today": "இன்று",
+      "whichTable": "எந்த மேசை?"
+    },
+    "bookingDetail": {
+      "date": "தேதி",
+      "durationMin": "{{count}} நிமி",
+      "estimatedCostValue": "மதிப்பீடு {{symbol}}{{amount}}"
+    },
+    "checkInPayload": "a3customer:{{userId}}",
+    "clubProfile": {
+      "perMin": "/நிமி",
+      "tablePlural": "மேசைகள்",
+      "tableSingular": "மேசை",
+      "tables": "மேசைகள்"
+    },
+    "discovery": {
+      "title": "கண்டறி"
+    },
+    "history": {
+      "minAtRate": "{{minutes}} நிமி @ {{rate}}/நிமி",
+      "snacks": "சிற்றுண்டி",
+      "total": "மொத்தம்",
+      "upi": "UPI"
+    },
+    "home": {
+      "discover": "கண்டறி"
+    },
+    "live": {
+      "title": "நேரலை"
+    },
+    "loyalty": {
+      "profile": {
+        "checkInCode": "கிளப் செக்-இன் குறியீடு",
+        "checkInCodeHint": "விரைவான ஸ்லாட் ஒதுக்கீட்டிற்காக கவுண்டரில் இதைக் காட்டுங்கள். குறியீடு: a3customer:{{id}}",
+        "deletePlaceholder": "DELETE",
+        "name": "பெயர்"
+      }
+    },
+    "profile": {
+      "checkInCode": "கிளப் செக்-இன் குறியீடு",
+      "checkInCodeHint": "விரைவான ஸ்லாட் ஒதுக்கீட்டிற்காக கவுண்டரில் இதைக் காட்டுங்கள். குறியீடு: a3customer:{{id}}",
+      "deletePlaceholder": "DELETE",
+      "name": "பெயர்"
+    },
+    "screens": {
+      "discover": "கண்டறி",
+      "live": "நேரலை"
+    },
+    "streaming": {
+      "mute": "ஒலிதடு",
+      "otherLive": "பிற நேரலை ஸ்ட்ரீம்கள்",
+      "unmute": "ஒலிதடு நீக்கு"
+    }
+  },
+  "notifications": {
+    "fallback": "அறிவிப்பு"
+  },
+  "ownerApp": {
+    "documents": {
+      "pdf": "PDF",
+      "title": "ஆவணங்கள்"
+    },
+    "financials": {
+      "cgst": "CGST",
+      "gstin": "GSTIN",
+      "igst": "IGST",
+      "minutes": "{{count}} நிமி",
+      "session_one": "{{count}} அமர்வு",
+      "sessions": "{{count}} அமர்வுகள்",
+      "sgst": "SGST",
+      "snackLine": "{{name}} × {{qty}} = {{amount}}",
+      "snacks": "சிற்றுண்டி",
+      "sortByDate": "தேதி",
+      "tableLine": "{{minutes}} @ {{rate}}/min = {{subtotal}}",
+      "upi": "UPI"
+    },
+    "gstReport": {
+      "financialsGst": {
+        "cgst": "CGST",
+        "gstin": "GSTIN",
+        "igst": "IGST",
+        "sgst": "SGST"
+      }
+    },
+    "home": {
+      "tileDocuments": "ஆவணங்கள்",
+      "tileSlots": "ஸ்லாட்கள்",
+      "tileSnacks": "சிற்றுண்டி"
+    },
+    "kitchen": {
+      "table": "மேசை {{label}}"
+    },
+    "livestream": {
+      "flipCamera": "கேமரா திருப்பு",
+      "liveBadge": "LIVE",
+      "micMute": "மைக்ரோஃபோன் ஒலிதடு",
+      "micUnmute": "மைக்ரோஃபோன் ஒலிதடு நீக்கு",
+      "otherClubStreams": "உங்கள் கிளப்பில் உள்ள பிற நேரலை மேசைகள்",
+      "placeholderTable": "மேசை 4",
+      "selectTable": "ஸ்ட்ரீம் செய்ய மேசை"
+    },
+    "loyalty": {
+      "awardLine": "{{date}} — +{{count}} கிரெடிட்(கள்) ({{tier}})",
+      "creditsCount": "{{count}} கிரெடிட்கள்",
+      "programmeNamePlaceholder": "A3 Regulars",
+      "statusLine": "நிலை: {{status}}"
+    },
+    "settings": {
+      "chefRoleName": "செஃப்",
+      "content": {
+        "acceptOnlineBookings": "ஆன்லைன் முன்பதிவுகளை ஏற்கவும்",
+        "addAmenity": "சேர்",
+        "addChefRole": "+ செஃப் பாத்திரம் சேர்",
+        "addEmailFirst": "முதலில் மின்னஞ்சல் சேர்க்கவும்",
+        "addPhoto": "+ புகைப்படம் சேர்",
+        "addRole": "பாத்திரம் சேர்",
+        "addTable": "+ மேசை சேர்",
+        "allTables": "அனைத்து மேசைகள்",
+        "amenities": "வசதிகள்",
+        "approvalDeadline": "ஒப்புதல் காலக்கெடு (நிமிடங்கள்)",
+        "approvalDeadlineNote": "முன்பதிவு காலாவதியாவதற்கு முன் ஒப்புதல் அளிக்க நிமிடங்கள்",
+        "bookableHours": "முன்பதிவு செய்யக்கூடிய நேரம்",
+        "bookableHoursMustBeWithin": "முன்பதிவு நேரம் செயல்பாட்டு நேரத்திற்குள் இருக்க வேண்டும். முதலில் முன்பதிவு நேரத்தைப் புதுப்பிக்கவும்.",
+        "bookableHoursNote": "முன்பதிவு நேரம் உங்கள் செயல்பாட்டு நேரத்திற்குள் இருக்க வேண்டும்.",
+        "bookableTableTypes": "முன்பதிவு செய்யக்கூடிய மேசை வகைகள்",
+        "bookableTableTypesMismatch": "சில முன்பதிவு மேசை வகைகளுக்கு செயலில் உள்ள மேசைகள் இல்லை.",
+        "bookableTableTypesNote": "தேர்ந்தெடுக்கப்பட்ட வகைகள் மட்டுமே வாடிக்கையாளர் முன்பதிவு ஓட்டத்தில் தோன்றும்.",
+        "bookingCouponCode": "முன்பதிவு கூப்பன் குறியீடு",
+        "bookingsDisabledDesc": "வாடிக்கையாளர்கள் உங்கள் கிளப்பை ஆன்லைனில் கண்டறியவோ முன்பதிவு செய்யவோ முடியாது",
+        "bookingsEnabledDesc": "உங்கள் கிளப் ஆன்லைன் முன்பதிவுகளை ஏற்கிறது",
+        "canApplyDiscount": "தள்ளுபடி வழங்கலாம்",
+        "canApplyDiscountMax": "தள்ளுபடி வழங்கலாம் (அதிகபட்சம் {{pct}}%)",
+        "canFileComplaints": "புகார்கள் தாக்கல் செய்யலாம்",
+        "cancellationWindow": "ரத்து சாளரம் (நிமிடங்கள்)",
+        "cancellationWindowNote": "தாமத ரத்துக்காக தொடக்க நேரத்திற்கு முன் நிமிடங்கள்",
+        "changeAccountPassword": "கணக்கு கடவுச்சொல்லை மாற்று",
+        "changeSettingsPasscode": "அமைப்புகள் கடவுக்குறியீட்டை மாற்று",
+        "chefRoleCreated": "செஃப் பாத்திரம் உருவாக்கப்பட்டது",
+        "chefRoleCreatedBody": "சமையலறை தாவல் மட்டும். சமையலறை ஊழியர்களுக்கு சாதனம் கொடுக்கும்போது இதை ஒதுக்குங்கள்.",
+        "chefRoleExists": "செஃப் பாத்திரம் ஏற்கனவே உள்ளது",
+        "chefRoleExistsBody": "தேவைப்பட்டால் ஊழியர் பாத்திரங்களில் திருத்துங்கள்.",
+        "closes": "மூடுகிறது",
+        "couponDescription": "முன்பதிவு செய்யும்போது வாடிக்கையாளர்கள் கார்டு கட்டணத்திற்குப் பதிலாக கூப்பன் உள்ளிடுகிறார்கள்",
+        "customAmenities": "தனிப்பயன் வசதிகள்",
+        "customAmenityPlaceholder": "தனிப்பயன் வசதி",
+        "deleteRoleBody": "இந்த பாத்திரம் சாதனத்தில் செயலில் இருந்தால், உரிமையாளர் பயன்முறைக்குத் திரும்பும்.",
+        "deleteRoleConfirm": "நீக்கு",
+        "deleteRoleTitle": "பாத்திரத்தை நீக்கவா?",
+        "descriptionMax": "விளக்கம் (அதிகபட்சம் 500)",
+        "discoverable": "கண்டறியக்கூடியது",
+        "downloadMyData": "எனது தரவைப் பதிவிறக்கு",
+        "editRole": "பாத்திரத்தைத் திருத்து",
+        "exportClubMembers": "கிளப் உறுப்பினர் தரவைப் பதிவிறக்கு",
+        "exportDownload": "பதிவிறக்கு",
+        "exportMembersBody": "உங்கள் கிளப்பில் முன்பதிவு செய்த, விளையாடிய அல்லது விசுவாசத் திட்டத்தில் சேர்ந்த வாடிக்கையாளர்களுடன் Excel அல்லது Google Sheets-க்கான விரிதாள் (CSV) பதிவிறக்குங்கள். கிளப்-நோக்கு புலங்கள் மட்டுமே சேர்க்கப்படும்.",
+        "exportMembersTitle": "கிளப் உறுப்பினர்களை ஏற்றுமதி செய்யவா?",
+        "exportingMembers": "ஏற்றுமதி செய்கிறது…",
+        "gstItcError": "மாதாந்திர ITC எதிர்மறை அல்லாத எண்ணாக இருக்க வேண்டும்.",
+        "gstNote": "மதிப்பீட்டு-மட்டும் GST அறிக்கைக்கான உள்ளீடுகள். CA ஆலோசனைக்குப் பிறகு முழு வருமான வரி அறிக்கை சேர்க்கப்படும்.",
+        "gstRegistered": "GST பதிவு",
+        "gstRegisteredNote": "அணைக்கப்பட்டால், GST அறிக்கை பூஜ்ஜிய வெளியீட்டு வரியைக் காட்டுகிறது",
+        "gstSnacks": "சிற்றுண்டியில் GST %",
+        "gstSnacksError": "சிற்றுண்டி GST % 0 மற்றும் 100க்கு இடையில் இருக்க வேண்டும்.",
+        "gstTableError": "மேசை GST % 0 மற்றும் 100க்கு இடையில் இருக்க வேண்டும்.",
+        "gstTableTime": "மேசை நேரத்தில் GST %",
+        "gstin": "GSTIN (விரும்பினால்)",
+        "hidden": "மறைக்கப்பட்டது",
+        "locationPin": "இருப்பிட பின்",
+        "locationSaved": "இருப்பிடம் சேமிக்கப்பட்டது",
+        "manageTables": "பிலியர்ட்ஸ் மேசைகளை நிர்வகி",
+        "maxAdvanceDays": "அதிகபட்ச முன்கூட்டிய நாட்கள்",
+        "maxAdvanceDaysNote": "வாடிக்கையாளர்கள் எத்தனை நாட்கள் முன்கூட்டியே முன்பதிவு செய்யலாம்",
+        "minAdvanceMinutes": "குறைந்தபட்ச முன்கூட்டிய நிமிடங்கள்",
+        "minAdvanceMinutesNote": "முன்பதிவு தொடங்குவதற்கு முன் குறைந்தபட்ச முன்னறிவிப்பு",
+        "monthlyItc": "மாதாந்திர உள்ளீட்டு வரி கிரெடிட் மதிப்பீடு (விரும்பினால்)",
+        "opens": "திறக்கிறது",
+        "operatingHours": "செயல்பாட்டு நேரம்",
+        "operatingHoursPrefix": "செயல்பாட்டு நேரம்:",
+        "ownerModeLabel": "உரிமையாளர் பயன்முறை (வரம்பற்ற)",
+        "photos": "புகைப்படங்கள்",
+        "requestDataExportBody": "உங்கள் தரவு ஏற்றுமதி (பெயர், தொலைபேசி, மின்னஞ்சல், கிளப் பெயர், சந்தா வரலாறு) 72 மணி நேரத்திற்குள் {{email}}-க்கு அனுப்பப்படும்.",
+        "requestDataExportTitle": "தரவு ஏற்றுமதி கோரவா?",
+        "requestSubmitted": "கோரிக்கை சமர்ப்பிக்கப்பட்டது",
+        "requireBookingCoupon": "முன்பதிவு கூப்பன் தேவை",
+        "saveAmenities": "வசதிகளைச் சேமி",
+        "saveBookableHours": "முன்பதிவு நேரத்தைச் சேமி",
+        "saveBookableTypes": "முன்பதிவு வகைகளைச் சேமி",
+        "saveBookingRules": "முன்பதிவு விதிகளைச் சேமி",
+        "saveCouponSettings": "கூப்பன் அமைப்புகளைச் சேமி",
+        "saveDescription": "விளக்கத்தைச் சேமி",
+        "saveGst": "GST அமைப்புகளைச் சேமி",
+        "saveLocation": "இருப்பிடத்தைச் சேமி",
+        "saveOperatingHours": "செயல்பாட்டு நேரத்தைச் சேமி",
+        "saveSlotDurations": "ஸ்லாட் கால அளவுகளைச் சேமி",
+        "selectAtLeastOneTab": "குறைந்தது ஒரு தாவலைத் தேர்ந்தெடுக்கவும்.",
+        "selectAtLeastOneTable": "குறிப்பிட்ட மேசைகளைப் பயன்படுத்தும்போது குறைந்தது ஒரு மேசையைத் தேர்ந்தெடுக்கவும்.",
+        "selectSlotDuration": "குறைந்தது ஒரு ஸ்லாட் கால அளவைத் தேர்ந்தெடுக்கவும்.",
+        "setOperatingHoursFirst": "முதலில் கிளப் சுயவிவரத்தில் செயல்பாட்டு நேரத்தை அமைத்து, பின்னர் இங்கே முன்பதிவு நேரத்தைச் சேமிக்கவும்.",
+        "showClubInSearch": "வாடிக்கையாளர் தேடலில் கிளப்பைக் காட்டு",
+        "slotDurationOptions": "ஸ்லாட் கால அளவு விருப்பங்கள்",
+        "specificTables": "{{count}} குறிப்பிட்ட மேசைகள்",
+        "supplyInterstate": "மாநிலங்களுக்கிடையே (IGST)",
+        "supplyIntrastate": "மாநிலத்திற்குள் (CGST + SGST)",
+        "supplyType": "வழங்கல் வகை",
+        "tableActive": "செயலில்",
+        "tableDisabled": "முடக்கப்பட்டது",
+        "timeTo": "முதல்",
+        "uploading": "பதிவேற்றுகிறது…"
+      },
+      "hhmmStart": "HH:MM start",
+      "labelField": "லேபிள்",
+      "labelPlaceholder": "லேபிள் *",
+      "passcode": {
+        "ok": "சரி"
+      },
+      "sections": {
+        "tables": "மேசைகள்"
+      },
+      "timezonePlaceholder": "Asia/Kolkata"
+    },
+    "slots": {
+      "addTeammate": "வீரரைச் சேர்",
+      "addTeammatePhone": "வீரர் தொலைபேசி",
+      "age18Plus": "18+",
+      "assignBothSides": "ஒவ்வொரு பக்கத்திலும் குறைந்தது ஒரு வீரரை ஒதுக்குங்கள்.",
+      "billBreakdown": "பில் விவரம்",
+      "checkInCode": "செக்-இன் குறியீடு",
+      "checkoutCounterSnacks": "கவுண்டர் சிற்றுண்டி",
+      "checkoutDiscount": "தள்ளுபடி ({{percent}}%)",
+      "checkoutItemLine": "{{name}} × {{qty}}",
+      "checkoutKitchenItems": "சமையலறை பொருட்கள்",
+      "checkoutSectionSubtotal": "துணை மொத்தம்",
+      "checkoutTableRate": "{{minutes}} நிமி @ {{rate}}/நிமி",
+      "checkoutTableTime": "மேசை நேரம்",
+      "checkoutTableTotal": "மேசை மொத்தம்",
+      "continueToGroup": "தொடர்க",
+      "customerNamePlaceholder": "வாடிக்கையாளர் பெயரைத் தட்டச்சு செய்யுங்கள்…",
+      "customerNameSearch": "அல்லது பெயரால் தேடுங்கள்",
+      "groupSetupHint": "இந்த மேசையில் விளையாடும் வீரர்களைச் சேர்க்கவும். ஒவ்வொரு புதிய வீரரும் WhatsApp வழியாக தொலைபேசியைச் சரிபார்க்க வேண்டும்.",
+      "groupSetupTitle": "இந்த மேசையில் உள்ள வீரர்கள்",
+      "losersPay": "தோல்வியடைந்தவர் செலுத்துவார்",
+      "losersPayBadge": "தோல்வியடைந்தவர் செலுத்துவார்",
+      "losersPayCheckoutNote": "தோல்வியடைந்தவர் செலுத்துவார் — பில் தோல்வி பக்கத்திற்கு பதிவு செய்யப்பட்டது.",
+      "losersPayHint": "செக் அவுட்டில் எந்த பக்கம் தோற்றது, மேசை பில் யார் செலுத்துவார் என்பதைப் பதிவு செய்யுங்கள்.",
+      "mobileWhatsApp": "மொபைல் (WhatsApp)",
+      "needTwoForVersus": "எதிர் விளையாட்டுக்கு குறைந்தது ஒரு வீரரைச் சேர்க்கவும்.",
+      "openQrScanner": "QR குறியீட்டை ஸ்கேன் செய்",
+      "paymentUpi": "UPI",
+      "playVersus": "எதிர் விளையாட்டு",
+      "playVersusHint": "போட்டி போட்டிக்காக வீரர்களை Side A மற்றும் Side B ஆகப் பிரிக்கவும்.",
+      "playersCount": "{{count}} வீரர்கள்",
+      "primaryPlayer": "முதன்மை வீரர்",
+      "qrAllowCamera": "கேமரா அனுமதி",
+      "qrCameraPermission": "வாடிக்கையாளர் செக்-இன் குறியீடுகளை ஸ்கேன் செய்ய கேமரா அணுகல் தேவை.",
+      "qrPlaceholder": "QR பேலோடை ஒட்டவும் அல்லது கவுண்டரில் ஸ்கேன் செய்யவும்",
+      "qrScannerHint": "வாடிக்கையாளர் சுயவிவரத்தில் உள்ள செக்-இன் QR-ஐ நோக்கி காட்டுங்கள்",
+      "qrScannerTitle": "வாடிக்கையாளர் QR ஸ்கேன் செய்",
+      "registerTeammateWhatsApp": "வீரர் பதிவு — WhatsApp OTP",
+      "removePlayer": "நீக்கு",
+      "scanQrCode": "ஸ்கேன் / செக்-இன் குறியீட்டை ஒட்டு",
+      "selectLosingSide": "எந்த பக்கம் தோற்றது?",
+      "sideA": "Side A",
+      "sideB": "Side B",
+      "snacksCharge": "சிற்றுண்டி",
+      "tableCharge": "மேசை",
+      "teammateAlreadyAdded": "இந்த வீரர் ஏற்கனவே மேசையில் உள்ளார்.",
+      "teammates": "வீரர்கள்",
+      "versusBadge": "எதிர்"
+    },
+    "snacks": {
+      "name": "பெயர்"
+    }
+  },
+  "sharedUi": {
+    "bookingCard": {
+      "duration30": "30 நிமி",
+      "durationMinutes": "{{min}} நிமி",
+      "estimated": "மதிப்பீடு {{amount}}"
+    },
+    "clubCard": {
+      "kmAway": "{{km}} கி.மீ"
+    },
+    "liveStreamCard": {
+      "liveBadge": "LIVE"
+    },
+    "placeholders": {
+      "billModal": "BillModal",
+      "networkGuard": "NetworkGuard",
+      "offlineScreen": "OfflineScreen",
+      "passcodeSetupModal": "PasscodeSetupModal",
+      "sessionTimer": "SessionTimer",
+      "userSelector": "UserSelector"
+    },
+    "safeLocationPicker": {
+      "latitude": "அட்சரேகை",
+      "longitude": "தீர்க்கரேகை"
+    },
+    "tableGrid": {
+      "a11yTable": "{{label}}, {{status}}{{tag}}",
+      "tableFallback": "மேசை"
+    },
+    "tableTypePicker": {
+      "ratePerMin": "{{rate}}/நிமி"
+    }
+  }
+}

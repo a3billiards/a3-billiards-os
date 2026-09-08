@@ -9,14 +9,18 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
+import Svg, { Path, Circle } from "react-native-svg";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
+import { GlassPageBackground, LiquidGlassCard, GlassIconTile } from "@a3/ui/components";
+import { LanguagePicker, getCurrentLanguage, useTranslation } from "@a3/i18n";
+import { adminShell, adminTabBarTotalInset } from "../../theme/adminShell";
+import { useAdminAuth } from "../../lib/adminAuth";
 
 type DashboardData = {
   totalUsers: number;
@@ -29,11 +33,11 @@ type DashboardData = {
 };
 
 function formatInt(n: number): string {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat(getCurrentLanguage(), { maximumFractionDigits: 0 }).format(n);
 }
 
 function formatUpdated(ts: number): string {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(getCurrentLanguage(), {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
@@ -69,7 +73,9 @@ function SkeletonGrid(): React.JSX.Element {
   return (
     <View style={styles.grid}>
       {Array.from({ length: 6 }).map((_, i) => (
-        <ShimmerBox key={i} style={styles.skeletonCard} />
+        <View key={i} style={styles.statCellWrap}>
+          <ShimmerBox style={styles.skeletonCard} />
+        </View>
       ))}
     </View>
   );
@@ -101,16 +107,49 @@ function LiveDot(): React.JSX.Element {
     <Animated.View
       style={[
         styles.liveDot,
-        {
-          transform: [{ scale }],
-        },
+        { transform: [{ scale }] },
       ]}
     />
   );
 }
 
+function DecorativeRevenueChart(): React.JSX.Element {
+  return (
+    <View style={styles.chartWrap}>
+      <Svg width="100%" height={140} viewBox="0 0 320 140" preserveAspectRatio="none">
+        <Path
+          d="M 8 110 C 60 114, 100 96, 140 78 S 220 36, 312 22"
+          stroke={glass.chartLine}
+          strokeWidth={2.5}
+          fill="none"
+          strokeLinecap="round"
+        />
+        {/* Data points */}
+        <Circle cx={8} cy={110} r={3} fill={glass.chartLine} />
+        <Circle cx={70} cy={108} r={3} fill={glass.chartLine} />
+        <Circle cx={140} cy={78} r={3} fill={glass.chartLine} />
+        <Circle cx={210} cy={56} r={3} fill={glass.chartLine} />
+        <Circle cx={270} cy={40} r={3} fill={glass.chartLine} />
+        <Circle cx={312} cy={22} r={5} fill={glass.chartLine} />
+      </Svg>
+      <View style={styles.chartLabelsRow}>
+        {["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"].map((m) => (
+          <Text key={m} style={styles.chartXLabel}>
+            {m}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 class DashboardErrorBoundary extends Component<
-  { children: React.ReactNode; onRetry: () => void },
+  {
+    children: React.ReactNode;
+    onRetry: () => void;
+    loadError: string;
+    retryLabel: string;
+  },
   { message: string | null }
 > {
   state = { message: null as string | null };
@@ -128,9 +167,7 @@ class DashboardErrorBoundary extends Component<
       return (
         <View style={styles.errorBanner}>
           <MaterialIcons name="error-outline" size={20} color={colors.status.error} />
-          <Text style={styles.errorText}>
-            Failed to load dashboard data. Pull to refresh.
-          </Text>
+          <Text style={styles.errorText}>{this.props.loadError}</Text>
           <Pressable
             style={styles.retryBtn}
             onPress={() => {
@@ -138,7 +175,7 @@ class DashboardErrorBoundary extends Component<
               this.props.onRetry();
             }}
           >
-            <Text style={styles.retryBtnText}>Retry</Text>
+            <Text style={styles.retryBtnText}>{this.props.retryLabel}</Text>
           </Pressable>
         </View>
       );
@@ -147,9 +184,11 @@ class DashboardErrorBoundary extends Component<
   }
 }
 
-export default function DashboardScreen(): React.JSX.Element {
+function DashboardScreenContent(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
-  const { signOut } = useAuthActions();
+  const insets = useSafeAreaInsets();
+  const { signOutAdmin } = useAdminAuth();
   const user = useQuery(api.users.getCurrentUser, {});
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -170,111 +209,153 @@ export default function DashboardScreen(): React.JSX.Element {
   }, []);
 
   const onLogout = useCallback(async () => {
-    await signOut();
-    router.replace("/login");
-  }, [router, signOut]);
+    await signOutAdmin();
+  }, [signOutAdmin]);
 
   const dash = data ?? undefined;
+  const bottomPad = adminTabBarTotalInset(insets.bottom);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.brand}>A3 Billiards OS</Text>
-          <Text style={styles.subtitle}>Platform Overview</Text>
-          {dash ? (
-            <Text style={styles.updated}>Updated {formatUpdated(dash.fetchedAt)}</Text>
-          ) : null}
-        </View>
-        <Pressable onPress={onLogout} hitSlop={12} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </Pressable>
-      </View>
-
-      <DashboardErrorBoundary
-        key={boundaryNonce}
-        onRetry={() => setBoundaryNonce((n) => n + 1)}
-      >
+    <GlassPageBackground>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingTop: spacing[2], paddingBottom: bottomPad },
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.accent.green}
+              tintColor={glass.chartLine}
             />
           }
+          showsVerticalScrollIndicator={false}
         >
-          {!canQuery || dash === undefined ? (
-            <SkeletonGrid />
-          ) : (
-            <View style={styles.grid}>
-              <MetricCard
-                icon="people"
-                value={formatInt(dash.totalUsers)}
-                label="Registered Users"
-                onPress={() => router.push("/(tabs)/users")}
-              />
-              <MetricCard
-                icon="business"
-                value={formatInt(dash.activeClubs)}
-                label="Active Clubs"
-                sublabel="Active + Grace period"
-                onPress={() =>
-                  router.push({
-                    pathname: "/(tabs)/users",
-                    params: { role: "owner" },
-                  } as never)
-                }
-              />
-              <MetricCard
-                icon="play-circle-filled"
-                value={formatInt(dash.activeSessions)}
-                label="Active Sessions"
-                valueColor={
-                  dash.activeSessions > 0 ? colors.accent.green : colors.text.primary
-                }
-                trailing={dash.activeSessions > 0 ? <LiveDot /> : null}
-              />
-              <MetricCard
-                icon="pending-actions"
-                value={formatInt(dash.pendingBookings)}
-                label="Pending Bookings"
-                valueColor={
-                  dash.pendingBookings > 0 ? colors.accent.amber : colors.text.primary
-                }
-                sublabel="Awaiting owner approval"
-              />
-              <MetricCard
-                icon="report-problem"
-                value={formatInt(dash.openComplaints)}
-                label="Open Complaints"
-                valueColor={
-                  dash.openComplaints > 0 ? colors.status.error : colors.text.primary
-                }
-                onPress={() => router.push("/(tabs)/complaints")}
-              />
-              <MetricCard
-                icon="trending-up"
-                value={formatInt(dash.revenue.today)}
-                label="Today's Revenue"
-                sublabel={`All-time: ${formatInt(dash.revenue.allTime)}`}
-                footnote="Multi-currency totals not converted"
-              />
+          {/* Hero card */}
+          <LiquidGlassCard style={styles.heroCard} padding={24}>
+              <View style={styles.heroTopRow}>
+              <View style={styles.heroTitles}>
+                <Text style={styles.heroTitle}>{t("adminApp.dashboard.title")}</Text>
+                <Text style={styles.heroSubtitle}>{t("adminApp.dashboard.subtitle")}</Text>
+              </View>
+              <View style={styles.heroActions}>
+                <LanguagePicker variant="icon" />
+                <Pressable
+                onPress={onLogout}
+                hitSlop={12}
+                style={({ pressed }) => [styles.heroIconBtn, pressed && { opacity: 0.75 }]}
+                accessibilityLabel={t("adminApp.dashboard.logOutAccessibility")}
+              >
+                <MaterialIcons name="logout" size={20} color={glass.accentBlue} />
+              </Pressable>
+              </View>
             </View>
-          )}
+            {dash ? (
+              <View style={styles.updatedRow}>
+                <View style={styles.statusDot} />
+                <Text style={styles.updated}>
+                  {t("adminApp.dashboard.liveUpdated", {
+                    time: formatUpdated(dash.fetchedAt),
+                  })}
+                </Text>
+              </View>
+            ) : null}
+          </LiquidGlassCard>
+
+          <DashboardErrorBoundary
+            key={boundaryNonce}
+            onRetry={() => setBoundaryNonce((n) => n + 1)}
+            loadError={t("adminApp.dashboard.loadError")}
+            retryLabel={t("adminApp.dashboard.retry")}
+          >
+            {!canQuery || dash === undefined ? (
+              <SkeletonGrid />
+            ) : (
+              <>
+                <View style={styles.grid}>
+                  <GlassStatCard
+                    icon="people"
+                    value={formatInt(dash.totalUsers)}
+                    label={t("adminApp.dashboard.totalUsers")}
+                    onPress={() => router.push("/(tabs)/users")}
+                  />
+                  <GlassStatCard
+                    icon="business"
+                    value={formatInt(dash.activeClubs)}
+                    label={t("adminApp.dashboard.activeClubs")}
+                    onPress={() => router.push("/(tabs)/clubs")}
+                  />
+                  <GlassStatCard
+                    icon="play-circle-filled"
+                    value={formatInt(dash.activeSessions)}
+                    label={t("adminApp.dashboard.activeSessions")}
+                    valueColor={
+                      dash.activeSessions > 0 ? glass.trendPositive : glass.textPrimary
+                    }
+                    trailing={dash.activeSessions > 0 ? <LiveDot /> : null}
+                    onPress={() => router.push("/sessions")}
+                  />
+                  <GlassStatCard
+                    icon="report-problem"
+                    value={formatInt(dash.openComplaints)}
+                    label={t("adminApp.dashboard.openComplaints")}
+                    valueColor={
+                      dash.openComplaints > 0 ? colors.status.error : glass.textPrimary
+                    }
+                    onPress={() => router.push("/(tabs)/complaints")}
+                  />
+                  <GlassStatCard
+                    icon="pending-actions"
+                    value={formatInt(dash.pendingBookings)}
+                    label={t("adminApp.dashboard.pendingBookings")}
+                    valueColor={
+                      dash.pendingBookings > 0 ? colors.accent.amberLight : glass.textPrimary
+                    }
+                    onPress={() => router.push("/bookings")}
+                  />
+                </View>
+
+                <LiquidGlassCard
+                  style={styles.revenueCard}
+                  padding={24}
+                  onPress={() => router.push("/revenue")}
+                >
+                  <Text style={styles.revenueLabel}>{t("adminApp.dashboard.platformRevenue")}</Text>
+                  <Text style={styles.revenueValue}>₹{formatInt(dash.revenue.allTime)}</Text>
+                  <View style={styles.revenueRow}>
+                    <MaterialIcons
+                      name="trending-up"
+                      size={16}
+                      color={glass.trendPositive}
+                    />
+                    <Text style={styles.revenueTrend}>
+                      {t("adminApp.dashboard.todayRevenue", {
+                        amount: formatInt(dash.revenue.today),
+                      })}
+                    </Text>
+                  </View>
+                  <DecorativeRevenueChart />
+                  <View style={styles.revenueCta}>
+                    <Text style={styles.revenueCtaText}>
+                      {t("adminApp.dashboard.viewDailyRevenue")}
+                    </Text>
+                    <MaterialIcons name="chevron-right" size={18} color={glass.accentBlue} />
+                  </View>
+                </LiquidGlassCard>
+              </>
+            )}
+          </DashboardErrorBoundary>
         </ScrollView>
-      </DashboardErrorBoundary>
-    </SafeAreaView>
+      </SafeAreaView>
+    </GlassPageBackground>
   );
 }
 
-function MetricCard(props: {
+function GlassStatCard(props: {
   icon: keyof typeof MaterialIcons.glyphMap;
   value: string;
   label: string;
-  sublabel?: string;
-  footnote?: string;
   valueColor?: string;
   trailing?: React.ReactNode;
   onPress?: () => void;
@@ -283,115 +364,186 @@ function MetricCard(props: {
     icon,
     value,
     label,
-    sublabel,
-    footnote,
-    valueColor = colors.text.primary,
+    valueColor = glass.textPrimary,
     trailing,
     onPress,
   } = props;
-  const Body = (
-    <View style={styles.card}>
-      <View style={styles.cardTop}>
-        <View style={styles.iconWrap}>
-          <MaterialIcons name={icon} size={22} color={colors.text.secondary} />
-        </View>
+
+  return (
+    <View style={styles.statCellWrap}>
+      <LiquidGlassCard style={styles.statCard} onPress={onPress} padding={20}>
+        <GlassIconTile>
+          <MaterialIcons name={icon} size={20} color={glass.textMuted} />
+        </GlassIconTile>
         <View style={styles.valueRow}>
-          <Text style={[styles.value, { color: valueColor }]}>{value}</Text>
+          <Text style={[styles.statValue, { color: valueColor }]}>{value}</Text>
           {trailing}
         </View>
-        <Text style={styles.cardLabel}>{label}</Text>
-        {sublabel ? <Text style={styles.cardSublabel}>{sublabel}</Text> : null}
-        {footnote ? <Text style={styles.cardFoot}>{footnote}</Text> : null}
-      </View>
+        <Text style={styles.statLabel} numberOfLines={2}>
+          {label.toUpperCase()}
+        </Text>
+      </LiquidGlassCard>
     </View>
   );
-  if (onPress) {
-    return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }: { pressed: boolean }) => [pressed && styles.cardPressed]}
-      >
-        {Body}
-      </Pressable>
-    );
-  }
-  return Body;
 }
 
-const CARD_GAP = spacing[3];
+const GAP = 12;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg.primary },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing[2],
-    paddingBottom: spacing[3],
-  },
-  headerLeft: { flex: 1, paddingRight: spacing[3] },
-  brand: { ...typography.heading3, color: colors.text.primary },
-  subtitle: { ...typography.bodySmall, color: colors.text.secondary, marginTop: 2 },
-  updated: { ...typography.caption, color: colors.text.secondary, marginTop: spacing[2] },
-  logoutBtn: { paddingVertical: spacing[2], paddingHorizontal: spacing[2] },
-  logoutText: { ...typography.label, color: colors.accent.green },
+  safe: { flex: 1 },
   scroll: {
     paddingHorizontal: layout.screenPadding,
-    paddingBottom: spacing[10],
   },
-  grid: {
+  heroTopRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: spacing[3],
   },
-  skeletonCard: {
-    width: "48%",
-    aspectRatio: 1.15,
-    backgroundColor: colors.bg.tertiary,
-    borderRadius: radius.md,
-    marginBottom: CARD_GAP,
+  heroTitles: { flex: 1, minWidth: 0 },
+  heroActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
   },
-  card: {
-    width: "48%",
-    backgroundColor: colors.bg.secondary,
-    borderRadius: radius.md,
-    padding: spacing[4],
-    minHeight: 132,
-    marginBottom: CARD_GAP,
-  },
-  cardPressed: { opacity: 0.92 },
-  cardTop: { gap: spacing[2] },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    backgroundColor: colors.bg.tertiary,
+  heroIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: glass.iconTileBorder,
+    backgroundColor: glass.iconTileBg,
     alignItems: "center",
     justifyContent: "center",
   },
-  valueRow: { flexDirection: "row", alignItems: "center", gap: spacing[2] },
-  value: { ...typography.heading2, fontSize: 26, fontWeight: "700" },
-  cardLabel: { ...typography.caption, color: colors.text.secondary, textTransform: "none" },
-  cardSublabel: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    marginTop: -spacing[1],
+  heroCard: {
+    marginBottom: spacing[5],
   },
-  cardFoot: {
-    ...typography.caption,
-    fontStyle: "italic",
-    color: colors.text.secondary,
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: "600",
+    color: glass.textPrimary,
+    letterSpacing: -0.3,
+  },
+  heroSubtitle: {
     marginTop: spacing[1],
+    fontSize: 14,
+    lineHeight: 20,
+    color: glass.textMuted,
+  },
+  updatedRow: {
+    marginTop: spacing[4],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: glass.trendPositive,
+  },
+  updated: {
+    fontSize: 12,
+    color: glass.textLabel,
+    letterSpacing: 0.4,
+  },
+  grid: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: spacing[5],
+  },
+  statCellWrap: {
+    width: "48%",
+    marginBottom: GAP,
+  },
+  statCard: {
+    width: "100%",
+    alignSelf: "stretch",
+    minHeight: 162,
+  },
+  valueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    marginTop: spacing[4],
+  },
+  statValue: { fontSize: 26, fontWeight: "600", letterSpacing: -0.5 },
+  statLabel: {
+    marginTop: spacing[2],
+    fontSize: 11,
+    fontWeight: "500",
+    letterSpacing: 0.6,
+    color: glass.textLabel,
+  },
+  skeletonCard: {
+    width: "100%",
+    minHeight: 162,
+    borderRadius: glass.cardRadius,
+    backgroundColor: glass.cardBg,
+    borderWidth: 1,
+    borderColor: glass.cardBorder,
+  },
+  revenueCard: {
+    marginBottom: spacing[4],
+  },
+  revenueLabel: {
+    fontSize: 13,
+    letterSpacing: 0.7,
+    color: glass.textLabel,
+    textTransform: "uppercase",
+  },
+  revenueValue: {
+    marginTop: spacing[2],
+    fontSize: 32,
+    fontWeight: "600",
+    color: glass.textPrimary,
+    letterSpacing: -0.5,
+  },
+  revenueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    marginTop: spacing[2],
+  },
+  revenueTrend: {
+    flex: 1,
+    fontSize: 13,
+    color: glass.trendPositive,
+    fontWeight: "600",
+  },
+  revenueCta: {
+    marginTop: spacing[4],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[1],
+  },
+  revenueCtaText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: glass.accentBlue,
+  },
+  chartWrap: { marginTop: spacing[4] },
+  chartLabelsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    marginTop: 6,
+  },
+  chartXLabel: {
+    fontSize: 10,
+    color: glass.textLabel,
   },
   liveDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.accent.emerald,
+    backgroundColor: glass.trendPositive,
   },
   errorBanner: {
-    marginHorizontal: layout.screenPadding,
     marginBottom: spacing[3],
     padding: spacing[3],
     borderRadius: radius.md,
@@ -417,3 +569,12 @@ const styles = StyleSheet.create({
   },
   retryBtnText: { ...typography.caption, color: colors.text.primary, fontWeight: "600" },
 });
+
+export default function DashboardScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.admin.index")}>
+      <DashboardScreenContent />
+    </TabErrorBoundary>
+  );
+}

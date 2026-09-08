@@ -9,6 +9,11 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
+import {
+  assertNoControlChars,
+  MAX_BROADCAST_BODY_LEN,
+  MAX_BROADCAST_TITLE_LEN,
+} from "./model/inputValidation";
 
 const targetTypeV = v.union(
   v.literal("all"),
@@ -45,17 +50,23 @@ export const sendAdminBroadcast = action({
 
     const title = args.title.trim();
     const body = args.body.trim();
+    assertNoControlChars("Title", title);
+    assertNoControlChars("Message", body);
     if (title.length === 0) {
       throw new Error("DATA_001: Title is required");
     }
     if (body.length === 0) {
       throw new Error("DATA_001: Message is required");
     }
-    if (title.length > 100) {
-      throw new Error("DATA_001: Title must be at most 100 characters");
+    if (title.length > MAX_BROADCAST_TITLE_LEN) {
+      throw new Error(
+        `DATA_001: Title must be at most ${MAX_BROADCAST_TITLE_LEN} characters`,
+      );
     }
-    if (body.length > 500) {
-      throw new Error("DATA_001: Message must be at most 500 characters");
+    if (body.length > MAX_BROADCAST_BODY_LEN) {
+      throw new Error(
+        `DATA_001: Message must be at most ${MAX_BROADCAST_BODY_LEN} characters`,
+      );
     }
 
     if (args.targetType === "role") {
@@ -99,9 +110,7 @@ export const sendAdminBroadcast = action({
       },
     );
 
-    const recipientCount = recipientRows.length;
-
-    const { notificationId } = await ctx.runMutation(
+    const { notificationId, inboxCount } = await ctx.runMutation(
       internal.notifications.internalInsertAdminBroadcast,
       {
         sentByAdminId: adminId,
@@ -113,6 +122,8 @@ export const sendAdminBroadcast = action({
         createdAt: Date.now(),
       },
     );
+
+    const recipientCount = inboxCount;
 
     const tokenMap = recipientRows.map((row) => ({
       userId: row.userId.toString(),
@@ -129,16 +140,30 @@ export const sendAdminBroadcast = action({
       };
     }
 
-    const { sentCount, failedCount } = await ctx.runAction(
-      internal.notifications.sendAdminBroadcastPush,
-      {
-        notificationId,
-        title,
-        body,
-        tokenMap,
-      },
-    );
-
-    return { notificationId, recipientCount, sentCount, failedCount };
+    try {
+      const { sentCount, failedCount } = await ctx.runAction(
+        internal.notifications.sendAdminBroadcastPush,
+        {
+          notificationId,
+          title,
+          body,
+          tokenMap,
+        },
+      );
+      return { notificationId, recipientCount, sentCount, failedCount };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (
+        msg.includes("Missing FIREBASE") ||
+        msg.includes("Failed to obtain FCM") ||
+        msg.includes("Unexpected token") ||
+        msg.includes("JSON")
+      ) {
+        throw new Error(
+          "PUSH_001: Push is not configured on the server. Set FIREBASE_PROJECT_ID and FIREBASE_SERVICE_ACCOUNT_JSON in the Convex dashboard Environment Variables.",
+        );
+      }
+      throw e;
+    }
   },
 });

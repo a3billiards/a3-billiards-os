@@ -8,14 +8,17 @@
     ".": "./index.ts",
     "./theme": "./theme/index.ts",
     "./components": "./components/index.ts",
-    "./errors": "./errors/index.ts"
+    "./errors": "./errors/index.ts",
+    "./hooks": "./hooks/index.ts",
+    "./shareJson": "./utils/shareJson.ts"
   },
   "dependencies": {
     "@a3/utils": "workspace:*"
   },
   "peerDependencies": {
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "convex": "*"
   },
   "devDependencies": {
     "@types/react": "~19.2.10",

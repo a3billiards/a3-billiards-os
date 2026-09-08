@@ -6,6 +6,7 @@
 ---
 
 ## 1. Security & Infrastructure Guardrails
+*See also: `.cursor/rules/security-standing-rules.mdc` (always-on standing rules for new code).*
 * **Zero Secrets Policy**: Never hardcode API keys, secrets, or credentials. Use environment variables exclusively.
 * **Input Validation**: Strict validation and sanitization for ALL user inputs to prevent injection attacks.
 * **API Protection**: 

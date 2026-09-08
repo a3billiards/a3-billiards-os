@@ -1,0 +1,194 @@
+{
+  "passcodeGate": {
+    "title": "Instellingen",
+    "subtitle": "Voer uw 6-cijferige instellingenpasscode in om door te gaan.",
+    "invalidFormat": "Voer uw 6-cijferige instellingenpasscode in.",
+    "invalidPasscode": "Ongeldige passcode.",
+    "unlock": "Ontgrendelen",
+    "cancel": "Annuleren"
+  },
+  "tablePicker": {
+    "title": "Welke tafel?",
+    "empty": "Geen actieve tafels voor dit type. Vraag de club om de tafelconfiguratie in Instellingen te controleren."
+  },
+  "tableTypeSelect": {
+    "customName": "Aangepaste typenaam",
+    "custom": "Aangepast"
+  },
+  "timeSlotGrid": {
+    "loading": "Tijdsloten laden…",
+    "noSlots": "Geen tijdsloten voor deze datum en duur.",
+    "pickStart": "Kies een starttijd",
+    "noTimesOpen": "Geen tijden beschikbaar voor deze datum en duur. Probeer een andere datum, een kortere sessie of een ander tafeltype.",
+    "unavailable": "Niet beschikbaar",
+    "realtimeNote": "Beschikbaarheid wordt in realtime bijgewerkt — controleer uw selectie opnieuw voordat u verzendt."
+  },
+  "dateStrip": {
+    "heading": "Wanneer wilt u spelen?",
+    "today": "Vandaag",
+    "noBookableDates": "Geen boekbare data in de komende {{maxAdvanceDays}} dagen. De club moet mogelijk boekbare dagen of uren bijwerken in Instellingen."
+  },
+  "tableTypePicker": {
+    "heading": "Welk type tafel?",
+    "oneTable": "1 tafel beschikbaar",
+    "tablesAvailable": "{{count}} tafels beschikbaar",
+    "ratePerMin": "{{rate}}/min"
+  },
+  "tableGrid": {
+    "tableFallback": "Tafel",
+    "disabled": "Uitgeschakeld",
+    "occupied": "Bezet",
+    "free": "Vrij",
+    "a11yTable": "{{label}}, {{status}}{{tag}}"
+  },
+  "clubCard": {
+    "hoursNotSet": "Openingstijden niet ingesteld",
+    "kmAway": "{{km}} km",
+    "moreAmenities": "+{{overflow}} meer",
+    "bookableOnline": "Online boekbaar"
+  },
+  "liveStreamCard": {
+    "watchA11y": "Livestream bekijken van {{clubName}}",
+    "liveBadge": "LIVE",
+    "viewer": "{{count}} kijker",
+    "viewers": "{{count}} kijkers"
+  },
+  "complaintBanner": {
+    "warning": "⚠ Klant heeft actieve klacht(en)",
+    "filedBy": "Ingediend door {{clubName}}",
+    "justNow": "zojuist",
+    "minAgo": "{{min}} min geleden",
+    "hoursAgo": "{{hr}} uur geleden",
+    "hoursAgo_other": "{{hr}} uur geleden",
+    "daysAgo": "{{day}} dag geleden",
+    "daysAgo_other": "{{day}} dagen geleden",
+    "monthsAgo": "{{mo}} maand geleden",
+    "monthsAgo_other": "{{mo}} maanden geleden",
+    "advisory": "Dit is een advieswaarschuwing. U kunt doorgaan of de sessie annuleren.",
+    "cancel": "Annuleren",
+    "acknowledge": "Bevestigen en doorgaan"
+  },
+  "snackPicker": {
+    "counterTitle": "Toonbank snacks",
+    "counterDesc": "Klaar bij de kassa — alleen aan de rekening toegevoegd.",
+    "counterEmpty": "Geen toonbank snacks in het menu. Voeg ze toe onder Snacks → Toonbank.",
+    "kitchenTitle": "Keukenartikelen",
+    "kitchenDesc": "Verzonden naar het keukenscherm voor bereiding.",
+    "kitchenEmpty": "Geen keukenartikelen in het menu. Voeg ze toe onder Snacks → Keuken.",
+    "unableTitle": "Kan artikelen niet toevoegen",
+    "unableBody": "Deze sessie kan niet meer worden bewerkt.",
+    "addFailed": "Kon artikelen niet toevoegen.",
+    "addFailedTitle": "Artikelen toevoegen mislukt",
+    "addToBill": "Aan rekening toevoegen",
+    "heading": "Wat voegt u toe voor deze tafel?",
+    "counterSnack": "Toonbank snack",
+    "counterSnackDesc": "Chips, drankjes, etc. bij de kassa — alleen rekening, geen keuken.",
+    "kitchenItem": "Keukenartikel",
+    "kitchenItemDesc": "Eten bereid in de keuken — verschijnt op het keukenscherm.",
+    "cancel": "Annuleren",
+    "changeType": "← Type wijzigen",
+    "loadingMenu": "Menu laden...",
+    "each": "per stuk",
+    "decreaseA11y": "{{name}} verminderen",
+    "increaseA11y": "{{name}} verhogen",
+    "subtotal": "Subtotaal",
+    "adding": "Toevoegen...",
+    "addToBillButton": "Aan rekening toevoegen"
+  },
+  "bookingCard": {
+    "customerFallback": "Klant",
+    "tableLabel": "Tafel: {{label}}",
+    "reasonLabel": "Reden: {{reason}}",
+    "estimated": "Geschat {{amount}}",
+    "requestedTable": "Gevraagde tafel: {{label}}",
+    "assignedTable": "Toegewezen: {{label}}",
+    "statsAtClub": "Bij deze club: {{bookings}} boekingen, {{noShows}} no-shows | Platformbreed: {{platformBookings}} boekingen, {{platformNoShows}} no-shows",
+    "cancel": "Annuleren",
+    "approve": "Goedkeuren",
+    "reject": "Afwijzen",
+    "startSession": "Sessie starten",
+    "statusPending": "In afwachting",
+    "statusConfirmed": "Bevestigd",
+    "statusDeclined": "Afgewezen",
+    "statusCancelled": "Geannuleerd",
+    "statusCancelledByClub": "Geannuleerd door club",
+    "statusExpired": "Verlopen",
+    "statusCompleted": "Voltooid",
+    "awaitingApproval": "Wacht op goedkeuring",
+    "duration30": "30 min",
+    "duration1Hour": "1 uur",
+    "durationHours": "{{count}} uur",
+    "durationMinutes": "{{min}} min"
+  },
+  "passwordStrength": {
+    "weak": "Zwak",
+    "good": "Goed",
+    "strong": "Sterk",
+    "hint": "Minstens 8 tekens met hoofdletter, kleine letter, een cijfer en een speciaal teken.",
+    "minLength": "Wachtwoord moet minstens {{min}} tekens bevatten.",
+    "uppercase": "Wachtwoord moet minstens één hoofdletter bevatten.",
+    "lowercase": "Wachtwoord moet minstens één kleine letter bevatten.",
+    "number": "Wachtwoord moet minstens één cijfer bevatten.",
+    "special": "Wachtwoord moet minstens één speciaal teken bevatten."
+  },
+  "shareExport": {
+    "tooLargeTitle": "Export te groot",
+    "tooLargeBody": "Het bestand is te groot om als tekst te delen op dit apparaat. Verklein uw filterbereik en probeer opnieuw.",
+    "shareTitle": "Export delen",
+    "saveShare": "Bestand opslaan en delen",
+    "savedTitle": "Opgeslagen",
+    "savedBody": "Export opgeslagen. Installeer een bestandsbeheerder of spreadsheet-app om het te openen.",
+    "failedTitle": "Export mislukt",
+    "couldNotShare": "Kon het opgeslagen bestand niet delen.",
+    "couldNotOpenSheet": "Kon het deelvenster niet openen.",
+    "shareAsText": "Delen als tekst",
+    "cancel": "Annuleren",
+    "readyTitle": "Export gereed",
+    "readyBody": "Kies hoe u uw gegevens wilt opslaan of delen."
+  },
+  "financialDateRange": {
+    "datesInTz": "Data in {{tzAbbr}}",
+    "from": "Van",
+    "to": "Tot",
+    "fromDate": "Begindatum",
+    "toDate": "Einddatum",
+    "done": "Klaar",
+    "last7Days": "Afgelopen 7 dagen",
+    "last30Days": "Afgelopen 30 dagen",
+    "thisMonth": "Deze maand",
+    "lastMonth": "Vorige maand",
+    "endBeforeStart": "Einddatum kan niet vóór begindatum liggen.",
+    "largeRangeWarning": "Grote datumbereiken kunnen even duren om te laden."
+  },
+  "timeField": {
+    "pickTime": "Tijd kiezen",
+    "done": "Klaar",
+    "pickATime": "Kies een tijd"
+  },
+  "safeLocationPicker": {
+    "mapUnavailable": "Kaart niet beschikbaar",
+    "fallbackInstructions": "Open Google Maps, zoek het adres van uw club, druk lang op de pin en kopieer de coördinaten onderaan.",
+    "latitude": "Breedtegraad",
+    "longitude": "Lengtegraad",
+    "latError": "Breedtegraad moet een getal tussen -90 en 90 zijn.",
+    "lngError": "Lengtegraad moet een getal tussen -180 en 180 zijn.",
+    "useCoordinates": "Deze coördinaten gebruiken"
+  },
+  "safeBarChart": {
+    "noData": "Geen gegevens om weer te geven voor deze periode.",
+    "unavailable": "Grafiek niet beschikbaar. Probeer opnieuw."
+  },
+  "broadcastPermissions": {
+    "cameraMic": "Cameratoegang en microfoontoegang zijn vereist om live te gaan.",
+    "cameraOnly": "Cameratoegang is vereist om live te gaan.",
+    "micOnly": "Microfoontoegang is vereist om audio in de uitzending op te nemen."
+  },
+  "placeholders": {
+    "offlineScreen": "OfflineScreen",
+    "passcodeSetupModal": "PasscodeSetupModal",
+    "billModal": "BillModal",
+    "networkGuard": "NetworkGuard",
+    "sessionTimer": "SessionTimer",
+    "userSelector": "UserSelector"
+  }
+}

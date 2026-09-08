@@ -1,0 +1,478 @@
+{
+  "adminApp": {
+    "bookings": {
+      "estimatedCost": "Est. {{amount}}"
+    },
+    "complaints": {
+      "dateFormatHint": "YYYY-MM-DD",
+      "statusActive": "Active"
+    },
+    "moderation": {
+      "live": "LIVE"
+    },
+    "notifications": {
+      "messageLabel": "Message",
+      "required": " *"
+    },
+    "roles": {
+      "admin": "Admin"
+    },
+    "userProfile": {
+      "actionsSection": "Actions",
+      "club": "Club: {{name}}",
+      "confirmPlaceholder": "CONFIRM",
+      "namePlaceholder": "Name",
+      "phonePlaceholder": "+919876543210"
+    },
+    "users": {
+      "filterAdmins": "Admins"
+    }
+  },
+  "auth": {
+    "admin": {
+      "login": {
+        "emailPlaceholder": "admin@example.com"
+      }
+    },
+    "customer": {
+      "register": {
+        "agePlaceholder": "18",
+        "emailOptional": "(optional)",
+        "emailPlaceholder": "you@example.com",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      }
+    },
+    "owner": {
+      "changePasscode": {
+        "ok": "OK"
+      },
+      "login": {
+        "emailPlaceholder": "owner@example.com",
+        "logo": "A3"
+      },
+      "passcode": {
+        "ok": "OK"
+      },
+      "register": {
+        "agePlaceholder": "18",
+        "emailPlaceholder": "you@example.com",
+        "logo": "A3",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      },
+      "verifyPhone": {
+        "logo": "A3"
+      }
+    },
+    "phone": {
+      "countryCode": "Country code",
+      "number": "Phone number",
+      "selectCountry": "Select country"
+    }
+  },
+  "common": {
+    "amenityPresets": {
+      "ac": "AC",
+      "lounge": "Lounge",
+      "parking": "Parking",
+      "wifi": "WiFi"
+    },
+    "arrowSeparator": " → ",
+    "chartMonths": {
+      "dec": "Dec",
+      "feb": "Feb",
+      "jan": "Jan",
+      "mar": "Mar",
+      "nov": "Nov",
+      "oct": "Oct"
+    },
+    "confirmKeyword": "CONFIRM",
+    "deleteKeyword": "DELETE",
+    "detailsLabel": "Details",
+    "emDash": "—",
+    "inbox": {
+      "alertLater": "Later",
+      "alertView": "View",
+      "bellAccessibility": "Notifications",
+      "empty": "No notifications yet.",
+      "fromAdmin": "A3 Billiards",
+      "loadMore": "Load more",
+      "markAllRead": "Mark all read",
+      "subtitle": "Messages from A3 Billiards",
+      "title": "Notifications"
+    },
+    "loadingEllipsis": "…",
+    "logoA3": "A3",
+    "mapsClubFallback": "Club",
+    "minSuffix": " min",
+    "ok": "OK",
+    "passcodeMask": "••••••",
+    "passwordMask": "••••••••",
+    "placeholderOtp": "000000",
+    "placeholderZero": "0",
+    "pushChannelName": "A3 Billiards",
+    "questionMark": "?",
+    "slotDurationChips": {
+      "min30": "30 min"
+    },
+    "tableTypes": {
+      "americanPool": "American Pool",
+      "eightBall": "8-Ball",
+      "frenchBilliards": "French Billiards",
+      "nineBall": "9-Ball",
+      "snooker": "Snooker"
+    },
+    "tabs": {
+      "admin": {
+        "audit": "Audit",
+        "live-moderation": "Live"
+      },
+      "customer": {
+        "live": "Live"
+      },
+      "owner": {
+        "documents": "Docs",
+        "financials": "Finances",
+        "livestream": "Live",
+        "snacks": "Snacks"
+      }
+    },
+    "timesSeparator": " × ",
+    "typeLabel": "Type"
+  },
+  "customerApp": {
+    "booking": {
+      "durations": {
+        "chipFallback": "{{count}}m",
+        "d120": {
+          "chip": "2h"
+        },
+        "d180": {
+          "chip": "3h"
+        },
+        "d30": {
+          "chip": "30m",
+          "summary": "30 minutes"
+        },
+        "d60": {
+          "chip": "1h"
+        },
+        "summaryFallback": "{{count}} minutes"
+      },
+      "emDash": "—",
+      "noDatesAvailable": "No bookable dates available. The club may need to update their schedule.",
+      "noTablesEmpty": "No active tables for this type. Ask the club to check table setup in Settings.",
+      "notesCounter": "{{count}}/200",
+      "pickDate": "When do you want to play?",
+      "steps": {
+        "date": "Date",
+        "table": "Table",
+        "type": "Type"
+      },
+      "summaryDate": "Date",
+      "summaryTable": "Table",
+      "today": "Today",
+      "whichTable": "Which table?"
+    },
+    "bookingDetail": {
+      "date": "Date",
+      "durationMin": "{{count}} min",
+      "estimatedCostValue": "Est. {{symbol}}{{amount}}"
+    },
+    "checkInPayload": "a3customer:{{userId}}",
+    "clubProfile": {
+      "perMin": "/min",
+      "tablePlural": "tables",
+      "tableSingular": "table",
+      "tables": "Tables"
+    },
+    "discovery": {
+      "title": "Discover"
+    },
+    "history": {
+      "minAtRate": "{{minutes}} min @ {{rate}}/min",
+      "snacks": "Snacks",
+      "total": "Total",
+      "upi": "UPI"
+    },
+    "home": {
+      "discover": "Discover"
+    },
+    "live": {
+      "title": "Live"
+    },
+    "loyalty": {
+      "profile": {
+        "checkInCode": "Club check-in code",
+        "checkInCodeHint": "Show this at the counter for faster slot allotment. Code: a3customer:{{id}}",
+        "deletePlaceholder": "DELETE",
+        "name": "Name"
+      }
+    },
+    "profile": {
+      "checkInCode": "Club check-in code",
+      "checkInCodeHint": "Show this at the counter for faster slot allotment. Code: a3customer:{{id}}",
+      "deletePlaceholder": "DELETE",
+      "name": "Name"
+    },
+    "screens": {
+      "discover": "Discover",
+      "live": "Live"
+    },
+    "streaming": {
+      "mute": "Mute",
+      "otherLive": "Other live streams",
+      "unmute": "Unmute"
+    }
+  },
+  "notifications": {
+    "fallback": "Notification"
+  },
+  "ownerApp": {
+    "documents": {
+      "pdf": "PDF",
+      "title": "Documents"
+    },
+    "financials": {
+      "cgst": "CGST",
+      "gstin": "GSTIN",
+      "igst": "IGST",
+      "minutes": "{{count}} min",
+      "session_one": "{{count}} session",
+      "sessions": "{{count}} sessions",
+      "sgst": "SGST",
+      "snackLine": "{{name}} × {{qty}} = {{amount}}",
+      "snacks": "Snacks",
+      "sortByDate": "Date",
+      "tableLine": "{{minutes}} @ {{rate}}/min = {{subtotal}}",
+      "upi": "UPI"
+    },
+    "gstReport": {
+      "financialsGst": {
+        "cgst": "CGST",
+        "gstin": "GSTIN",
+        "igst": "IGST",
+        "sgst": "SGST"
+      }
+    },
+    "home": {
+      "tileDocuments": "Documents",
+      "tileSlots": "Slots",
+      "tileSnacks": "Snacks"
+    },
+    "kitchen": {
+      "table": "Table {{label}}"
+    },
+    "livestream": {
+      "flipCamera": "Flip camera",
+      "liveBadge": "LIVE",
+      "micMute": "Mute microphone",
+      "micUnmute": "Unmute microphone",
+      "otherClubStreams": "Other live tables at your club",
+      "placeholderTable": "Table 4",
+      "selectTable": "Table to stream"
+    },
+    "loyalty": {
+      "awardLine": "{{date}} — +{{count}} credit(s) ({{tier}})",
+      "creditsCount": "{{count}} credits",
+      "programmeNamePlaceholder": "A3 Regulars",
+      "statusLine": "Status: {{status}}"
+    },
+    "settings": {
+      "chefRoleName": "Chef",
+      "content": {
+        "acceptOnlineBookings": "Accept Online Bookings",
+        "addAmenity": "Add",
+        "addChefRole": "+ Add Chef Role",
+        "addEmailFirst": "Add email first",
+        "addPhoto": "+ Add Photo",
+        "addRole": "Add role",
+        "addTable": "+ Add Table",
+        "allTables": "All tables",
+        "amenities": "Amenities",
+        "approvalDeadline": "Approval deadline (minutes)",
+        "approvalDeadlineNote": "Minutes to approve before booking expires",
+        "bookableHours": "Bookable hours",
+        "bookableHoursMustBeWithin": "Bookable hours must fall within operating hours. Update bookable hours first.",
+        "bookableHoursNote": "Bookable hours must fall within your operating hours.",
+        "bookableTableTypes": "Bookable table types",
+        "bookableTableTypesMismatch": "Some bookable table types have no active tables.",
+        "bookableTableTypesNote": "Only selected types appear in the customer booking flow.",
+        "bookingCouponCode": "Booking coupon code",
+        "bookingsDisabledDesc": "Customers cannot discover or book your club online",
+        "bookingsEnabledDesc": "Your club is accepting online bookings",
+        "canApplyDiscount": "Can apply discount",
+        "canApplyDiscountMax": "Can apply discount (max {{pct}}%)",
+        "canFileComplaints": "Can file complaints",
+        "cancellationWindow": "Cancellation window (minutes)",
+        "cancellationWindowNote": "Minutes before start time for late cancellation",
+        "changeAccountPassword": "Change account password",
+        "changeSettingsPasscode": "Change settings passcode",
+        "chefRoleCreated": "Chef role created",
+        "chefRoleCreatedBody": "Kitchen tab only. Assign it when handing the device to kitchen staff.",
+        "chefRoleExists": "Chef role already exists",
+        "chefRoleExistsBody": "Edit it under Staff Roles if needed.",
+        "closes": "Closes",
+        "couponDescription": "Customers enter a coupon instead of card payment when booking",
+        "customAmenities": "Custom amenities",
+        "customAmenityPlaceholder": "Custom amenity",
+        "deleteRoleBody": "If this role is currently active on the device, it will revert to Owner Mode.",
+        "deleteRoleConfirm": "Delete",
+        "deleteRoleTitle": "Delete role?",
+        "descriptionMax": "Description (max 500)",
+        "discoverable": "Discoverable",
+        "downloadMyData": "Download my data",
+        "editRole": "Edit role",
+        "exportClubMembers": "Download club members data",
+        "exportDownload": "Download",
+        "exportMembersBody": "Download a spreadsheet (CSV) for Excel or Google Sheets with customers who have booked, played, or joined loyalty at your club. Only club-scoped fields are included.",
+        "exportMembersTitle": "Export club members?",
+        "exportingMembers": "Exporting…",
+        "gstItcError": "Monthly ITC must be a non-negative number.",
+        "gstNote": "Inputs for the estimate-only GST Report. Full income-tax reporting will be added after CA consultation.",
+        "gstRegistered": "GST registered",
+        "gstRegisteredNote": "When off, the GST Report shows zero output tax",
+        "gstSnacks": "GST % on snacks",
+        "gstSnacksError": "Snacks GST % must be between 0 and 100.",
+        "gstTableError": "Table GST % must be between 0 and 100.",
+        "gstTableTime": "GST % on table time",
+        "gstin": "GSTIN (optional)",
+        "hidden": "Hidden",
+        "locationPin": "Location pin",
+        "locationSaved": "Location saved",
+        "manageTables": "Manage billiards tables",
+        "maxAdvanceDays": "Max advance days",
+        "maxAdvanceDaysNote": "How far ahead customers can book",
+        "minAdvanceMinutes": "Min advance minutes",
+        "minAdvanceMinutesNote": "Minimum lead time before booking start",
+        "monthlyItc": "Monthly input tax credit estimate (optional)",
+        "opens": "Opens",
+        "operatingHours": "Operating hours",
+        "operatingHoursPrefix": "Operating hours:",
+        "ownerModeLabel": "Owner Mode (Unrestricted)",
+        "photos": "Photos",
+        "requestDataExportBody": "Your data export (name, phone, email, club name, subscription history) will be sent to {{email}} within 72 hours.",
+        "requestDataExportTitle": "Request data export?",
+        "requestSubmitted": "Request submitted",
+        "requireBookingCoupon": "Require booking coupon",
+        "saveAmenities": "Save amenities",
+        "saveBookableHours": "Save bookable hours",
+        "saveBookableTypes": "Save bookable types",
+        "saveBookingRules": "Save booking rules",
+        "saveCouponSettings": "Save coupon settings",
+        "saveDescription": "Save description",
+        "saveGst": "Save GST settings",
+        "saveLocation": "Save Location",
+        "saveOperatingHours": "Save operating hours",
+        "saveSlotDurations": "Save slot durations",
+        "selectAtLeastOneTab": "Select at least one tab.",
+        "selectAtLeastOneTable": "Select at least one table when using specific tables.",
+        "selectSlotDuration": "Select at least one slot duration.",
+        "setOperatingHoursFirst": "Set operating hours under Club Profile first, then save bookable hours here.",
+        "showClubInSearch": "Show club in customer search",
+        "slotDurationOptions": "Slot duration options",
+        "specificTables": "{{count}} specific tables",
+        "supplyInterstate": "Interstate (IGST)",
+        "supplyIntrastate": "Intrastate (CGST + SGST)",
+        "supplyType": "Supply type",
+        "tableActive": "Active",
+        "tableDisabled": "Disabled",
+        "timeTo": "to",
+        "uploading": "Uploading…"
+      },
+      "hhmmStart": "HH:MM start",
+      "labelField": "Label",
+      "labelPlaceholder": "Label *",
+      "passcode": {
+        "ok": "OK"
+      },
+      "sections": {
+        "tables": "Tables"
+      },
+      "timezonePlaceholder": "Asia/Kolkata"
+    },
+    "slots": {
+      "addTeammate": "Add player",
+      "addTeammatePhone": "Player phone",
+      "age18Plus": "18+",
+      "assignBothSides": "Assign at least one player to each side.",
+      "billBreakdown": "Bill breakdown",
+      "checkInCode": "Check-in code",
+      "checkoutCounterSnacks": "Counter snacks",
+      "checkoutDiscount": "Discount ({{percent}}%)",
+      "checkoutItemLine": "{{name}} × {{qty}}",
+      "checkoutKitchenItems": "Kitchen items",
+      "checkoutSectionSubtotal": "Subtotal",
+      "checkoutTableRate": "{{minutes}} min @ {{rate}}/min",
+      "checkoutTableTime": "Table time",
+      "checkoutTableTotal": "Table total",
+      "continueToGroup": "Continue",
+      "customerNamePlaceholder": "Type customer name…",
+      "customerNameSearch": "Or search by name",
+      "groupSetupHint": "Add players who are playing on this table. Each new player must verify their phone via WhatsApp.",
+      "groupSetupTitle": "Players on this table",
+      "losersPay": "Losers pay",
+      "losersPayBadge": "Losers pay",
+      "losersPayCheckoutNote": "Losers pay — bill recorded against the losing side.",
+      "losersPayHint": "At checkout, record which side lost and pays the table bill.",
+      "mobileWhatsApp": "Mobile (WhatsApp)",
+      "needTwoForVersus": "Add at least one player for versus play.",
+      "openQrScanner": "Scan QR code",
+      "paymentUpi": "UPI",
+      "playVersus": "Play versus",
+      "playVersusHint": "Split players into Side A and Side B for a competitive match.",
+      "playersCount": "{{count}} players",
+      "primaryPlayer": "Primary player",
+      "qrAllowCamera": "Allow camera",
+      "qrCameraPermission": "Camera access is needed to scan customer check-in codes.",
+      "qrPlaceholder": "Paste QR payload or scan at counter",
+      "qrScannerHint": "Point at the customer's check-in QR on their profile",
+      "qrScannerTitle": "Scan customer QR",
+      "registerTeammateWhatsApp": "Register player — WhatsApp OTP",
+      "removePlayer": "Remove",
+      "scanQrCode": "Scan / paste check-in code",
+      "selectLosingSide": "Which side lost?",
+      "sideA": "Side A",
+      "sideB": "Side B",
+      "snacksCharge": "Snacks",
+      "tableCharge": "Table",
+      "teammateAlreadyAdded": "This player is already on the table.",
+      "teammates": "Players",
+      "versusBadge": "Versus"
+    },
+    "snacks": {
+      "name": "Name"
+    }
+  },
+  "sharedUi": {
+    "bookingCard": {
+      "duration30": "30 min",
+      "durationMinutes": "{{min}} min",
+      "estimated": "Est. {{amount}}"
+    },
+    "clubCard": {
+      "kmAway": "{{km}} km"
+    },
+    "liveStreamCard": {
+      "liveBadge": "LIVE"
+    },
+    "placeholders": {
+      "billModal": "BillModal",
+      "networkGuard": "NetworkGuard",
+      "offlineScreen": "OfflineScreen",
+      "passcodeSetupModal": "PasscodeSetupModal",
+      "sessionTimer": "SessionTimer",
+      "userSelector": "UserSelector"
+    },
+    "safeLocationPicker": {
+      "latitude": "Latitude",
+      "longitude": "Longitude"
+    },
+    "tableGrid": {
+      "a11yTable": "{{label}}, {{status}}{{tag}}",
+      "tableFallback": "Table"
+    },
+    "tableTypePicker": {
+      "ratePerMin": "{{rate}}/min"
+    }
+  }
+}

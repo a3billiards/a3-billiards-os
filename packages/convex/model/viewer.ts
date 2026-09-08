@@ -6,6 +6,8 @@
  * - Customer: scoped to own userId; club reads only via getClubForViewer (public rules).
  *
  * Call requireViewer() at the top of every mutation, then assert scope helpers as needed.
+ *
+ * Policy reference: `model/accessControlMatrix.ts`
  */
 
 import { getAuthUserId } from "@convex-dev/auth/server";
@@ -26,7 +28,8 @@ export type AdminViewer = {
 export type OwnerViewer = {
   userId: Id<"users">;
   role: "owner";
-  clubId: Id<"clubs">;
+  /** Resolved via `clubs.by_owner`. Null until the owner completes venue onboarding (web). */
+  clubId: Id<"clubs"> | null;
   isFrozen: boolean;
   deletionRequestedAt?: number;
 };
@@ -47,15 +50,12 @@ function throwAuth(message: string): never {
 async function clubIdForOwner(
   ctx: AuthCtx,
   ownerUserId: Id<"users">,
-): Promise<Id<"clubs">> {
+): Promise<Id<"clubs"> | null> {
   const club = await ctx.db
     .query("clubs")
     .withIndex("by_owner", (q) => q.eq("ownerId", ownerUserId))
     .unique();
-  if (!club) {
-    throwAuth("AUTH_008: No club found for owner account");
-  }
-  return club._id;
+  return club?._id ?? null;
 }
 
 /**
@@ -125,11 +125,32 @@ export function requireAdmin(viewer: Viewer): AdminViewer {
   return viewer;
 }
 
+/** Admin role + completed MFA for this session (PRD §4.5). */
+export async function requireAdminWithMfa(ctx: AuthCtx): Promise<AdminViewer> {
+  const viewer = requireAdmin(await requireViewer(ctx));
+  const user = await ctx.db.get(viewer.userId);
+  if (!user?.adminMfaVerifiedAt) {
+    throwAuth("AUTH_003: Admin MFA verification required");
+  }
+  return viewer;
+}
+
 export function requireOwner(viewer: Viewer): OwnerViewer {
   if (viewer.role !== "owner") {
     throwAuth("PERM_001: Owner only");
   }
   return viewer;
+}
+
+/** Owner viewer with a club row; use for mutations/queries that need `clubId`. */
+export function requireOwnerWithClub(viewer: Viewer): OwnerViewer & {
+  clubId: Id<"clubs">;
+} {
+  const o = requireOwner(viewer);
+  if (o.clubId === null) {
+    throwAuth("AUTH_008: No club found for owner account");
+  }
+  return o as OwnerViewer & { clubId: Id<"clubs"> };
 }
 
 export function requireCustomer(viewer: Viewer): CustomerViewer {
@@ -150,6 +171,9 @@ export function assertMutationClubScope(
     return;
   }
   if (viewer.role === "owner") {
+    if (viewer.clubId === null) {
+      throwAuth("AUTH_008: No club found for owner account");
+    }
     if (viewer.clubId !== clubId) {
       throwAuth("PERM_001: Cannot access another club's data");
     }
@@ -198,7 +222,11 @@ export async function getClubForViewer(
   }
 
   if (viewer.role === "owner") {
-    if (viewer.clubId !== clubId) {
+    if (viewer.clubId !== null) {
+      if (viewer.clubId !== clubId) {
+        throwAuth("PERM_001: Cannot access another club's data");
+      }
+    } else if (club.ownerId !== viewer.userId) {
       throwAuth("PERM_001: Cannot access another club's data");
     }
     return club;

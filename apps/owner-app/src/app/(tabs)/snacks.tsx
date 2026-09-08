@@ -4,6 +4,7 @@ import {
   Alert,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,20 +15,31 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, layout, radius, spacing, typography } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { useTranslation } from "@a3/i18n";
 import { formatCurrency } from "@a3/utils/billing";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { OwnerNoClubPlaceholder } from "../../components/OwnerNoClubPlaceholder";
+import { ownerTabBarTotalInset } from "../../theme/ownerShell";
+import { useStaffRole, useStaffTabQueryArgs } from "../../lib/StaffRoleContext";
+import { TabAccessDenied } from "../../components/TabAccessDenied";
 
 type FormState = {
   name: string;
   price: string;
+  fulfillmentType: "counter" | "kitchen";
 };
 
-export default function SnacksScreen() {
+function SnacksScreenContent() {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
+  const { roleId, canAccessTab } = useStaffRole();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
-  const snacks = useQuery(
-    api.snacks.listSnacks,
-    dashboard ? { clubId: dashboard.clubId } : "skip",
-  );
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
+  const snacksArgs = useStaffTabQueryArgs(dashboard?.clubId, "snacks");
+  const snacks = useQuery(api.snacks.listSnacks, snacksArgs);
   const createSnack = useMutation(api.snacks.createSnack);
   const updateSnack = useMutation(api.snacks.updateSnack);
   const toggleSnackAvailability = useMutation(api.snacks.toggleSnackAvailability);
@@ -35,7 +47,11 @@ export default function SnacksScreen() {
 
   const [editorVisible, setEditorVisible] = useState(false);
   const [editingSnackId, setEditingSnackId] = useState<Id<"snacks"> | null>(null);
-  const [form, setForm] = useState<FormState>({ name: "", price: "" });
+  const [form, setForm] = useState<FormState>({
+    name: "",
+    price: "",
+    fulfillmentType: "counter",
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,18 +60,35 @@ export default function SnacksScreen() {
     [snacks, editingSnackId],
   );
 
-  if (dashboard === undefined || snacks === undefined) {
+  if (dashboard === undefined) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.accent.green} />
-        <Text style={styles.centerText}>Loading snack menu...</Text>
+        <Text style={styles.centerText}>{t("ownerApp.snacks.loading")}</Text>
+      </View>
+    );
+  }
+
+  if (dashboard === null) {
+    return <OwnerNoClubPlaceholder />;
+  }
+
+  if (roleId !== undefined && !canAccessTab("snacks")) {
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.snacks")} />;
+  }
+
+  if (snacks === undefined) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.accent.green} />
+        <Text style={styles.centerText}>{t("ownerApp.snacks.loading")}</Text>
       </View>
     );
   }
 
   const openCreate = () => {
     setEditingSnackId(null);
-    setForm({ name: "", price: "" });
+    setForm({ name: "", price: "", fulfillmentType: "counter" });
     setError(null);
     setEditorVisible(true);
   };
@@ -64,7 +97,11 @@ export default function SnacksScreen() {
     const snack = snacks.find((s) => s._id === snackId);
     if (!snack) return;
     setEditingSnackId(snackId);
-    setForm({ name: snack.name, price: String(snack.price) });
+    setForm({
+      name: snack.name,
+      price: String(snack.price),
+      fulfillmentType: snack.fulfillmentType ?? "counter",
+    });
     setError(null);
     setEditorVisible(true);
   };
@@ -79,20 +116,30 @@ export default function SnacksScreen() {
     const name = form.name.trim();
     const price = Number(form.price);
     if (!name) {
-      setError("Name is required.");
+      setError(t("ownerApp.snacks.nameRequired"));
       return;
     }
     if (!Number.isFinite(price) || price <= 0) {
-      setError("Price must be a positive number.");
+      setError(t("ownerApp.snacks.pricePositive"));
       return;
     }
     setSaving(true);
     setError(null);
     try {
       if (editingSnackId) {
-        await updateSnack({ snackId: editingSnackId, name, price });
+        await updateSnack({
+          snackId: editingSnackId,
+          name,
+          price,
+          fulfillmentType: form.fulfillmentType,
+        });
       } else {
-        await createSnack({ clubId: dashboard.clubId, name, price });
+        await createSnack({
+          clubId: dashboard.clubId,
+          name,
+          price,
+          fulfillmentType: form.fulfillmentType,
+        });
       }
       setEditorVisible(false);
     } catch (e) {
@@ -106,24 +153,24 @@ export default function SnacksScreen() {
     try {
       await toggleSnackAvailability({ snackId });
     } catch (e) {
-      Alert.alert("Unable to update", parseConvexError(e as Error).message);
+      Alert.alert(t("ownerApp.snacks.unableToUpdate"), parseConvexError(e as Error).message);
     }
   };
 
   const onDelete = (snackId: Id<"snacks">) => {
     Alert.alert(
-      "Remove this item?",
-      "It will no longer appear on the menu. Historical orders are preserved.",
+      t("ownerApp.snacks.removeTitle"),
+      t("ownerApp.snacks.removeBody"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("ownerApp.snacks.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("ownerApp.snacks.delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await deleteSnack({ snackId });
             } catch (e) {
-              Alert.alert("Delete failed", parseConvexError(e as Error).message);
+              Alert.alert(t("ownerApp.snacks.deleteFailed"), parseConvexError(e as Error).message);
             }
           },
         },
@@ -134,25 +181,28 @@ export default function SnacksScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Snacks</Text>
+        <Text style={styles.title}>{t("ownerApp.snacks.menuTitle")}</Text>
         <Pressable
           onPress={openCreate}
           style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}
           accessibilityRole="button"
-          accessibilityLabel="Add snack item"
+          accessibilityLabel={t("ownerApp.snacks.addItem")}
         >
-          <Text style={styles.addBtnText}>+ Add Item</Text>
+          <Text style={styles.addBtnText}>{t("ownerApp.snacks.addSnack")}</Text>
         </Pressable>
       </View>
 
       {snacks.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>
-            No snack items yet. Tap '+ Add Item' to create your menu.
-          </Text>
+          <Text style={styles.emptyText}>{t("ownerApp.snacks.empty")}</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView
+          contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
           {snacks.map((snack) => (
             <View key={snack._id} style={styles.card}>
               <View style={styles.cardTop}>
@@ -160,6 +210,11 @@ export default function SnacksScreen() {
                   <Text style={styles.snackName}>{snack.name}</Text>
                   <Text style={styles.snackPrice}>
                     {formatCurrency(snack.price, dashboard.currency)}
+                  </Text>
+                  <Text style={styles.snackType}>
+                    {(snack.fulfillmentType ?? "counter") === "kitchen"
+                      ? t("ownerApp.snacks.kitchenItem")
+                      : t("ownerApp.snacks.counterSnack")}
                   </Text>
                 </View>
                 <View
@@ -169,7 +224,9 @@ export default function SnacksScreen() {
                   ]}
                 >
                   <Text style={styles.badgeText}>
-                    {snack.isAvailable ? "Available" : "Unavailable"}
+                    {snack.isAvailable
+                      ? t("ownerApp.snacks.available")
+                      : t("ownerApp.snacks.unavailable")}
                   </Text>
                 </View>
               </View>
@@ -179,14 +236,16 @@ export default function SnacksScreen() {
                   style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
                   onPress={() => openEdit(snack._id)}
                 >
-                  <Text style={styles.actionText}>Edit</Text>
+                  <Text style={styles.actionText}>{t("common.edit")}</Text>
                 </Pressable>
                 <Pressable
                   style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
                   onPress={() => void onToggle(snack._id)}
                 >
                   <Text style={styles.actionText}>
-                    {snack.isAvailable ? "Mark Unavailable" : "Mark Available"}
+                    {snack.isAvailable
+                      ? t("ownerApp.snacks.markUnavailable")
+                      : t("ownerApp.snacks.markAvailable")}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -197,7 +256,7 @@ export default function SnacksScreen() {
                   ]}
                   onPress={() => onDelete(snack._id)}
                 >
-                  <Text style={styles.deleteText}>Delete</Text>
+                  <Text style={styles.deleteText}>{t("ownerApp.snacks.delete")}</Text>
                 </Pressable>
               </View>
             </View>
@@ -214,19 +273,19 @@ export default function SnacksScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>
-              {editingSnack ? "Edit Snack Item" : "Add Snack Item"}
+              {editingSnack ? t("ownerApp.snacks.editItem") : t("ownerApp.snacks.addSnackItem")}
             </Text>
 
-            <Text style={styles.label}>Name</Text>
+            <Text style={styles.label}>{t("ownerApp.snacks.name")}</Text>
             <TextInput
               value={form.name}
               onChangeText={(name) => setForm((prev) => ({ ...prev, name }))}
-              placeholder="e.g. Nachos"
+              placeholder={t("ownerApp.snacks.namePlaceholder")}
               placeholderTextColor={colors.text.tertiary}
               style={styles.input}
             />
 
-            <Text style={styles.label}>Price</Text>
+            <Text style={styles.label}>{t("ownerApp.snacks.price")}</Text>
             <TextInput
               value={form.price}
               onChangeText={(price) => setForm((prev) => ({ ...prev, price }))}
@@ -236,6 +295,46 @@ export default function SnacksScreen() {
               style={styles.input}
             />
 
+            <Text style={styles.label}>{t("common.typeLabel")}</Text>
+            <View style={styles.typeRow}>
+              <Pressable
+                onPress={() =>
+                  setForm((prev) => ({ ...prev, fulfillmentType: "counter" }))
+                }
+                style={[
+                  styles.typeChip,
+                  form.fulfillmentType === "counter" && styles.typeChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.typeChipText,
+                    form.fulfillmentType === "counter" && styles.typeChipTextActive,
+                  ]}
+                >
+                  {t("ownerApp.snacks.counterSnack")}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() =>
+                  setForm((prev) => ({ ...prev, fulfillmentType: "kitchen" }))
+                }
+                style={[
+                  styles.typeChip,
+                  form.fulfillmentType === "kitchen" && styles.typeChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.typeChipText,
+                    form.fulfillmentType === "kitchen" && styles.typeChipTextActive,
+                  ]}
+                >
+                  {t("ownerApp.snacks.kitchenItem")}
+                </Text>
+              </Pressable>
+            </View>
+
             {error ? <Text style={styles.formError}>{error}</Text> : null}
 
             <View style={styles.modalActions}>
@@ -243,7 +342,7 @@ export default function SnacksScreen() {
                 onPress={closeEditor}
                 style={[styles.modalBtn, styles.modalCancel]}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t("ownerApp.snacks.cancel")}</Text>
               </Pressable>
               <Pressable
                 onPress={() => void saveSnack()}
@@ -251,7 +350,7 @@ export default function SnacksScreen() {
                 style={[styles.modalBtn, styles.modalConfirm, saving && styles.disabled]}
               >
                 <Text style={styles.modalConfirmText}>
-                  {saving ? "Saving..." : "Save"}
+                  {saving ? t("ownerApp.snacks.saving") : t("ownerApp.snacks.save")}
                 </Text>
               </Pressable>
             </View>
@@ -342,6 +441,11 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing[1],
   },
+  snackType: {
+    ...typography.labelSmall,
+    color: colors.text.tertiary,
+    marginTop: spacing[1],
+  },
   badge: {
     borderRadius: radius.full,
     paddingHorizontal: spacing[2],
@@ -408,6 +512,34 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing[1],
   },
+  typeRow: {
+    flexDirection: "row",
+    gap: spacing[2],
+    marginTop: spacing[1],
+  },
+  typeChip: {
+    flex: 1,
+    minHeight: layout.touchTarget,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: colors.bg.tertiary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing[2],
+  },
+  typeChipActive: {
+    borderColor: colors.accent.green,
+    backgroundColor: colors.accent.green,
+  },
+  typeChipText: {
+    ...typography.labelSmall,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  typeChipTextActive: {
+    color: colors.bg.primary,
+  },
   input: {
     minHeight: layout.touchTarget,
     borderRadius: radius.md,
@@ -455,3 +587,12 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 });
+
+export default function SnacksScreen() {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.owner.snacks")}>
+      <SnacksScreenContent />
+    </TabErrorBoundary>
+  );
+}

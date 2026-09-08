@@ -9,28 +9,34 @@ import {
   Modal,
   Dimensions,
   Alert,
-  Platform,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import DateTimePicker, {
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
-import { BarChart } from "react-native-gifted-charts";
 import { useMutation, useQuery } from "convex/react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { api } from "@a3/convex/_generated/api";
 import type { Id } from "@a3/convex/_generated/dataModel";
 import { colors, typography, spacing, radius } from "@a3/ui/theme";
-import { parseConvexError } from "@a3/ui/errors";
+import { parseConvexError, TabErrorBoundary } from "@a3/ui/errors";
+import { usePullToRefresh } from "@a3/ui/hooks";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 import {
   addCalendarDaysYmd,
-  toClubDate,
-  zonedWallTimeToUtcMs,
   timeZoneAbbreviation,
+  normalizeIanaTimeZone,
 } from "@a3/utils/timezone";
 import { formatCurrency } from "@a3/utils/billing";
-import { getActiveRoleId } from "../lib/activeRoleStorage";
+import { useStaffRole, staffRoleQueryId, useStaffTabQueriesEnabled } from "../lib/StaffRoleContext";
+import { TabAccessDenied } from "../components/TabAccessDenied";
+import { OwnerNoClubPlaceholder } from "../components/OwnerNoClubPlaceholder";
+import { SafeBarChart } from "../components/SafeBarChart";
+import { FinancialDateRangeBar } from "../components/FinancialDateRangeBar";
+import { countDaysInclusive } from "../lib/financialDateRange";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ownerTabBarTotalInset } from "../theme/ownerShell";
+
+const WEEK_DAY_SHORT_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 type SortKey = "date" | "amount";
 
@@ -53,41 +59,6 @@ type CreditRow = {
   ratePerMin: number;
 };
 
-function countDaysInclusive(
-  dateFrom: string,
-  dateTo: string,
-  timeZone: string,
-): number {
-  if (dateFrom.localeCompare(dateTo) > 0) return 0;
-  let n = 0;
-  let cur = dateFrom;
-  while (cur.localeCompare(dateTo) <= 0 && n < 400) {
-    n += 1;
-    cur = addCalendarDaysYmd(cur, 1, timeZone);
-  }
-  return n;
-}
-
-function firstOfMonthYmd(todayYmd: string): string {
-  return `${todayYmd.slice(0, 7)}-01`;
-}
-
-function startOfLastMonthYmd(todayYmd: string): string {
-  const y = Number(todayYmd.slice(0, 4));
-  const mo = Number(todayYmd.slice(5, 7));
-  if (mo === 1) return `${y - 1}-12-01`;
-  return `${y}-${String(mo - 1).padStart(2, "0")}-01`;
-}
-
-function endOfLastMonthYmd(todayYmd: string, tz: string): string {
-  const firstThis = firstOfMonthYmd(todayYmd);
-  return addCalendarDaysYmd(firstThis, -1, tz);
-}
-
-function ymdToDate(ymd: string, tz: string): Date {
-  return new Date(zonedWallTimeToUtcMs(ymd, "12:00", tz));
-}
-
 function formatMoney(amount: number, currency: string): string {
   try {
     return formatCurrency(amount, currency);
@@ -101,49 +72,55 @@ function formatBarAxisLabel(
   dayIndex: number,
   totalDays: number,
 ): string {
+  const locale = getCurrentLanguage();
   const d = new Date(ymd + "T12:00:00Z");
   if (totalDays <= 14) {
-    return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+    return d.toLocaleDateString(locale, { month: "short", day: "numeric" });
   }
   if (totalDays <= 30) {
     if (dayIndex % 3 !== 0) return "";
-    return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+    return d.toLocaleDateString(locale, { month: "short", day: "numeric" });
   }
   if (dayIndex % 7 !== 0) return "";
-  return d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+  return d.toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
 
 function formatEndDateLabel(endTime: number, tz: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: tz,
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(endTime));
+  const locale = getCurrentLanguage();
+  const timeZone = normalizeIanaTimeZone(tz);
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      timeZone,
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(endTime));
+  } catch {
+    return new Date(endTime).toLocaleDateString(locale);
+  }
 }
 
-export default function FinancialsScreen(): React.JSX.Element {
+function FinancialsContent(): React.JSX.Element {
+  const { t } = useTranslation();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const router = useRouter();
   const dashboard = useQuery(api.slotManagement.getSlotDashboard);
   const clubId = dashboard?.clubId;
-  const clubTimezone = dashboard?.timezone ?? "Asia/Kolkata";
+  const clubTimezone = normalizeIanaTimeZone(dashboard?.timezone);
+  const insets = useSafeAreaInsets();
+  const bottomPad = ownerTabBarTotalInset(insets.bottom);
 
-  const [roleId, setRoleId] = useState<Id<"staffRoles"> | undefined>(undefined);
-
-  useEffect(() => {
-    void getActiveRoleId().then((v) => {
-      if (v) setRoleId(v as Id<"staffRoles">);
-    });
-  }, []);
+  const { roleId, canAccessTab } = useStaffRole();
+  const queryRoleId = roleId !== undefined ? staffRoleQueryId(roleId) : undefined;
+  const financialsEnabled = useStaffTabQueriesEnabled("financials");
 
   const access = useQuery(
     api.financials.getFinancialTabAccess,
-    clubId ? { clubId, roleId } : "skip",
+    clubId && financialsEnabled ? { clubId, roleId: queryRoleId } : "skip",
   );
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [picker, setPicker] = useState<"from" | "to" | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("date");
   const [expandedId, setExpandedId] = useState<Id<"sessions"> | null>(null);
   const [paySheet, setPaySheet] = useState<CreditRow | null>(null);
@@ -167,58 +144,39 @@ export default function FinancialsScreen(): React.JSX.Element {
   const largeRange = rangeDays > 90;
 
   const revenueArgs =
-    clubId && dateFrom && dateTo && !rangeInvalid
-      ? { clubId, dateFrom, dateTo, roleId }
+    clubId && dateFrom && dateTo && !rangeInvalid && financialsEnabled
+      ? { clubId, dateFrom, dateTo, roleId: queryRoleId }
       : "skip";
   const revenue = useQuery(api.financials.getRevenueByDay, revenueArgs);
 
   const breakdownArgs =
-    clubId && dateFrom && dateTo && !rangeInvalid
-      ? { clubId, dateFrom, dateTo, roleId }
+    clubId && dateFrom && dateTo && !rangeInvalid && financialsEnabled
+      ? { clubId, dateFrom, dateTo, roleId: queryRoleId }
       : "skip";
   const breakdown = useQuery(
     api.financials.getPaymentMethodBreakdown,
     breakdownArgs,
   );
 
-  const creditsArgs = clubId ? { clubId, sortBy, roleId } : "skip";
+  const creditsArgs =
+    clubId && financialsEnabled ? { clubId, sortBy, roleId: queryRoleId } : "skip";
   const credits = useQuery(api.financials.getOutstandingCredits, creditsArgs);
 
+  const analyticsArgs =
+    clubId && dateFrom && dateTo && !rangeInvalid && financialsEnabled
+      ? { clubId, dateFrom, dateTo, roleId: queryRoleId }
+      : "skip";
+  const bestTables = useQuery(
+    api.financials.getBestPerformingTables,
+    analyticsArgs === "skip" ? "skip" : { ...analyticsArgs, limit: 5 },
+  );
+  const snackSales = useQuery(
+    api.financials.getSnackSalesBreakdown,
+    analyticsArgs === "skip" ? "skip" : { ...analyticsArgs, limit: 8 },
+  );
+  const heatmap = useQuery(api.financials.getPeakHourHeatmap, analyticsArgs);
+
   const resolveCredit = useMutation(api.financials.resolveCredit);
-
-  const onPickChip = useCallback(
-    (kind: "7" | "30" | "this" | "last") => {
-      const to =
-        dashboard?.todayYmd ?? toClubDate(Date.now(), clubTimezone);
-      if (kind === "7") {
-        setDateFrom(addCalendarDaysYmd(to, -6, clubTimezone));
-        setDateTo(to);
-      } else if (kind === "30") {
-        setDateFrom(addCalendarDaysYmd(to, -29, clubTimezone));
-        setDateTo(to);
-      } else if (kind === "this") {
-        setDateFrom(firstOfMonthYmd(to));
-        setDateTo(to);
-      } else {
-        const end = endOfLastMonthYmd(to, clubTimezone);
-        const start = startOfLastMonthYmd(to);
-        setDateFrom(start);
-        setDateTo(end);
-      }
-    },
-    [clubTimezone, dashboard?.todayYmd],
-  );
-
-  const onDateChange = useCallback(
-    (_e: DateTimePickerEvent, date?: Date) => {
-      if (!date || !picker) return;
-      const ymd = toClubDate(date.getTime(), clubTimezone);
-      if (picker === "from") setDateFrom(ymd);
-      else setDateTo(ymd);
-      if (Platform.OS !== "ios") setPicker(null);
-    },
-    [picker, clubTimezone],
-  );
 
   const chartWidth = Dimensions.get("window").width - spacing[6] * 2;
 
@@ -244,34 +202,34 @@ export default function FinancialsScreen(): React.JSX.Element {
 
   const onResolve = useCallback(
     async (row: CreditRow, method: "cash" | "upi" | "card") => {
+      const methodLabel =
+        method === "cash"
+          ? t("ownerApp.financials.cash")
+          : method === "upi"
+            ? t("ownerApp.financials.upi")
+            : t("ownerApp.financials.card");
       Alert.alert(
-        "Confirm",
-        `Mark ${row.customerName}'s ${formatMoney(row.billTotal, row.currency)} credit as paid by ${method}?`,
+        t("ownerApp.financials.confirm"),
+        `${t("ownerApp.financials.confirmPayment", { name: row.customerName })} ${formatMoney(row.billTotal, row.currency)} (${methodLabel})`,
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Confirm",
+            text: t("ownerApp.financials.confirm"),
             onPress: async () => {
               try {
                 await resolveCredit({
                   sessionId: row.sessionId,
                   resolvedMethod: method,
-                  roleId,
+                  roleId: queryRoleId,
                 });
                 setPaySheet(null);
-                Alert.alert(
-                  "Done",
-                  `Credit resolved. ${row.customerName}'s balance cleared.`,
-                );
+                Alert.alert(t("common.done"), row.customerName);
               } catch (e) {
                 const msg = parseConvexError(e as Error).message;
                 if (msg.toLowerCase().includes("permission")) {
-                  Alert.alert(
-                    "Permission",
-                    "Your current role cannot resolve credits.",
-                  );
+                  Alert.alert(t("ownerApp.financials.error"), t("ownerApp.financials.permissionDenied"));
                 } else {
-                  Alert.alert("Error", msg);
+                  Alert.alert(t("ownerApp.financials.error"), msg);
                 }
               }
             },
@@ -279,10 +237,30 @@ export default function FinancialsScreen(): React.JSX.Element {
         ],
       );
     },
-    [resolveCredit, roleId],
+    [resolveCredit, queryRoleId, t],
   );
 
-  if (dashboard === undefined || access === undefined) {
+  if (dashboard === undefined) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ActivityIndicator size="large" color={colors.accent.green} />
+      </SafeAreaView>
+    );
+  }
+
+  if (dashboard === null) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <OwnerNoClubPlaceholder />
+      </SafeAreaView>
+    );
+  }
+
+  if (roleId !== undefined && !canAccessTab("financials")) {
+    return <TabAccessDenied tabLabel={t("common.tabs.owner.financials")} />;
+  }
+
+  if (access === undefined) {
     return (
       <SafeAreaView style={styles.safe}>
         <ActivityIndicator size="large" color={colors.accent.green} />
@@ -294,17 +272,15 @@ export default function FinancialsScreen(): React.JSX.Element {
     return (
       <SafeAreaView style={styles.safe}>
         <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/slots"))}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/home"))}
           style={styles.backRow}
         >
           <MaterialIcons name="arrow-back" size={22} color={colors.text.primary} />
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.backText}>{t("ownerApp.financials.back")}</Text>
         </Pressable>
         <View style={styles.deniedBox}>
           <MaterialIcons name="lock" size={48} color={colors.text.secondary} />
-          <Text style={styles.deniedTitle}>
-            {"You don't have permission to view financial data."}
-          </Text>
+          <Text style={styles.deniedTitle}>{t("ownerApp.financials.noPermission")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -315,70 +291,44 @@ export default function FinancialsScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Financials</Text>
-        <Text style={styles.sub}>Revenue and outstanding credits</Text>
+        <Text style={styles.title}>{t("ownerApp.financials.title")}</Text>
+        <Text style={styles.sub}>{t("ownerApp.financials.subtitle")}</Text>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
-        <Text style={styles.tzNote}>Dates in {tzAbbr}</Text>
+        <FinancialDateRangeBar
+          clubTimezone={clubTimezone}
+          todayYmd={dashboard.todayYmd}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          tzAbbr={tzAbbr}
+        />
 
-        <View style={styles.dateRow}>
-          <Pressable style={styles.dateBtn} onPress={() => setPicker("from")}>
-            <Text style={styles.dateLbl}>From</Text>
-            <Text style={styles.dateVal}>{dateFrom || "—"}</Text>
-          </Pressable>
-          <Pressable style={styles.dateBtn} onPress={() => setPicker("to")}>
-            <Text style={styles.dateLbl}>To</Text>
-            <Text style={styles.dateVal}>{dateTo || "—"}</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          style={styles.gstLink}
+          onPress={() => router.push("/(tabs)/gst-report")}
+          accessibilityRole="button"
+          accessibilityLabel={t("ownerApp.financials.gstReport")}
+        >
+          <View style={styles.gstLinkIcon}>
+            <MaterialIcons name="receipt-long" size={22} color={colors.accent.green} />
+          </View>
+          <View style={styles.gstLinkText}>
+            <Text style={styles.gstLinkTitle}>{t("ownerApp.financials.gstReport")}</Text>
+            <Text style={styles.gstLinkSub}>{t("ownerApp.financials.gstReportSub")}</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={colors.text.secondary} />
+        </Pressable>
 
-        {picker ? (
-          <DateTimePicker
-            value={ymdToDate(picker === "from" ? dateFrom : dateTo, clubTimezone)}
-            mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={onDateChange}
-            themeVariant="dark"
-          />
-        ) : null}
-        {Platform.OS === "ios" && picker ? (
-          <Pressable style={styles.iosPickDone} onPress={() => setPicker(null)}>
-            <Text style={styles.iosPickDoneText}>Done</Text>
-          </Pressable>
-        ) : null}
-
-        <View style={styles.chips}>
-          {(
-            [
-              { k: "7" as const, label: "Last 7 days" },
-              { k: "30" as const, label: "Last 30 days" },
-              { k: "this" as const, label: "This month" },
-              { k: "last" as const, label: "Last month" },
-            ] as const
-          ).map((c) => (
-            <Pressable key={c.k} onPress={() => onPickChip(c.k)} style={styles.chip}>
-              <Text style={styles.chipText}>{c.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {rangeInvalid ? (
-          <Text style={styles.errText}>
-            End date cannot be before start date.
-          </Text>
-        ) : null}
-
-        {largeRange ? (
-          <Text style={styles.warnLarge}>
-            Large date ranges may take a moment to load.
-          </Text>
-        ) : null}
-
-        <Text style={styles.sectionTitle}>Revenue</Text>
+        <Text style={styles.sectionTitle}>{t("ownerApp.financials.revenue")}</Text>
         {revenue === undefined ? (
           <View style={styles.skelChart}>
             {[40, 70, 35, 55, 80, 45, 60].map((h, i) => (
@@ -394,7 +344,8 @@ export default function FinancialsScreen(): React.JSX.Element {
                   style={styles.chartOverlay}
                 />
               ) : null}
-              <BarChart
+              <SafeBarChart
+                emptyMessage={t("ownerApp.financials.noRevenue")}
                 parentWidth={chartWidth}
                 data={barData}
                 maxValue={maxBar}
@@ -416,7 +367,7 @@ export default function FinancialsScreen(): React.JSX.Element {
                 yAxisLabelWidth={44}
                 hideRules={false}
                 showFractionalValues={false}
-                renderTooltip={(items: ReadonlyArray<{ index?: number }>) => {
+                renderTooltip={(items: readonly { index?: number }[]) => {
                   const it = items?.[0];
                   if (!it) return null;
                   const idx = typeof it.index === "number" ? it.index : 0;
@@ -426,31 +377,33 @@ export default function FinancialsScreen(): React.JSX.Element {
                     <View style={styles.tooltip}>
                       <Text style={styles.tooltipTxt}>
                         {src.date}: {formatMoney(src.revenue, revenue.currency)} •{" "}
-                        {src.sessionCount} sessions
+                        {t("ownerApp.financials.sessions", { count: src.sessionCount })}
                       </Text>
                     </View>
                   );
                 }}
-                {...({
-                  pointerConfig: {
-                    activatePointersOnLongPress: false,
-                    pointerStripColor: colors.border.default,
-                    pointerStripWidth: 1,
-                  },
-                } as object)}
+                pointerConfig={{
+                  activatePointersOnLongPress: false,
+                  pointerStripColor: colors.border.default,
+                  pointerStripWidth: 1,
+                }}
               />
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.totalMain}>
-                Total: {formatMoney(revenue.totalRevenue, revenue.currency)}
+                {t("ownerApp.financials.total", {
+                  amount: formatMoney(revenue.totalRevenue, revenue.currency),
+                })}
               </Text>
-              <Text style={styles.totalSub}>{revenue.totalSessions} sessions</Text>
+              <Text style={styles.totalSub}>
+                {t("ownerApp.financials.sessions", { count: revenue.totalSessions })}
+              </Text>
             </View>
           </>
         )}
 
         <Text style={[styles.sectionTitle, { marginTop: spacing[8] }]}>
-          Payment methods
+          {t("ownerApp.financials.paymentMethods")}
         </Text>
         {breakdown === undefined ? (
           <View style={styles.grid4}>
@@ -472,40 +425,229 @@ export default function FinancialsScreen(): React.JSX.Element {
                         : { icon: "sync" as const, color: colors.status.disabled };
                 const label =
                   b.method === "cash"
-                    ? "Cash"
+                    ? t("ownerApp.financials.cash")
                     : b.method === "upi"
-                      ? "UPI"
+                      ? t("ownerApp.financials.upi")
                       : b.method === "card"
-                        ? "Card"
-                        : "Credit (resolved)";
+                        ? t("ownerApp.financials.card")
+                        : t("ownerApp.financials.creditResolved");
                 return (
                   <View key={b.method} style={styles.methodCard}>
                     <MaterialIcons name={cfg.icon} size={22} color={cfg.color} />
                     <Text style={styles.methodLbl}>{label}</Text>
                     <Text style={styles.methodAmt}>
                       {b.method === "credit"
-                        ? `${b.sessionCount} session${b.sessionCount === 1 ? "" : "s"}`
+                        ? t("ownerApp.financials.session_one", { count: b.sessionCount })
                         : formatMoney(b.totalAmount, displayCurrency)}
                     </Text>
                     <Text style={styles.methodSub}>
                       {b.method === "credit"
-                        ? "Allocated above"
-                        : `${b.sessionCount} session${b.sessionCount === 1 ? "" : "s"}`}
+                        ? t("ownerApp.financials.allocatedAbove")
+                        : t("ownerApp.financials.sessions", { count: b.sessionCount })}
                     </Text>
                   </View>
                 );
               })}
             </View>
-            <Text style={styles.breakdownNote}>
-              Credit totals show resolved payments only. Unresolved credits appear
-              below.
-            </Text>
+            <Text style={styles.breakdownNote}>{t("ownerApp.financials.creditNote")}</Text>
           </>
+        )}
+
+        <Text style={[styles.sectionTitle, { marginTop: spacing[8] }]}>
+          {t("ownerApp.financials.bestTables")}
+        </Text>
+        {bestTables === undefined ? (
+          <View style={{ gap: spacing[2] }}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.skelRow} />
+            ))}
+          </View>
+        ) : bestTables.tables.length === 0 ? (
+          <View style={styles.emptyAnalytics}>
+            <MaterialIcons
+              name="bar-chart"
+              size={32}
+              color={colors.text.secondary}
+            />
+            <Text style={styles.emptyAnalyticsTxt}>{t("ownerApp.financials.noData")}</Text>
+          </View>
+        ) : (
+          <View style={{ gap: spacing[2], marginBottom: spacing[6] }}>
+            {bestTables.tables.map((row, idx) => {
+              const top = bestTables.tables[0]!;
+              const pct =
+                top.revenue > 0
+                  ? Math.max(0.04, row.revenue / top.revenue)
+                  : 0;
+              return (
+                <View key={row.tableId} style={styles.tableRow}>
+                  <View style={styles.tableRowHead}>
+                    <Text style={styles.tableRank}>#{idx + 1}</Text>
+                    <Text style={styles.tableLbl} numberOfLines={1}>
+                      {row.tableLabel}
+                    </Text>
+                    <Text style={styles.tableAmt}>
+                      {formatMoney(row.revenue, bestTables.currency)}
+                    </Text>
+                  </View>
+                  <View style={styles.tableBarTrack}>
+                    <View
+                      style={[
+                        styles.tableBarFill,
+                        { width: `${Math.round(pct * 100)}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.tableSub}>
+                    {t("ownerApp.financials.sessions", { count: row.sessionCount })}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        <Text style={styles.sectionTitle}>{t("ownerApp.financials.snackRevenue")}</Text>
+        {snackSales === undefined ? (
+          <View style={{ gap: spacing[2] }}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.skelRow} />
+            ))}
+          </View>
+        ) : snackSales.snacks.length === 0 ? (
+          <View style={styles.emptyAnalytics}>
+            <MaterialIcons
+              name="fastfood"
+              size={32}
+              color={colors.text.secondary}
+            />
+            <Text style={styles.emptyAnalyticsTxt}>{t("ownerApp.financials.noData")}</Text>
+          </View>
+        ) : (
+          <View style={{ marginBottom: spacing[6] }}>
+            <Text style={styles.snackTotalLine}>
+              {t("ownerApp.financials.total", {
+                amount: formatMoney(snackSales.totalRevenue, snackSales.currency),
+              })}{" "}
+              · {t("ownerApp.financials.sessions", { count: snackSales.totalUnits })}
+            </Text>
+            <View style={{ gap: spacing[2], marginTop: spacing[2] }}>
+              {snackSales.snacks.map((row) => {
+                const top = snackSales.snacks[0]!;
+                const pct =
+                  top.revenue > 0
+                    ? Math.max(0.04, row.revenue / top.revenue)
+                    : 0;
+                return (
+                  <View key={row.snackId} style={styles.tableRow}>
+                    <View style={styles.tableRowHead}>
+                      <Text style={styles.tableLbl} numberOfLines={1}>
+                        {row.name}
+                      </Text>
+                      <Text style={styles.tableAmt}>
+                        {formatMoney(row.revenue, snackSales.currency)}
+                      </Text>
+                    </View>
+                    <View style={styles.tableBarTrack}>
+                      <View
+                        style={[
+                          styles.tableBarFill,
+                          {
+                            width: `${Math.round(pct * 100)}%`,
+                            backgroundColor: colors.accent.amber,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.tableSub}>{row.units} sold</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        <Text style={styles.sectionTitle}>{t("ownerApp.financials.peakHours")}</Text>
+        {heatmap === undefined ? (
+          <View style={[styles.heatmapSkel]} />
+        ) : heatmap.totalSessions === 0 ? (
+          <View style={styles.emptyAnalytics}>
+            <MaterialIcons
+              name="schedule"
+              size={32}
+              color={colors.text.secondary}
+            />
+            <Text style={styles.emptyAnalyticsTxt}>{t("ownerApp.financials.noData")}</Text>
+          </View>
+        ) : (
+          <View style={{ marginBottom: spacing[6] }}>
+            <View style={styles.heatmapHeader}>
+              <View style={styles.heatmapDayCol} />
+              {[0, 6, 12, 18, 23].map((h) => (
+                <Text
+                  key={h}
+                  style={[
+                    styles.heatmapAxis,
+                    {
+                      position: "absolute",
+                      left: `${(h / 23) * 100}%`,
+                      transform: [{ translateX: -8 }],
+                    },
+                  ]}
+                >
+                  {h}
+                </Text>
+              ))}
+            </View>
+            {WEEK_DAY_SHORT_KEYS.map((dayKey, dow) => {
+                const label = t(`common.weekDaysShort.${dayKey}`);
+                const dayCells = heatmap.cells.filter(
+                  (c) => c.dayOfWeek === dow,
+                );
+                return (
+                  <View key={label} style={styles.heatmapRow}>
+                    <Text style={styles.heatmapDayLbl}>{label}</Text>
+                    <View style={styles.heatmapCells}>
+                      {dayCells.map((c) => {
+                        const intensity =
+                          heatmap.maxCellSessions > 0
+                            ? c.sessions / heatmap.maxCellSessions
+                            : 0;
+                        const bg =
+                          c.sessions === 0
+                            ? colors.bg.tertiary
+                            : `rgba(67,160,71,${0.15 + intensity * 0.85})`;
+                        return (
+                          <View
+                            key={c.hour}
+                            style={[
+                              styles.heatmapCell,
+                              { backgroundColor: bg },
+                            ]}
+                          />
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })}
+            <Text style={styles.heatmapNote}>
+              {heatmap.peak
+                ? t("ownerApp.financials.busiest", {
+                    day: t(
+                      `common.weekDaysShort.${WEEK_DAY_SHORT_KEYS[heatmap.peak.dayOfWeek] ?? "sun"}`,
+                    ),
+                    hour: heatmap.peak.hour,
+                    count: heatmap.peak.sessions,
+                  })
+                : t("ownerApp.financials.noData")}
+            </Text>
+          </View>
         )}
 
         <View style={styles.creditHeader}>
           <View style={styles.creditTitleRow}>
-            <Text style={styles.sectionTitle}>Outstanding Credits</Text>
+            <Text style={styles.sectionTitle}>{t("ownerApp.financials.outstandingCredits")}</Text>
             {credits && credits.count > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeTxt}>{credits.count}</Text>
@@ -514,24 +656,26 @@ export default function FinancialsScreen(): React.JSX.Element {
           </View>
           {credits ? (
             <Text style={styles.creditTotal}>
-              Total: {formatMoney(credits.totalOutstanding, displayCurrency)}
+              {t("ownerApp.financials.total", {
+                amount: formatMoney(credits.totalOutstanding, displayCurrency),
+              })}
             </Text>
           ) : null}
         </View>
 
         <View style={styles.sortRow}>
-          <Text style={styles.sortLbl}>Sort by</Text>
+          <Text style={styles.sortLbl}>{t("ownerApp.financials.sortBy")}</Text>
           <Pressable
             onPress={() => setSortBy("date")}
             style={[styles.sortChip, sortBy === "date" && styles.sortChipOn]}
           >
-            <Text style={styles.sortChipTxt}>Date</Text>
+            <Text style={styles.sortChipTxt}>{t("ownerApp.financials.sortByDate")}</Text>
           </Pressable>
           <Pressable
             onPress={() => setSortBy("amount")}
             style={[styles.sortChip, sortBy === "amount" && styles.sortChipOn]}
           >
-            <Text style={styles.sortChipTxt}>Amount</Text>
+            <Text style={styles.sortChipTxt}>{t("ownerApp.financials.sortByAmount")}</Text>
           </Pressable>
         </View>
 
@@ -544,9 +688,7 @@ export default function FinancialsScreen(): React.JSX.Element {
         ) : credits.count === 0 ? (
           <View style={styles.emptyCredit}>
             <MaterialIcons name="check-circle" size={40} color={colors.accent.green} />
-            <Text style={styles.emptyCreditTxt}>
-              No outstanding credits. All sessions have been settled.
-            </Text>
+            <Text style={styles.emptyCreditTxt}>{t("ownerApp.financials.noCredits")}</Text>
           </View>
         ) : (
           (credits.credits as CreditRow[]).map((row) => {
@@ -567,7 +709,7 @@ export default function FinancialsScreen(): React.JSX.Element {
                       <Text style={styles.custName}>
                         {row.customerName}
                         {row.isGuest ? (
-                          <Text style={styles.guestBadge}> (Guest)</Text>
+                          <Text style={styles.guestBadge}> ({t("ownerApp.financials.guest")})</Text>
                         ) : null}
                       </Text>
                       <Text style={styles.meta}>{row.tableLabel}</Text>
@@ -582,30 +724,34 @@ export default function FinancialsScreen(): React.JSX.Element {
                   {open ? (
                     <View style={styles.breakdown}>
                       <Text style={styles.bdLine}>
-                        Table time: {row.billableMinutes ?? "—"} min @ {row.ratePerMin}
+                        {t("ownerApp.financials.minutes", { count: row.billableMinutes ?? 0 })} @ {row.ratePerMin}
                         /min = {tableSub.toFixed(2)}
                       </Text>
                       {row.discount != null && row.discount > 0 ? (
-                        <Text style={styles.bdLine}>Discount: −{row.discount}%</Text>
+                        <Text style={styles.bdLine}>
+                          {t("ownerApp.financials.discount")}: −{row.discount}%
+                        </Text>
                       ) : null}
                       {row.snackOrders.map((s, si) => (
                         <Text key={`${row.sessionId}-sn-${si}`} style={styles.bdLine}>
                           {s.name} × {s.qty} = {(s.priceAtOrder * s.qty).toFixed(2)}
                         </Text>
                       ))}
-                      <Text style={styles.bdTotal}>Total: {row.billTotal.toFixed(2)}</Text>
+                      <Text style={styles.bdTotal}>
+                        {t("ownerApp.financials.total", { amount: row.billTotal.toFixed(2) })}
+                      </Text>
                     </View>
                   ) : null}
                 </Pressable>
                 <View style={styles.markRow}>
                   {canResolve ? (
                     <Pressable style={styles.markBtn} onPress={() => setPaySheet(row)}>
-                      <Text style={styles.markBtnTxt}>Mark as Paid</Text>
+                      <Text style={styles.markBtnTxt}>{t("ownerApp.financials.markPaid")}</Text>
                     </Pressable>
                   ) : (
                     <View style={styles.lockRow}>
                       <MaterialIcons name="lock" size={18} color={colors.text.secondary} />
-                      <Text style={styles.lockTxt}>Owner only</Text>
+                      <Text style={styles.lockTxt}>{t("ownerApp.complaints.ownerOnly")}</Text>
                     </View>
                   )}
                 </View>
@@ -618,7 +764,7 @@ export default function FinancialsScreen(): React.JSX.Element {
       <Modal visible={paySheet !== null} transparent animationType="slide">
         <Pressable style={styles.sheetScrim} onPress={() => setPaySheet(null)}>
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation?.()}>
-            <Text style={styles.sheetTitle}>How was this credit paid?</Text>
+            <Text style={styles.sheetTitle}>{t("ownerApp.financials.creditPaymentTitle")}</Text>
             {(["cash", "upi", "card"] as const).map((m) => (
               <Pressable
                 key={m}
@@ -633,17 +779,30 @@ export default function FinancialsScreen(): React.JSX.Element {
                   color={colors.text.primary}
                 />
                 <Text style={styles.methodPickTxt}>
-                  {m === "cash" ? "Cash" : m === "upi" ? "UPI" : "Card"}
+                  {m === "cash"
+                    ? t("ownerApp.financials.cash")
+                    : m === "upi"
+                      ? t("ownerApp.financials.upi")
+                      : t("ownerApp.financials.card")}
                 </Text>
               </Pressable>
             ))}
             <Pressable onPress={() => setPaySheet(null)} style={styles.sheetCancel}>
-              <Text style={styles.sheetCancelTxt}>Cancel</Text>
+              <Text style={styles.sheetCancelTxt}>{t("common.cancel")}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+export default function FinancialsScreen(): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <TabErrorBoundary tabName={t("common.tabs.owner.financials")}>
+      <FinancialsContent />
+    </TabErrorBoundary>
   );
 }
 
@@ -653,26 +812,26 @@ const styles = StyleSheet.create({
   title: { ...typography.heading3, color: colors.text.primary },
   sub: { ...typography.bodySmall, color: colors.text.secondary, marginTop: 4 },
   scroll: { paddingHorizontal: spacing[6], paddingBottom: spacing[16] },
-  tzNote: { ...typography.caption, color: colors.text.secondary, marginBottom: spacing[2] },
-  dateRow: { flexDirection: "row", gap: spacing[3], marginBottom: spacing[3] },
-  dateBtn: {
-    flex: 1,
-    padding: spacing[3],
-    borderRadius: radius.md,
-    backgroundColor: colors.bg.tertiary,
-  },
-  dateLbl: { ...typography.caption, color: colors.text.secondary },
-  dateVal: { ...typography.label, color: colors.text.primary, marginTop: 4 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing[2], marginBottom: spacing[4] },
-  chip: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: 999,
+  gstLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    padding: spacing[4],
+    borderRadius: radius.lg,
     backgroundColor: colors.bg.secondary,
+    marginBottom: spacing[6],
   },
-  chipText: { ...typography.caption, color: colors.text.primary },
-  errText: { color: colors.status.error, marginBottom: spacing[2] },
-  warnLarge: { color: colors.accent.amber, marginBottom: spacing[2] },
+  gstLinkIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(67,160,71,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gstLinkText: { flex: 1 },
+  gstLinkTitle: { ...typography.label, color: colors.text.primary, fontWeight: "700" },
+  gstLinkSub: { ...typography.caption, color: colors.text.secondary, marginTop: 2 },
   sectionTitle: { ...typography.heading4, color: colors.text.primary, marginBottom: spacing[3] },
   skelChart: {
     flexDirection: "row",
@@ -731,6 +890,115 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing[2],
     marginBottom: spacing[6],
+  },
+  emptyAnalytics: {
+    alignItems: "center",
+    gap: spacing[2],
+    paddingVertical: spacing[6],
+    backgroundColor: colors.bg.secondary,
+    borderRadius: radius.lg,
+    marginBottom: spacing[6],
+  },
+  emptyAnalyticsTxt: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  skelRow: {
+    height: 56,
+    borderRadius: radius.md,
+    backgroundColor: colors.bg.secondary,
+  },
+  tableRow: {
+    backgroundColor: colors.bg.secondary,
+    borderRadius: radius.md,
+    padding: spacing[3],
+    gap: spacing[1.5],
+  },
+  tableRowHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+  },
+  tableRank: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    width: 24,
+  },
+  tableLbl: {
+    ...typography.label,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  tableAmt: {
+    ...typography.label,
+    color: colors.accent.green,
+    fontWeight: "700",
+  },
+  tableBarTrack: {
+    height: 6,
+    backgroundColor: colors.bg.tertiary,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  tableBarFill: {
+    height: "100%",
+    backgroundColor: colors.accent.green,
+    borderRadius: 3,
+  },
+  tableSub: {
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  snackTotalLine: {
+    ...typography.label,
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  heatmapSkel: {
+    height: 200,
+    backgroundColor: colors.bg.secondary,
+    borderRadius: radius.lg,
+    marginBottom: spacing[6],
+  },
+  heatmapHeader: {
+    height: 18,
+    flexDirection: "row",
+    marginLeft: 32,
+    position: "relative",
+  },
+  heatmapDayCol: {
+    width: 0,
+  },
+  heatmapAxis: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    fontSize: 10,
+  },
+  heatmapRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 3,
+  },
+  heatmapDayLbl: {
+    width: 32,
+    ...typography.caption,
+    color: colors.text.secondary,
+  },
+  heatmapCells: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 2,
+  },
+  heatmapCell: {
+    flex: 1,
+    height: 18,
+    borderRadius: 2,
+  },
+  heatmapNote: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    marginTop: spacing[3],
   },
   creditHeader: { marginBottom: spacing[2] },
   creditTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing[2] },
@@ -846,6 +1114,4 @@ const styles = StyleSheet.create({
     padding: spacing[4],
   },
   backText: { ...typography.label, color: colors.text.primary },
-  iosPickDone: { alignItems: "flex-end", paddingRight: spacing[4] },
-  iosPickDoneText: { color: colors.status.info, ...typography.label },
 });

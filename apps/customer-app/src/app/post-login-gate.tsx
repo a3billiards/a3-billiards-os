@@ -1,24 +1,57 @@
 import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors } from "@a3/ui/theme";
+import { GlassPageBackground } from "@a3/ui/components";
+import { glass } from "@a3/ui/theme";
+import { useAuthUserSettled } from "@a3/ui/hooks";
+import { usePushRegistration } from "../lib/usePushRegistration";
 
 export default function PostLoginGate() {
   const router = useRouter();
-  const user = useQuery(api.users.getCurrentUser);
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const user = useQuery(
+    api.users.getCurrentUser,
+    isAuthenticated ? {} : "skip",
+  );
+  const nullUserExpired = useAuthUserSettled(isAuthenticated, user);
+  usePushRegistration();
 
   useEffect(() => {
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      router.replace("/login");
+      return;
+    }
+
     if (user === undefined) return;
 
     if (user === null) {
+      if (!nullUserExpired) return;
       router.replace("/login");
       return;
     }
 
     if (user.role !== "customer") {
       router.replace("/login");
+      return;
+    }
+
+    if (user.isFrozen) {
+      router.replace({
+        pathname: "/account-blocked",
+        params: { reason: "frozen" },
+      });
+      return;
+    }
+
+    if (user.deletionRequestedAt !== undefined) {
+      router.replace({
+        pathname: "/account-blocked",
+        params: { reason: "deletion" },
+      });
       return;
     }
 
@@ -30,20 +63,22 @@ export default function PostLoginGate() {
       return;
     }
 
-    router.replace("/(tabs)/discover");
-  }, [user, router]);
+    router.replace("/(tabs)/home");
+  }, [isLoading, isAuthenticated, user, nullUserExpired, router]);
 
   return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color={colors.accent.green} />
-    </View>
+    <GlassPageBackground>
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color={glass.ctaBg} />
+      </View>
+    </GlassPageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
   },

@@ -1,0 +1,45 @@
+---
+description: Security standing rules — input validation, secrets, rate limits, authz, tokens
+alwaysApply: true
+---
+
+# Security standing rules (A3 Billiards OS)
+
+Apply these on **every** new endpoint, mutation, query, action, and client API call. Do not skip because a change "looks small."
+
+## Input validation & sanitization
+
+- Validate all user input with explicit Convex `v.*` schemas; reject unknown or unexpected fields.
+- Reuse `packages/convex/model/inputValidation.ts` (trim, length, email, phone, dates, search text, tokens).
+- Never trust client-supplied IDs for scope — always re-verify ownership server-side.
+
+## Secrets & API keys
+
+- **Never** hardcode API keys, passwords, tokens, or credentials in source or seed JSON.
+- Use Convex env vars via `packages/convex/model/envSecrets.ts` (`requireServerEnv`, redacted logging).
+- Run `pnpm check:secrets` after adding config files or examples.
+
+## Rate limiting
+
+- Add rate limiting to **every new public or abuse-prone endpoint** (auth, OTP, registration, search, support, geocode, etc.).
+- Use `packages/convex/model/rateLimiter.ts` → `enforceFixedWindowLimit()` and the `rateLimits` table.
+- Prefer per-user / per-email / per-phone keys when client IP is unavailable (Convex mutations).
+
+## Authorization & ownership (IDOR prevention)
+
+- Call `requireViewer()` (or role helpers) at the top of privileged handlers.
+- Scope data with `assertMutationClubScope`, `assertCustomerUserScope`, `ownerCanViewCustomer`, and `assertStaffTabAllowed` as appropriate.
+- Policy reference: `packages/convex/model/accessControlMatrix.ts`.
+- Before returning or modifying a row, confirm the viewer may access **that** `userId`, `clubId`, `bookingId`, `sessionId`, etc. — not just that they are signed in.
+
+## Tokens & sessions
+
+- Keep access tokens short-lived; rely on Convex Auth refresh with rotation (built-in).
+- Revoke sessions on password change, password reset, account freeze, and explicit logout where applicable (`invalidateSessions` from `@convex-dev/auth/server`).
+- Admin privileged operations require MFA (`requireAdminWithMfa`).
+- Do not log JWTs, refresh tokens, or session IDs.
+
+## When unsure
+
+- **Flag** security-relevant ambiguity to the user instead of guessing (e.g. cross-club PII, passcode server enforcement, new public surface).
+- Prefer minimal, behavior-preserving hardening over large auth rewrites unless explicitly requested.

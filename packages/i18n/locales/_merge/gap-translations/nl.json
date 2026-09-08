@@ -1,0 +1,478 @@
+{
+  "adminApp": {
+    "bookings": {
+      "estimatedCost": "Ca. {{amount}}"
+    },
+    "complaints": {
+      "dateFormatHint": "YYYY-MM-DD",
+      "statusActive": "Actief"
+    },
+    "moderation": {
+      "live": "LIVE"
+    },
+    "notifications": {
+      "messageLabel": "Bericht",
+      "required": " *"
+    },
+    "roles": {
+      "admin": "Admin"
+    },
+    "userProfile": {
+      "actionsSection": "Acties",
+      "club": "Club: {{name}}",
+      "confirmPlaceholder": "CONFIRM",
+      "namePlaceholder": "Naam",
+      "phonePlaceholder": "+919876543210"
+    },
+    "users": {
+      "filterAdmins": "Beheerders"
+    }
+  },
+  "auth": {
+    "admin": {
+      "login": {
+        "emailPlaceholder": "admin@example.com"
+      }
+    },
+    "customer": {
+      "register": {
+        "agePlaceholder": "18",
+        "emailOptional": "(optioneel)",
+        "emailPlaceholder": "you@example.com",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      }
+    },
+    "owner": {
+      "changePasscode": {
+        "ok": "OK"
+      },
+      "login": {
+        "emailPlaceholder": "owner@example.com",
+        "logo": "A3"
+      },
+      "passcode": {
+        "ok": "OK"
+      },
+      "register": {
+        "agePlaceholder": "18",
+        "emailPlaceholder": "you@example.com",
+        "logo": "A3",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      },
+      "verifyPhone": {
+        "logo": "A3"
+      }
+    },
+    "phone": {
+      "countryCode": "Landcode",
+      "number": "Telefoonnummer",
+      "selectCountry": "Land selecteren"
+    }
+  },
+  "common": {
+    "amenityPresets": {
+      "ac": "Airco",
+      "lounge": "Lounge",
+      "parking": "Parkeren",
+      "wifi": "Wi‑Fi"
+    },
+    "arrowSeparator": " → ",
+    "chartMonths": {
+      "dec": "Dec",
+      "feb": "Feb",
+      "jan": "Jan",
+      "mar": "Mar",
+      "nov": "Nov",
+      "oct": "Oct"
+    },
+    "confirmKeyword": "CONFIRM",
+    "deleteKeyword": "DELETE",
+    "detailsLabel": "Details",
+    "emDash": "—",
+    "inbox": {
+      "alertLater": "Later",
+      "alertView": "Bekijken",
+      "bellAccessibility": "Meldingen",
+      "empty": "Nog geen meldingen.",
+      "fromAdmin": "A3 Billiards",
+      "loadMore": "Meer laden",
+      "markAllRead": "Alles als gelezen markeren",
+      "subtitle": "Berichten van A3 Billiards",
+      "title": "Meldingen"
+    },
+    "loadingEllipsis": "…",
+    "logoA3": "A3",
+    "mapsClubFallback": "Club",
+    "minSuffix": " min",
+    "ok": "OK",
+    "passcodeMask": "••••••",
+    "passwordMask": "••••••••",
+    "placeholderOtp": "000000",
+    "placeholderZero": "0",
+    "pushChannelName": "A3 Billiards",
+    "questionMark": "?",
+    "slotDurationChips": {
+      "min30": "30 min"
+    },
+    "tableTypes": {
+      "americanPool": "American Pool",
+      "eightBall": "8-Ball",
+      "frenchBilliards": "French Billiards",
+      "nineBall": "9-Ball",
+      "snooker": "Snooker"
+    },
+    "tabs": {
+      "admin": {
+        "audit": "Audit",
+        "live-moderation": "Live"
+      },
+      "customer": {
+        "live": "Live"
+      },
+      "owner": {
+        "documents": "Documenten",
+        "financials": "Financiën",
+        "livestream": "Live",
+        "snacks": "Snacks"
+      }
+    },
+    "timesSeparator": " × ",
+    "typeLabel": "Type"
+  },
+  "customerApp": {
+    "booking": {
+      "durations": {
+        "chipFallback": "{{count}}m",
+        "d120": {
+          "chip": "2u"
+        },
+        "d180": {
+          "chip": "3u"
+        },
+        "d30": {
+          "chip": "30m",
+          "summary": "30 minuten"
+        },
+        "d60": {
+          "chip": "1u"
+        },
+        "summaryFallback": "{{count}} minuten"
+      },
+      "emDash": "—",
+      "noDatesAvailable": "Geen boekbare datums beschikbaar. De club moet mogelijk het rooster bijwerken.",
+      "noTablesEmpty": "Geen actieve tafels voor dit type. Vraag de club om de tafelconfiguratie in Instellingen te controleren.",
+      "notesCounter": "{{count}}/200",
+      "pickDate": "Wanneer wil je spelen?",
+      "steps": {
+        "date": "Datum",
+        "table": "Tafel",
+        "type": "Type"
+      },
+      "summaryDate": "Datum",
+      "summaryTable": "Tafel",
+      "today": "Vandaag",
+      "whichTable": "Welke tafel?"
+    },
+    "bookingDetail": {
+      "date": "Datum",
+      "durationMin": "{{count}} min",
+      "estimatedCostValue": "Ca. {{symbol}}{{amount}}"
+    },
+    "checkInPayload": "a3customer:{{userId}}",
+    "clubProfile": {
+      "perMin": "/min",
+      "tablePlural": "tafels",
+      "tableSingular": "tafel",
+      "tables": "Tafels"
+    },
+    "discovery": {
+      "title": "Ontdekken"
+    },
+    "history": {
+      "minAtRate": "{{minutes}} min @ {{rate}}/min",
+      "snacks": "Snacks",
+      "total": "Totaal",
+      "upi": "UPI"
+    },
+    "home": {
+      "discover": "Ontdekken"
+    },
+    "live": {
+      "title": "Live"
+    },
+    "loyalty": {
+      "profile": {
+        "checkInCode": "Club check-incode",
+        "checkInCodeHint": "Toon dit bij de balie voor snellere toewijzing van een slot. Code: a3customer:{{id}}",
+        "deletePlaceholder": "DELETE",
+        "name": "Naam"
+      }
+    },
+    "profile": {
+      "checkInCode": "Club check-incode",
+      "checkInCodeHint": "Toon dit bij de balie voor snellere toewijzing van een slot. Code: a3customer:{{id}}",
+      "deletePlaceholder": "DELETE",
+      "name": "Naam"
+    },
+    "screens": {
+      "discover": "Ontdekken",
+      "live": "Live"
+    },
+    "streaming": {
+      "mute": "Dempen",
+      "otherLive": "Andere livestreams",
+      "unmute": "Geluid aan"
+    }
+  },
+  "notifications": {
+    "fallback": "Melding"
+  },
+  "ownerApp": {
+    "documents": {
+      "pdf": "PDF",
+      "title": "Documenten"
+    },
+    "financials": {
+      "cgst": "CGST",
+      "gstin": "GSTIN",
+      "igst": "IGST",
+      "minutes": "{{count}} min",
+      "session_one": "{{count}} sessie",
+      "sessions": "{{count}} sessies",
+      "sgst": "SGST",
+      "snackLine": "{{name}} × {{qty}} = {{amount}}",
+      "snacks": "Snacks",
+      "sortByDate": "Datum",
+      "tableLine": "{{minutes}} @ {{rate}}/min = {{subtotal}}",
+      "upi": "UPI"
+    },
+    "gstReport": {
+      "financialsGst": {
+        "cgst": "CGST",
+        "gstin": "GSTIN",
+        "igst": "IGST",
+        "sgst": "SGST"
+      }
+    },
+    "home": {
+      "tileDocuments": "Documenten",
+      "tileSlots": "Slots",
+      "tileSnacks": "Snacks"
+    },
+    "kitchen": {
+      "table": "Tafel {{label}}"
+    },
+    "livestream": {
+      "flipCamera": "Camera omdraaien",
+      "liveBadge": "LIVE",
+      "micMute": "Microfoon dempen",
+      "micUnmute": "Microfoon aanzetten",
+      "otherClubStreams": "Andere live tafels in je club",
+      "placeholderTable": "Tafel 4",
+      "selectTable": "Tafel om te streamen"
+    },
+    "loyalty": {
+      "awardLine": "{{date}} — +{{count}} tegoed ({{tier}})",
+      "creditsCount": "{{count}} tegoeden",
+      "programmeNamePlaceholder": "A3 Regulars",
+      "statusLine": "Status: {{status}}"
+    },
+    "settings": {
+      "chefRoleName": "Chef",
+      "content": {
+        "acceptOnlineBookings": "Online boekingen accepteren",
+        "addAmenity": "Toevoegen",
+        "addChefRole": "+ Chef-rol toevoegen",
+        "addEmailFirst": "Voeg eerst een e-mail toe",
+        "addPhoto": "+ Foto toevoegen",
+        "addRole": "Rol toevoegen",
+        "addTable": "+ Tafel toevoegen",
+        "allTables": "Alle tafels",
+        "amenities": "Voorzieningen",
+        "approvalDeadline": "Goedkeuringstermijn (minuten)",
+        "approvalDeadlineNote": "Minuten om goed te keuren voordat de boeking verloopt",
+        "bookableHours": "Boekbare uren",
+        "bookableHoursMustBeWithin": "Boekbare uren moeten binnen de openingstijden vallen. Werk eerst de boekbare uren bij.",
+        "bookableHoursNote": "Boekbare uren moeten binnen je openingstijden vallen.",
+        "bookableTableTypes": "Boekbare tafeltypes",
+        "bookableTableTypesMismatch": "Sommige boekbare tafeltypes hebben geen actieve tafels.",
+        "bookableTableTypesNote": "Alleen geselecteerde types verschijnen in de klantboekingsflow.",
+        "bookingCouponCode": "Boekingscouponcode",
+        "bookingsDisabledDesc": "Klanten kunnen je club niet online ontdekken of boeken",
+        "bookingsEnabledDesc": "Je club accepteert online boekingen",
+        "canApplyDiscount": "Kan korting toepassen",
+        "canApplyDiscountMax": "Kan korting toepassen (max {{pct}}%)",
+        "canFileComplaints": "Kan klachten indienen",
+        "cancellationWindow": "Annuleringsvenster (minuten)",
+        "cancellationWindowNote": "Minuten vóór starttijd voor late annulering",
+        "changeAccountPassword": "Accountwachtwoord wijzigen",
+        "changeSettingsPasscode": "Instellingentoegangscode wijzigen",
+        "chefRoleCreated": "Chef-rol aangemaakt",
+        "chefRoleCreatedBody": "Alleen Keuken-tab. Wijs deze toe wanneer je het apparaat aan keukenpersoneel geeft.",
+        "chefRoleExists": "Chef-rol bestaat al",
+        "chefRoleExistsBody": "Bewerk deze onder Personeelsrollen indien nodig.",
+        "closes": "Sluit",
+        "couponDescription": "Klanten voeren een coupon in in plaats van kaartbetaling bij het boeken",
+        "customAmenities": "Aangepaste voorzieningen",
+        "customAmenityPlaceholder": "Aangepaste voorziening",
+        "deleteRoleBody": "Als deze rol momenteel actief is op het apparaat, wordt teruggeschakeld naar Eigenaarsmodus.",
+        "deleteRoleConfirm": "Verwijderen",
+        "deleteRoleTitle": "Rol verwijderen?",
+        "descriptionMax": "Beschrijving (max 500)",
+        "discoverable": "Zichtbaar",
+        "downloadMyData": "Mijn gegevens downloaden",
+        "editRole": "Rol bewerken",
+        "exportClubMembers": "Clubledengegevens downloaden",
+        "exportDownload": "Downloaden",
+        "exportMembersBody": "Download een spreadsheet (CSV) voor Excel of Google Sheets met klanten die hebben geboekt, gespeeld of zich hebben aangemeld voor loyaliteit bij je club. Alleen clubgebonden velden zijn opgenomen.",
+        "exportMembersTitle": "Clubleden exporteren?",
+        "exportingMembers": "Exporteren…",
+        "gstItcError": "Maandelijkse ITC moet een niet-negatief getal zijn.",
+        "gstNote": "Invoer voor het alleen-schatting GST-rapport. Volledige inkomstenbelastingrapportage wordt toegevoegd na CA-consultatie.",
+        "gstRegistered": "GST geregistreerd",
+        "gstRegisteredNote": "Wanneer uit, toont het GST-rapport nul uitgaande belasting",
+        "gstSnacks": "GST % op snacks",
+        "gstSnacksError": "Snacks GST % moet tussen 0 en 100 liggen.",
+        "gstTableError": "Tafel GST % moet tussen 0 en 100 liggen.",
+        "gstTableTime": "GST % op tafeltijd",
+        "gstin": "GSTIN (optioneel)",
+        "hidden": "Verborgen",
+        "locationPin": "Locatiepin",
+        "locationSaved": "Locatie opgeslagen",
+        "manageTables": "Biljarttafels beheren",
+        "maxAdvanceDays": "Max. dagen vooruit",
+        "maxAdvanceDaysNote": "Hoe ver vooruit klanten kunnen boeken",
+        "minAdvanceMinutes": "Min. minuten vooruit",
+        "minAdvanceMinutesNote": "Minimale voorlooptijd vóór boekingsstart",
+        "monthlyItc": "Maandelijkse schatting voorbelasting (optioneel)",
+        "opens": "Opent",
+        "operatingHours": "Openingstijden",
+        "operatingHoursPrefix": "Openingstijden:",
+        "ownerModeLabel": "Eigenaarsmodus (onbeperkt)",
+        "photos": "Foto's",
+        "requestDataExportBody": "Je gegevensexport (naam, telefoon, e-mail, clubnaam, abonnementsgeschiedenis) wordt binnen 72 uur naar {{email}} gestuurd.",
+        "requestDataExportTitle": "Gegevensexport aanvragen?",
+        "requestSubmitted": "Verzoek ingediend",
+        "requireBookingCoupon": "Boekingscoupon vereisen",
+        "saveAmenities": "Voorzieningen opslaan",
+        "saveBookableHours": "Boekbare uren opslaan",
+        "saveBookableTypes": "Boekbare types opslaan",
+        "saveBookingRules": "Boekingsregels opslaan",
+        "saveCouponSettings": "Couponinstellingen opslaan",
+        "saveDescription": "Beschrijving opslaan",
+        "saveGst": "GST-instellingen opslaan",
+        "saveLocation": "Locatie opslaan",
+        "saveOperatingHours": "Openingstijden opslaan",
+        "saveSlotDurations": "Slotduur opties opslaan",
+        "selectAtLeastOneTab": "Selecteer minstens één tabblad.",
+        "selectAtLeastOneTable": "Selecteer minstens één tafel bij gebruik van specifieke tafels.",
+        "selectSlotDuration": "Selecteer minstens één slotduur.",
+        "setOperatingHoursFirst": "Stel eerst openingstijden in onder Clubprofiel en sla hier daarna de boekbare uren op.",
+        "showClubInSearch": "Club tonen in klantzoekopdracht",
+        "slotDurationOptions": "Slotduur opties",
+        "specificTables": "{{count}} specifieke tafels",
+        "supplyInterstate": "Interstatelijk (IGST)",
+        "supplyIntrastate": "Intrastatelijk (CGST + SGST)",
+        "supplyType": "Leveringstype",
+        "tableActive": "Actief",
+        "tableDisabled": "Uitgeschakeld",
+        "timeTo": "tot",
+        "uploading": "Uploaden…"
+      },
+      "hhmmStart": "HH:MM start",
+      "labelField": "Label",
+      "labelPlaceholder": "Label *",
+      "passcode": {
+        "ok": "OK"
+      },
+      "sections": {
+        "tables": "Tafels"
+      },
+      "timezonePlaceholder": "Asia/Kolkata"
+    },
+    "slots": {
+      "addTeammate": "Speler toevoegen",
+      "addTeammatePhone": "Telefoon speler",
+      "age18Plus": "18+",
+      "assignBothSides": "Wijs minstens één speler toe aan elke kant.",
+      "billBreakdown": "Rekeningoverzicht",
+      "checkInCode": "Check-incode",
+      "checkoutCounterSnacks": "Toonbarsnacks",
+      "checkoutDiscount": "Korting ({{percent}}%)",
+      "checkoutItemLine": "{{name}} × {{qty}}",
+      "checkoutKitchenItems": "Keukenartikelen",
+      "checkoutSectionSubtotal": "Subtotaal",
+      "checkoutTableRate": "{{minutes}} min @ {{rate}}/min",
+      "checkoutTableTime": "Tafeltijd",
+      "checkoutTableTotal": "Tafeltotaal",
+      "continueToGroup": "Doorgaan",
+      "customerNamePlaceholder": "Typ klantnaam…",
+      "customerNameSearch": "Of zoek op naam",
+      "groupSetupHint": "Voeg spelers toe die aan deze tafel spelen. Elke nieuwe speler moet zijn telefoon verifiëren via WhatsApp.",
+      "groupSetupTitle": "Spelers aan deze tafel",
+      "losersPay": "Verliezers betalen",
+      "losersPayBadge": "Verliezers betalen",
+      "losersPayCheckoutNote": "Verliezers betalen — rekening geregistreerd tegen de verliezende kant.",
+      "losersPayHint": "Noteer bij afrekenen welke kant verloor en de tafelrekening betaalt.",
+      "mobileWhatsApp": "Mobiel (WhatsApp)",
+      "needTwoForVersus": "Voeg minstens één speler toe voor versus-spel.",
+      "openQrScanner": "QR-code scannen",
+      "paymentUpi": "UPI",
+      "playVersus": "Versus spelen",
+      "playVersusHint": "Verdeel spelers in Kant A en Kant B voor een competitieve wedstrijd.",
+      "playersCount": "{{count}} spelers",
+      "primaryPlayer": "Hoofdspeler",
+      "qrAllowCamera": "Camera toestaan",
+      "qrCameraPermission": "Cameratoegang is nodig om check-incodes van klanten te scannen.",
+      "qrPlaceholder": "Plak QR-inhoud of scan bij de balie",
+      "qrScannerHint": "Richt op de check-in-QR van de klant op zijn profiel",
+      "qrScannerTitle": "Klant-QR scannen",
+      "registerTeammateWhatsApp": "Speler registreren — WhatsApp OTP",
+      "removePlayer": "Verwijderen",
+      "scanQrCode": "Scannen / check-incode plakken",
+      "selectLosingSide": "Welke kant verloor?",
+      "sideA": "Kant A",
+      "sideB": "Kant B",
+      "snacksCharge": "Snacks",
+      "tableCharge": "Tafel",
+      "teammateAlreadyAdded": "Deze speler staat al aan de tafel.",
+      "teammates": "Spelers",
+      "versusBadge": "Versus"
+    },
+    "snacks": {
+      "name": "Naam"
+    }
+  },
+  "sharedUi": {
+    "bookingCard": {
+      "duration30": "30 min",
+      "durationMinutes": "{{min}} min",
+      "estimated": "Ca. {{amount}}"
+    },
+    "clubCard": {
+      "kmAway": "{{km}} km"
+    },
+    "liveStreamCard": {
+      "liveBadge": "LIVE"
+    },
+    "placeholders": {
+      "billModal": "BillModal",
+      "networkGuard": "NetworkGuard",
+      "offlineScreen": "OfflineScreen",
+      "passcodeSetupModal": "PasscodeSetupModal",
+      "sessionTimer": "SessionTimer",
+      "userSelector": "UserSelector"
+    },
+    "safeLocationPicker": {
+      "latitude": "Breedtegraad",
+      "longitude": "Lengtegraad"
+    },
+    "tableGrid": {
+      "a11yTable": "{{label}}, {{status}}{{tag}}",
+      "tableFallback": "Tafel"
+    },
+    "tableTypePicker": {
+      "ratePerMin": "{{rate}}/min"
+    }
+  }
+}

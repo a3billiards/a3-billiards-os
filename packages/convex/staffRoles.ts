@@ -8,6 +8,11 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { assertMutationClubScope, requireOwner, requireViewer } from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
+import { resolveStaffTabAccess } from "./model/staffTabAccess";
+import {
+  assertTrimmedLength,
+  MAX_ROLE_NAME_LEN,
+} from "./model/inputValidation";
 
 const TAB_VALUES = [
   "slots",
@@ -15,6 +20,9 @@ const TAB_VALUES = [
   "financials",
   "complaints",
   "bookings",
+  "documents",
+  "kitchen",
+  "livestream",
 ] as const;
 
 function assertAllowedTabs(tabs: string[]): void {
@@ -41,10 +49,25 @@ export const listStaffRoles = query({
   args: {},
   handler: async (ctx) => {
     const owner = requireOwner(await requireViewer(ctx));
+    if (owner.clubId === null) {
+      return [];
+    }
+    const clubId = owner.clubId;
     return ctx.db
       .query("staffRoles")
-      .withIndex("by_club", (q) => q.eq("clubId", owner.clubId))
+      .withIndex("by_club", (q) => q.eq("clubId", clubId))
       .collect();
+  },
+});
+
+export const getActiveStaffTabAccess = query({
+  args: { roleId: v.optional(v.id("staffRoles")) },
+  handler: async (ctx, { roleId }) => {
+    const owner = requireOwner(await requireViewer(ctx));
+    if (owner.clubId === null) {
+      return { allowedTabs: [] as string[], isOwnerMode: true, isChefKitchenRole: false };
+    }
+    return await resolveStaffTabAccess(ctx, owner.clubId, roleId);
   },
 });
 
@@ -60,8 +83,9 @@ export const createRole = mutation({
   },
   handler: async (ctx, args) => {
     await requireOwnerClubWritable(ctx, args.clubId);
-    const n = args.name.trim();
-    if (n.length === 0) throw new Error("DATA_002: Role name is required");
+    const n = assertTrimmedLength("Role name", args.name, 1, MAX_ROLE_NAME_LEN, {
+      normalizeWs: true,
+    });
     assertAllowedTabs(args.allowedTabs);
     if (
       args.allowedTableIds !== undefined &&
@@ -119,9 +143,13 @@ export const updateRole = mutation({
 
     const patch: Partial<Doc<"staffRoles">> = {};
     if (args.name !== undefined) {
-      const n = args.name.trim();
-      if (n.length === 0) throw new Error("DATA_002: Role name is required");
-      patch.name = n;
+      patch.name = assertTrimmedLength(
+        "Role name",
+        args.name,
+        1,
+        MAX_ROLE_NAME_LEN,
+        { normalizeWs: true },
+      );
     }
     if (args.allowedTabs !== undefined) {
       assertAllowedTabs(args.allowedTabs);

@@ -3,15 +3,20 @@ import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireOwner, requireViewer } from "./model/viewer";
+import {
+  assertTrimmedLength,
+  assertFiniteInRange,
+  MAX_SNACK_NAME_LEN,
+} from "./model/inputValidation";
 
 function normalizeSnackName(name: string): string {
-  return name.trim().replace(/\s+/g, " ");
+  return assertTrimmedLength("Snack name", name, 1, MAX_SNACK_NAME_LEN, {
+    normalizeWs: true,
+  });
 }
 
 function ensurePositivePrice(price: number): void {
-  if (!Number.isFinite(price) || price <= 0) {
-    throw new Error("DATA_002: Snack price must be a positive number");
-  }
+  assertFiniteInRange("Snack price", price, 0.01, 1_000_000);
 }
 
 function ensurePositiveQty(qty: number): void {
@@ -35,16 +40,34 @@ async function assertSnacksTabPermission(
   }
 }
 
+import { assertStaffTabAllowed } from "./model/staffTabAccess";
+import { insertKitchenOrderForSnackBatch } from "./kitchenOrders";
+
+type SnackFulfillmentType = "counter" | "kitchen";
+
+function resolveSnackFulfillmentType(
+  snack: { fulfillmentType?: SnackFulfillmentType },
+): SnackFulfillmentType {
+  return snack.fulfillmentType ?? "counter";
+}
+
+const snackFulfillmentTypeValidator = v.union(
+  v.literal("counter"),
+  v.literal("kitchen"),
+);
+
 export const listSnacks = query({
   args: {
     clubId: v.id("clubs"),
+    roleId: v.optional(v.id("staffRoles")),
   },
-  handler: async (ctx, { clubId }) => {
+  handler: async (ctx, { clubId, roleId }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
     if (owner.clubId !== clubId) {
       throw new Error("PERM_001: Cannot access another club's data");
     }
+    await assertStaffTabAllowed(ctx, clubId, "snacks", roleId);
 
     const snacks = await ctx.db
       .query("snacks")
@@ -60,8 +83,9 @@ export const listSnacks = query({
 export const listAvailableSnacks = query({
   args: {
     clubId: v.id("clubs"),
+    fulfillmentType: v.optional(snackFulfillmentTypeValidator),
   },
-  handler: async (ctx, { clubId }) => {
+  handler: async (ctx, { clubId, fulfillmentType }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
     if (owner.clubId !== clubId) {
@@ -75,6 +99,11 @@ export const listAvailableSnacks = query({
 
     return snacks
       .filter((snack) => snack.isDeleted !== true && snack.isAvailable === true)
+      .filter(
+        (snack) =>
+          fulfillmentType === undefined ||
+          resolveSnackFulfillmentType(snack) === fulfillmentType,
+      )
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 });
@@ -84,9 +113,10 @@ export const createSnack = mutation({
     clubId: v.id("clubs"),
     name: v.string(),
     price: v.number(),
+    fulfillmentType: v.optional(snackFulfillmentTypeValidator),
     roleId: v.optional(v.id("staffRoles")),
   },
-  handler: async (ctx, { clubId, name, price, roleId }) => {
+  handler: async (ctx, { clubId, name, price, fulfillmentType, roleId }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
     if (owner.clubId !== clubId) {
@@ -106,6 +136,7 @@ export const createSnack = mutation({
       price,
       isAvailable: true,
       isDeleted: false,
+      fulfillmentType: fulfillmentType ?? "counter",
     });
   },
 });
@@ -115,9 +146,10 @@ export const updateSnack = mutation({
     snackId: v.id("snacks"),
     name: v.string(),
     price: v.number(),
+    fulfillmentType: v.optional(snackFulfillmentTypeValidator),
     roleId: v.optional(v.id("staffRoles")),
   },
-  handler: async (ctx, { snackId, name, price, roleId }) => {
+  handler: async (ctx, { snackId, name, price, fulfillmentType, roleId }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
 
@@ -139,6 +171,7 @@ export const updateSnack = mutation({
     await ctx.db.patch(snackId, {
       name: cleanedName,
       price,
+      ...(fulfillmentType !== undefined ? { fulfillmentType } : {}),
     });
     return { success: true as const };
   },
@@ -197,6 +230,7 @@ export const deleteSnack = mutation({
 export const addSnacksToSession = mutation({
   args: {
     sessionId: v.id("sessions"),
+    fulfillmentType: snackFulfillmentTypeValidator,
     items: v.array(
       v.object({
         snackId: v.id("snacks"),
@@ -205,7 +239,7 @@ export const addSnacksToSession = mutation({
     ),
     roleId: v.optional(v.id("staffRoles")),
   },
-  handler: async (ctx, { sessionId, items, roleId }) => {
+  handler: async (ctx, { sessionId, fulfillmentType, items, roleId }) => {
     const viewer = await requireViewer(ctx);
     const owner = requireOwner(viewer);
 
@@ -227,6 +261,12 @@ export const addSnacksToSession = mutation({
     }
 
     const nextOrders = [...session.snackOrders];
+    const batchItems: {
+      snackId: Id<"snacks">;
+      name: string;
+      qty: number;
+      priceAtOrder: number;
+    }[] = [];
     for (const item of items) {
       ensurePositiveQty(item.qty);
       const snack = await ctx.db.get(item.snackId);
@@ -236,18 +276,34 @@ export const addSnacksToSession = mutation({
       if (snack.isAvailable !== true) {
         throw new Error("Snack item no longer available");
       }
-      nextOrders.push({
+      if (resolveSnackFulfillmentType(snack) !== fulfillmentType) {
+        throw new Error(
+          `DATA_002: Selected items must be ${fulfillmentType === "kitchen" ? "kitchen" : "counter"} items`,
+        );
+      }
+      const line = {
         snackId: snack._id,
         name: snack.name,
         qty: item.qty,
         priceAtOrder: snack.price,
-      });
+      };
+      nextOrders.push(line);
+      batchItems.push(line);
     }
 
     await ctx.db.patch(sessionId, {
       snackOrders: nextOrders,
       updatedAt: Date.now(),
     });
+
+    if (fulfillmentType === "kitchen" && batchItems.length > 0) {
+      await insertKitchenOrderForSnackBatch(ctx, {
+        clubId: session.clubId,
+        sessionId,
+        tableId: session.tableId,
+        items: batchItems,
+      });
+    }
 
     return { success: true as const };
   },

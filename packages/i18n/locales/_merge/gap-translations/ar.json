@@ -1,0 +1,478 @@
+{
+  "adminApp": {
+    "bookings": {
+      "estimatedCost": "تقديري {{amount}}"
+    },
+    "complaints": {
+      "dateFormatHint": "YYYY-MM-DD",
+      "statusActive": "نشط"
+    },
+    "moderation": {
+      "live": "LIVE"
+    },
+    "notifications": {
+      "messageLabel": "الرسالة",
+      "required": " *"
+    },
+    "roles": {
+      "admin": "مسؤول"
+    },
+    "userProfile": {
+      "actionsSection": "الإجراءات",
+      "club": "النادي: {{name}}",
+      "confirmPlaceholder": "CONFIRM",
+      "namePlaceholder": "الاسم",
+      "phonePlaceholder": "+919876543210"
+    },
+    "users": {
+      "filterAdmins": "المسؤولون"
+    }
+  },
+  "auth": {
+    "admin": {
+      "login": {
+        "emailPlaceholder": "admin@example.com"
+      }
+    },
+    "customer": {
+      "register": {
+        "agePlaceholder": "18",
+        "emailOptional": "(اختياري)",
+        "emailPlaceholder": "you@example.com",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      }
+    },
+    "owner": {
+      "changePasscode": {
+        "ok": "حسنًا"
+      },
+      "login": {
+        "emailPlaceholder": "owner@example.com",
+        "logo": "A3"
+      },
+      "passcode": {
+        "ok": "حسنًا"
+      },
+      "register": {
+        "agePlaceholder": "18",
+        "emailPlaceholder": "you@example.com",
+        "logo": "A3",
+        "phonePlaceholder": "+91XXXXXXXXXX"
+      },
+      "verifyPhone": {
+        "logo": "A3"
+      }
+    },
+    "phone": {
+      "countryCode": "رمز الدولة",
+      "number": "رقم الهاتف",
+      "selectCountry": "اختر الدولة"
+    }
+  },
+  "common": {
+    "amenityPresets": {
+      "ac": "تكييف",
+      "lounge": "استراحة",
+      "parking": "موقف سيارات",
+      "wifi": "واي فاي"
+    },
+    "arrowSeparator": " → ",
+    "chartMonths": {
+      "dec": "Dec",
+      "feb": "Feb",
+      "jan": "Jan",
+      "mar": "Mar",
+      "nov": "Nov",
+      "oct": "Oct"
+    },
+    "confirmKeyword": "CONFIRM",
+    "deleteKeyword": "DELETE",
+    "detailsLabel": "التفاصيل",
+    "emDash": "—",
+    "inbox": {
+      "alertLater": "لاحقاً",
+      "alertView": "عرض",
+      "bellAccessibility": "الإشعارات",
+      "empty": "لا إشعارات بعد.",
+      "fromAdmin": "A3 Billiards",
+      "loadMore": "تحميل المزيد",
+      "markAllRead": "تعليم الكل كمقروء",
+      "subtitle": "رسائل من A3 Billiards",
+      "title": "الإشعارات"
+    },
+    "loadingEllipsis": "…",
+    "logoA3": "A3",
+    "mapsClubFallback": "النادي",
+    "minSuffix": " دقيقة",
+    "ok": "حسنًا",
+    "passcodeMask": "••••••",
+    "passwordMask": "••••••••",
+    "placeholderOtp": "000000",
+    "placeholderZero": "0",
+    "pushChannelName": "A3 Billiards",
+    "questionMark": "؟",
+    "slotDurationChips": {
+      "min30": "30 دقيقة"
+    },
+    "tableTypes": {
+      "americanPool": "American Pool",
+      "eightBall": "8-Ball",
+      "frenchBilliards": "French Billiards",
+      "nineBall": "9-Ball",
+      "snooker": "Snooker"
+    },
+    "tabs": {
+      "admin": {
+        "audit": "التدقيق",
+        "live-moderation": "مباشر"
+      },
+      "customer": {
+        "live": "مباشر"
+      },
+      "owner": {
+        "documents": "المستندات",
+        "financials": "المالية",
+        "livestream": "مباشر",
+        "snacks": "الوجبات الخفيفة"
+      }
+    },
+    "timesSeparator": " × ",
+    "typeLabel": "النوع"
+  },
+  "customerApp": {
+    "booking": {
+      "durations": {
+        "chipFallback": "{{count}}د",
+        "d120": {
+          "chip": "2س"
+        },
+        "d180": {
+          "chip": "3س"
+        },
+        "d30": {
+          "chip": "30د",
+          "summary": "30 دقيقة"
+        },
+        "d60": {
+          "chip": "1س"
+        },
+        "summaryFallback": "{{count}} دقيقة"
+      },
+      "emDash": "—",
+      "noDatesAvailable": "لا تواريخ متاحة للحجز. قد يحتاج النادي إلى تحديث جدوله.",
+      "noTablesEmpty": "لا توجد طاولات نشطة لهذا النوع. اطلب من النادي التحقق من إعداد الطاولات في الإعدادات.",
+      "notesCounter": "{{count}}/200",
+      "pickDate": "متى تريد أن تلعب؟",
+      "steps": {
+        "date": "التاريخ",
+        "table": "الطاولة",
+        "type": "النوع"
+      },
+      "summaryDate": "التاريخ",
+      "summaryTable": "الطاولة",
+      "today": "اليوم",
+      "whichTable": "أي طاولة؟"
+    },
+    "bookingDetail": {
+      "date": "التاريخ",
+      "durationMin": "{{count}} دقيقة",
+      "estimatedCostValue": "تقديري {{symbol}}{{amount}}"
+    },
+    "checkInPayload": "a3customer:{{userId}}",
+    "clubProfile": {
+      "perMin": "/دقيقة",
+      "tablePlural": "طاولات",
+      "tableSingular": "طاولة",
+      "tables": "الطاولات"
+    },
+    "discovery": {
+      "title": "اكتشاف"
+    },
+    "history": {
+      "minAtRate": "{{minutes}} دقيقة @ {{rate}}/دقيقة",
+      "snacks": "وجبات خفيفة",
+      "total": "الإجمالي",
+      "upi": "UPI"
+    },
+    "home": {
+      "discover": "اكتشاف"
+    },
+    "live": {
+      "title": "مباشر"
+    },
+    "loyalty": {
+      "profile": {
+        "checkInCode": "رمز تسجيل الوصول للنادي",
+        "checkInCodeHint": "اعرض هذا عند المنضدة لتخصيص فترة أسرع. الرمز: a3customer:{{id}}",
+        "deletePlaceholder": "DELETE",
+        "name": "الاسم"
+      }
+    },
+    "profile": {
+      "checkInCode": "رمز تسجيل الوصول للنادي",
+      "checkInCodeHint": "اعرض هذا عند المنضدة لتخصيص فترة أسرع. الرمز: a3customer:{{id}}",
+      "deletePlaceholder": "DELETE",
+      "name": "الاسم"
+    },
+    "screens": {
+      "discover": "اكتشاف",
+      "live": "مباشر"
+    },
+    "streaming": {
+      "mute": "كتم الصوت",
+      "otherLive": "بثوث مباشرة أخرى",
+      "unmute": "إلغاء كتم الصوت"
+    }
+  },
+  "notifications": {
+    "fallback": "إشعار"
+  },
+  "ownerApp": {
+    "documents": {
+      "pdf": "PDF",
+      "title": "المستندات"
+    },
+    "financials": {
+      "cgst": "CGST",
+      "gstin": "GSTIN",
+      "igst": "IGST",
+      "minutes": "{{count}} دقيقة",
+      "session_one": "{{count}} جلسة",
+      "sessions": "{{count}} جلسات",
+      "sgst": "SGST",
+      "snackLine": "{{name}} × {{qty}} = {{amount}}",
+      "snacks": "وجبات خفيفة",
+      "sortByDate": "التاريخ",
+      "tableLine": "{{minutes}} @ {{rate}}/دقيقة = {{subtotal}}",
+      "upi": "UPI"
+    },
+    "gstReport": {
+      "financialsGst": {
+        "cgst": "CGST",
+        "gstin": "GSTIN",
+        "igst": "IGST",
+        "sgst": "SGST"
+      }
+    },
+    "home": {
+      "tileDocuments": "المستندات",
+      "tileSlots": "الفترات",
+      "tileSnacks": "الوجبات الخفيفة"
+    },
+    "kitchen": {
+      "table": "الطاولة {{label}}"
+    },
+    "livestream": {
+      "flipCamera": "تبديل الكاميرا",
+      "liveBadge": "LIVE",
+      "micMute": "كتم الميكروفون",
+      "micUnmute": "إلغاء كتم الميكروفون",
+      "otherClubStreams": "طاولات مباشرة أخرى في ناديك",
+      "placeholderTable": "الطاولة 4",
+      "selectTable": "الطاولة للبث"
+    },
+    "loyalty": {
+      "awardLine": "{{date}} — +{{count}} رصيد ({{tier}})",
+      "creditsCount": "{{count}} رصيد",
+      "programmeNamePlaceholder": "A3 Regulars",
+      "statusLine": "الحالة: {{status}}"
+    },
+    "settings": {
+      "chefRoleName": "شيف",
+      "content": {
+        "acceptOnlineBookings": "قبول الحجوزات عبر الإنترنت",
+        "addAmenity": "إضافة",
+        "addChefRole": "+ إضافة دور الشيف",
+        "addEmailFirst": "أضف البريد الإلكتروني أولاً",
+        "addPhoto": "+ إضافة صورة",
+        "addRole": "إضافة دور",
+        "addTable": "+ إضافة طاولة",
+        "allTables": "كل الطاولات",
+        "amenities": "المرافق",
+        "approvalDeadline": "الموعد النهائي للموافقة (دقائق)",
+        "approvalDeadlineNote": "دقائق للموافقة قبل انتهاء صلاحية الحجز",
+        "bookableHours": "ساعات الحجز",
+        "bookableHoursMustBeWithin": "يجب أن تقع ساعات الحجز ضمن ساعات العمل. حدّث ساعات الحجز أولاً.",
+        "bookableHoursNote": "يجب أن تقع ساعات الحجز ضمن ساعات العمل الخاصة بك.",
+        "bookableTableTypes": "أنواع الطاولات القابلة للحجز",
+        "bookableTableTypesMismatch": "بعض أنواع الطاولات القابلة للحجز ليس لها طاولات نشطة.",
+        "bookableTableTypesNote": "تظهر الأنواع المحددة فقط في تدفق حجز العملاء.",
+        "bookingCouponCode": "رمز قسيمة الحجز",
+        "bookingsDisabledDesc": "لا يمكن للعملاء اكتشاف ناديك أو حجزه عبر الإنترنت",
+        "bookingsEnabledDesc": "ناديك يقبل الحجوزات عبر الإنترنت",
+        "canApplyDiscount": "يمكنه تطبيق خصم",
+        "canApplyDiscountMax": "يمكنه تطبيق خصم (بحد أقصى {{pct}}%)",
+        "canFileComplaints": "يمكنه تقديم شكاوى",
+        "cancellationWindow": "نافذة الإلغاء (دقائق)",
+        "cancellationWindowNote": "دقائق قبل وقت البدء للإلغاء المتأخر",
+        "changeAccountPassword": "تغيير كلمة مرور الحساب",
+        "changeSettingsPasscode": "تغيير رمز مرور الإعدادات",
+        "chefRoleCreated": "تم إنشاء دور الشيف",
+        "chefRoleCreatedBody": "تبويب المطبخ فقط. عيِّنه عند تسليم الجهاز لموظفي المطبخ.",
+        "chefRoleExists": "دور الشيف موجود بالفعل",
+        "chefRoleExistsBody": "عدّله ضمن أدوار الموظفين إذا لزم الأمر.",
+        "closes": "يُغلق",
+        "couponDescription": "يدخل العملاء قسيمة بدلاً من الدفع بالبطاقة عند الحجز",
+        "customAmenities": "مرافق مخصصة",
+        "customAmenityPlaceholder": "مرفق مخصص",
+        "deleteRoleBody": "إذا كان هذا الدور نشطاً حالياً على الجهاز، سيعود إلى وضع المالك.",
+        "deleteRoleConfirm": "حذف",
+        "deleteRoleTitle": "حذف الدور؟",
+        "descriptionMax": "الوصف (بحد أقصى 500)",
+        "discoverable": "قابل للاكتشاف",
+        "downloadMyData": "تنزيل بياناتي",
+        "editRole": "تعديل الدور",
+        "exportClubMembers": "تنزيل بيانات أعضاء النادي",
+        "exportDownload": "تنزيل",
+        "exportMembersBody": "نزّل جدول بيانات (CSV) لـ Excel أو Google Sheets يتضمن العملاء الذين حجزوا أو لعبوا أو انضموا لبرنامج الولاء في ناديك. تُضمَّن حقول النادي فقط.",
+        "exportMembersTitle": "تصدير أعضاء النادي؟",
+        "exportingMembers": "جارٍ التصدير…",
+        "gstItcError": "يجب أن يكون ائتمان الضريبة المدخلة الشهري رقماً غير سالب.",
+        "gstNote": "مدخلات لتقرير GST التقديري فقط. ستُضاف تقارير ضريبة الدخل الكاملة بعد استشارة المحاسب القانوني.",
+        "gstRegistered": "مسجّل في ضريبة السلع والخدمات",
+        "gstRegisteredNote": "عند الإيقاف، يُظهر تقرير GST صفر ضريبة صادرة",
+        "gstSnacks": "نسبة GST % على الوجبات الخفيفة",
+        "gstSnacksError": "يجب أن تكون نسبة GST % للوجبات الخفيفة بين 0 و 100.",
+        "gstTableError": "يجب أن تكون نسبة GST % لوقت الطاولة بين 0 و 100.",
+        "gstTableTime": "نسبة GST % على وقت الطاولة",
+        "gstin": "GSTIN (اختياري)",
+        "hidden": "مخفي",
+        "locationPin": "دبوس الموقع",
+        "locationSaved": "تم حفظ الموقع",
+        "manageTables": "إدارة طاولات البلياردو",
+        "maxAdvanceDays": "الحد الأقصى للأيام المسبقة",
+        "maxAdvanceDaysNote": "إلى أي مدى يمكن للعملاء الحجز مسبقاً",
+        "minAdvanceMinutes": "الحد الأدنى للدقائق المسبقة",
+        "minAdvanceMinutesNote": "الحد الأدنى للمهلة قبل بدء الحجز",
+        "monthlyItc": "تقدير ائتمان الضريبة المدخلة الشهري (اختياري)",
+        "opens": "يُفتح",
+        "operatingHours": "ساعات العمل",
+        "operatingHoursPrefix": "ساعات العمل:",
+        "ownerModeLabel": "وضع المالك (غير مقيّد)",
+        "photos": "الصور",
+        "requestDataExportBody": "سيُرسَل تصدير بياناتك (الاسم، الهاتف، البريد الإلكتروني، اسم النادي، سجل الاشتراك) إلى {{email}} خلال 72 ساعة.",
+        "requestDataExportTitle": "طلب تصدير البيانات؟",
+        "requestSubmitted": "تم تقديم الطلب",
+        "requireBookingCoupon": "يتطلب قسيمة حجز",
+        "saveAmenities": "حفظ المرافق",
+        "saveBookableHours": "حفظ ساعات الحجز",
+        "saveBookableTypes": "حفظ الأنواع القابلة للحجز",
+        "saveBookingRules": "حفظ قواعد الحجز",
+        "saveCouponSettings": "حفظ إعدادات القسيمة",
+        "saveDescription": "حفظ الوصف",
+        "saveGst": "حفظ إعدادات GST",
+        "saveLocation": "حفظ الموقع",
+        "saveOperatingHours": "حفظ ساعات العمل",
+        "saveSlotDurations": "حفظ مدد الفترات",
+        "selectAtLeastOneTab": "اختر تبويباً واحداً على الأقل.",
+        "selectAtLeastOneTable": "اختر طاولة واحدة على الأقل عند استخدام طاولات محددة.",
+        "selectSlotDuration": "اختر مدة فترة واحدة على الأقل.",
+        "setOperatingHoursFirst": "عيِّن ساعات العمل ضمن ملف النادي أولاً، ثم احفظ ساعات الحجز هنا.",
+        "showClubInSearch": "إظهار النادي في بحث العملاء",
+        "slotDurationOptions": "خيارات مدة الفترة",
+        "specificTables": "{{count}} طاولات محددة",
+        "supplyInterstate": "Interstate (IGST)",
+        "supplyIntrastate": "Intrastate (CGST + SGST)",
+        "supplyType": "نوع التوريد",
+        "tableActive": "نشط",
+        "tableDisabled": "معطّل",
+        "timeTo": "إلى",
+        "uploading": "جارٍ الرفع…"
+      },
+      "hhmmStart": "بداية HH:MM",
+      "labelField": "التسمية",
+      "labelPlaceholder": "التسمية *",
+      "passcode": {
+        "ok": "حسنًا"
+      },
+      "sections": {
+        "tables": "الطاولات"
+      },
+      "timezonePlaceholder": "Asia/Kolkata"
+    },
+    "slots": {
+      "addTeammate": "إضافة لاعب",
+      "addTeammatePhone": "هاتف اللاعب",
+      "age18Plus": "18+",
+      "assignBothSides": "عيِّن لاعباً واحداً على الأقل لكل جانب.",
+      "billBreakdown": "تفصيل الفاتورة",
+      "checkInCode": "رمز تسجيل الوصول",
+      "checkoutCounterSnacks": "وجبات خفيفة من المنضدة",
+      "checkoutDiscount": "خصم ({{percent}}%)",
+      "checkoutItemLine": "{{name}} × {{qty}}",
+      "checkoutKitchenItems": "أصناف المطبخ",
+      "checkoutSectionSubtotal": "المجموع الفرعي",
+      "checkoutTableRate": "{{minutes}} دقيقة @ {{rate}}/دقيقة",
+      "checkoutTableTime": "وقت الطاولة",
+      "checkoutTableTotal": "إجمالي الطاولة",
+      "continueToGroup": "متابعة",
+      "customerNamePlaceholder": "اكتب اسم العميل…",
+      "customerNameSearch": "أو ابحث بالاسم",
+      "groupSetupHint": "أضف اللاعبين الذين يلعبون على هذه الطاولة. يجب على كل لاعب جديد التحقق من هاتفه عبر WhatsApp.",
+      "groupSetupTitle": "اللاعبون على هذه الطاولة",
+      "losersPay": "الخاسرون يدفعون",
+      "losersPayBadge": "الخاسرون يدفعون",
+      "losersPayCheckoutNote": "الخاسرون يدفعون — سُجّلت الفاتورة على الجانب الخاسر.",
+      "losersPayHint": "عند الدفع، سجّل أي جانب خسر ويدفع فاتورة الطاولة.",
+      "mobileWhatsApp": "الجوال (WhatsApp)",
+      "needTwoForVersus": "أضف لاعباً واحداً على الأقل للعب المواجهة.",
+      "openQrScanner": "مسح رمز QR",
+      "paymentUpi": "UPI",
+      "playVersus": "لعب مواجهة",
+      "playVersusHint": "قسّم اللاعبين إلى الجانب أ والجانب ب لمباراة تنافسية.",
+      "playersCount": "{{count}} لاعب",
+      "primaryPlayer": "اللاعب الرئيسي",
+      "qrAllowCamera": "السماح بالكاميرا",
+      "qrCameraPermission": "يلزم الوصول إلى الكاميرا لمسح رموز تسجيل وصول العملاء.",
+      "qrPlaceholder": "الصق محتوى QR أو امسحه عند المنضدة",
+      "qrScannerHint": "وجّه نحو رمز تسجيل الوصول الخاص بالعميل في ملفه الشخصي",
+      "qrScannerTitle": "مسح QR العميل",
+      "registerTeammateWhatsApp": "تسجيل اللاعب — OTP عبر WhatsApp",
+      "removePlayer": "إزالة",
+      "scanQrCode": "مسح / لصق رمز تسجيل الوصول",
+      "selectLosingSide": "أي جانب خسر؟",
+      "sideA": "الجانب أ",
+      "sideB": "الجانب ب",
+      "snacksCharge": "وجبات خفيفة",
+      "tableCharge": "الطاولة",
+      "teammateAlreadyAdded": "هذا اللاعب موجود بالفعل على الطاولة.",
+      "teammates": "اللاعبون",
+      "versusBadge": "مواجهة"
+    },
+    "snacks": {
+      "name": "الاسم"
+    }
+  },
+  "sharedUi": {
+    "bookingCard": {
+      "duration30": "30 دقيقة",
+      "durationMinutes": "{{min}} دقيقة",
+      "estimated": "تقديري {{amount}}"
+    },
+    "clubCard": {
+      "kmAway": "{{km}} كم"
+    },
+    "liveStreamCard": {
+      "liveBadge": "LIVE"
+    },
+    "placeholders": {
+      "billModal": "BillModal",
+      "networkGuard": "NetworkGuard",
+      "offlineScreen": "OfflineScreen",
+      "passcodeSetupModal": "PasscodeSetupModal",
+      "sessionTimer": "SessionTimer",
+      "userSelector": "UserSelector"
+    },
+    "safeLocationPicker": {
+      "latitude": "خط العرض",
+      "longitude": "خط الطول"
+    },
+    "tableGrid": {
+      "a11yTable": "{{label}}، {{status}}{{tag}}",
+      "tableFallback": "طاولة"
+    },
+    "tableTypePicker": {
+      "ratePerMin": "{{rate}}/دقيقة"
+    }
+  }
+}

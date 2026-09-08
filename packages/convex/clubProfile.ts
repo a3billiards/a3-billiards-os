@@ -1,9 +1,22 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { assertMutationClubScope, requireOwner, requireViewer } from "./model/viewer";
+import {
+  assertMutationClubScope,
+  requireOwner,
+  requireOwnerWithClub,
+  requireViewer,
+} from "./model/viewer";
 import { assertClubSubscriptionWritable } from "./model/clubSubscription";
-import { hhmmToMinutes } from "@a3/utils/timezone";
+import { assertValidClubPhotoStorage } from "./model/storageUploadValidation";
+import {
+  isSuspiciousOvernightWindow,
+  validateBookableWithinOperating,
+} from "@a3/utils/availability";
+import {
+  assertOptionalTrimmedLength,
+  MAX_DESCRIPTION_LEN,
+} from "./model/inputValidation";
 
 const operatingHoursValidator = v.object({
   open: v.string(),
@@ -21,14 +34,13 @@ function assertHHMM(label: string, s: string): void {
   }
 }
 
-function isSimpleSameDayWindow(open: string, close: string): boolean {
-  return hhmmToMinutes(close) >= hhmmToMinutes(open);
-}
-
 export const getMyClubProfile = query({
   args: {},
   handler: async (ctx) => {
     const owner = requireOwner(await requireViewer(ctx));
+    if (owner.clubId === null) {
+      return null;
+    }
     const club = await ctx.db.get(owner.clubId);
     if (!club) return null;
     const photos = await Promise.all(
@@ -53,6 +65,7 @@ export const getMyClubProfile = query({
       currency: club.currency,
       timezone: club.timezone,
       specialRates: club.specialRates ?? [],
+      typeBaseRates: club.typeBaseRates ?? [],
     };
   },
 });
@@ -60,7 +73,7 @@ export const getMyClubProfile = query({
 export const generateClubPhotoUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    const owner = requireOwner(await requireViewer(ctx));
+    const owner = requireOwnerWithClub(await requireViewer(ctx));
     const club = await ctx.db.get(owner.clubId);
     if (!club) throw new Error("DATA_003: Club not found");
     assertClubSubscriptionWritable(club);
@@ -79,10 +92,10 @@ export const updateClubDescription = mutation({
     const club = await ctx.db.get(clubId);
     if (!club) throw new Error("DATA_003: Club not found");
     assertClubSubscriptionWritable(club);
-    if (description.length > 500) {
-      throw new Error("DATA_002: Description must be 500 characters or less");
-    }
-    await ctx.db.patch(clubId, { description });
+    const safeDescription =
+      assertOptionalTrimmedLength(description, MAX_DESCRIPTION_LEN, "Description") ??
+      "";
+    await ctx.db.patch(clubId, { description: safeDescription });
     return { success: true as const };
   },
 });
@@ -118,6 +131,7 @@ export const uploadClubPhoto = mutation({
         "Maximum 5 photos allowed. Remove a photo before adding a new one.",
       );
     }
+    await assertValidClubPhotoStorage(ctx, storageId);
     photos.push(storageId);
     await ctx.db.patch(clubId, { photos });
     return { success: true as const };
@@ -152,7 +166,25 @@ export const updateAmenities = mutation({
     const club = await ctx.db.get(clubId);
     if (!club) throw new Error("DATA_003: Club not found");
     assertClubSubscriptionWritable(club);
-    await ctx.db.patch(clubId, { amenities });
+
+    const normalized: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of amenities) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      if (trimmed.length > 40) {
+        throw new Error("DATA_002: Each amenity must be 40 characters or less");
+      }
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      normalized.push(trimmed);
+    }
+    if (normalized.length > 20) {
+      throw new Error("DATA_002: Maximum 20 amenities allowed");
+    }
+
+    await ctx.db.patch(clubId, { amenities: normalized });
     return { success: true as const };
   },
 });
@@ -171,6 +203,13 @@ export const updateOperatingHours = mutation({
 
     assertHHMM("Open time", operatingHours.open);
     assertHHMM("Close time", operatingHours.close);
+    // open == close means "Open 24 hours"; a close only minutes before open is an AM/PM typo.
+    if (isSuspiciousOvernightWindow(operatingHours.open, operatingHours.close)) {
+      throw new Error(
+        "CLUB_004: Close time is only minutes before open time, creating a ~24-hour window. " +
+          "For a 24/7 club use \"Open 24 hours\"; otherwise check AM/PM.",
+      );
+    }
     if (operatingHours.daysOfWeek.length === 0) {
       throw new Error("DATA_002: Select at least one day");
     }
@@ -181,19 +220,10 @@ export const updateOperatingHours = mutation({
     }
 
     const bh = club.bookingSettings.bookableHours;
-    if (
-      bh &&
-      isSimpleSameDayWindow(operatingHours.open, operatingHours.close) &&
-      isSimpleSameDayWindow(bh.open, bh.close)
-    ) {
-      const oOpen = hhmmToMinutes(operatingHours.open);
-      const oClose = hhmmToMinutes(operatingHours.close);
-      const bOpen = hhmmToMinutes(bh.open);
-      const bClose = hhmmToMinutes(bh.close);
-      if (bOpen < oOpen || bClose > oClose) {
-        throw new Error(
-          "CLUB_004: Bookable hours must fall within operating hours. Update bookable hours first.",
-        );
+    if (bh) {
+      const result = validateBookableWithinOperating(operatingHours, bh);
+      if (!result.ok) {
+        throw new Error(`CLUB_004: ${result.message}`);
       }
     }
 

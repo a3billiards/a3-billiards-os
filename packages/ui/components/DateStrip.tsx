@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
@@ -9,9 +9,10 @@ import {
 import {
   addCalendarDaysYmd,
   dateYmdInTimeZone,
-  hhmmToMinutes,
   zonedWallTimeToUtcMs,
 } from "@a3/utils/timezone";
+import { dateAllowsMinAdvance } from "@a3/utils/availability";
+import { getCurrentLanguage, useTranslation } from "@a3/i18n";
 import { colors } from "../theme/colors";
 import { typography } from "../theme/typography";
 import { spacing, radius, layout } from "../theme/spacing";
@@ -27,27 +28,33 @@ export interface DateStripProps {
   slotDurationOptions: number[];
   selectedYmd: string | null;
   onSelectYmd: (ymd: string) => void;
+  /** Override the heading "When do you want to play?" */
+  headingLabel?: string;
+  /** Override "Today" label */
+  todayLabel?: string;
+  /** Override the empty-state message */
+  noDatesLabel?: string;
 }
 
-function monthShort(ymd: string, tz: string): string {
+function monthShort(ymd: string, tz: string, locale: string): string {
   const ms = zonedWallTimeToUtcMs(ymd, "12:00", tz);
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: tz,
     month: "short",
   }).format(new Date(ms));
 }
 
-function dayNum(ymd: string, tz: string): string {
+function dayNum(ymd: string, tz: string, locale: string): string {
   const ms = zonedWallTimeToUtcMs(ymd, "12:00", tz);
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: tz,
     day: "numeric",
   }).format(new Date(ms));
 }
 
-function weekdayShort(ymd: string, tz: string): string {
+function weekdayShort(ymd: string, tz: string, locale: string): string {
   const ms = zonedWallTimeToUtcMs(ymd, "12:00", tz);
-  const wd = new Intl.DateTimeFormat("en-US", {
+  const wd = new Intl.DateTimeFormat(locale, {
     timeZone: tz,
     weekday: "short",
   }).format(new Date(ms));
@@ -75,29 +82,6 @@ function dowIndex(ymd: string, tz: string): number {
   return map[wd] ?? 0;
 }
 
-/** True if some slot on this day can start ≥ minAdvanceMinutes from now. */
-function dateAllowsMinAdvance(
-  ymd: string,
-  timeZone: string,
-  nowMs: number,
-  minAdvanceMinutes: number,
-  openHm: string,
-  closeHm: string,
-  minDurationMin: number,
-): boolean {
-  const openMin = hhmmToMinutes(openHm);
-  const closeMin = hhmmToMinutes(closeHm);
-  const minStartMs = nowMs + minAdvanceMinutes * 60_000;
-  for (let s = openMin; s < closeMin; s += 30) {
-    if (s + minDurationMin > closeMin) continue;
-    const hh = String(Math.floor(s / 60)).padStart(2, "0");
-    const mm = String(s % 60).padStart(2, "0");
-    const slotStartMs = zonedWallTimeToUtcMs(ymd, `${hh}:${mm}`, timeZone);
-    if (slotStartMs >= minStartMs) return true;
-  }
-  return false;
-}
-
 export function DateStrip({
   timeZone,
   nowMs,
@@ -109,7 +93,17 @@ export function DateStrip({
   slotDurationOptions,
   selectedYmd,
   onSelectYmd,
+  headingLabel,
+  todayLabel,
+  noDatesLabel,
 }: DateStripProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const locale = getCurrentLanguage();
+  const heading = headingLabel ?? t("sharedUi.dateStrip.heading");
+  const today = todayLabel ?? t("sharedUi.dateStrip.today");
+  const noDates =
+    noDatesLabel ??
+    t("sharedUi.dateStrip.noBookableDates", { maxAdvanceDays });
   const todayYmd = dateYmdInTimeZone(nowMs, timeZone);
   const minDurationMin = Math.min(...slotDurationOptions, 30);
 
@@ -121,9 +115,38 @@ export function DateStrip({
     return out;
   }, [todayYmd, maxAdvanceDays, timeZone]);
 
+  const selectableDays = useMemo(() => {
+    return days.filter((ymd) => {
+      const dow = dowIndex(ymd, timeZone);
+      if (!bookableDaysOfWeek.includes(dow)) return false;
+      return dateAllowsMinAdvance(
+        ymd,
+        timeZone,
+        nowMs,
+        minAdvanceMinutes,
+        bookableOpen,
+        bookableClose,
+        minDurationMin,
+        zonedWallTimeToUtcMs,
+      );
+    });
+  }, [
+    days,
+    timeZone,
+    bookableDaysOfWeek,
+    nowMs,
+    minAdvanceMinutes,
+    bookableOpen,
+    bookableClose,
+    minDurationMin,
+  ]);
+
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>When do you want to play?</Text>
+      <Text style={styles.title}>{heading}</Text>
+      {selectableDays.length === 0 ? (
+        <Text style={styles.emptyHint}>{noDates}</Text>
+      ) : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -140,6 +163,7 @@ export function DateStrip({
             bookableOpen,
             bookableClose,
             minDurationMin,
+            zonedWallTimeToUtcMs,
           );
           const disabled = !inBookableWeek || !advanceOk;
           const selected = selectedYmd === ymd;
@@ -163,7 +187,7 @@ export function DateStrip({
                   selected && !disabled && styles.textOnSelected,
                 ]}
               >
-                {weekdayShort(ymd, timeZone)}
+                {weekdayShort(ymd, timeZone, locale)}
               </Text>
               <Text
                 style={[
@@ -172,7 +196,7 @@ export function DateStrip({
                   selected && !disabled && styles.textOnSelected,
                 ]}
               >
-                {dayNum(ymd, timeZone)}
+                {dayNum(ymd, timeZone, locale)}
               </Text>
               <Text
                 style={[
@@ -181,7 +205,7 @@ export function DateStrip({
                   selected && !disabled && styles.textOnSelected,
                 ]}
               >
-                {monthShort(ymd, timeZone)}
+                {monthShort(ymd, timeZone, locale)}
               </Text>
               {isToday && !disabled ? (
                 <Text
@@ -190,7 +214,7 @@ export function DateStrip({
                     selected && styles.textOnSelected,
                   ]}
                 >
-                  Today
+                  {today}
                 </Text>
               ) : (
                 <View style={styles.todaySpacer} />
@@ -250,6 +274,11 @@ const styles = StyleSheet.create({
   todaySpacer: { height: spacing[3] },
   textDisabled: { color: colors.status.disabled },
   textOnSelected: { color: colors.bg.primary },
+  emptyHint: {
+    ...typography.body,
+    color: colors.text.secondary,
+    marginBottom: spacing[3],
+  },
 });
 
 export default DateStrip;

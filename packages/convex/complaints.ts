@@ -12,8 +12,9 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { OwnerViewer } from "./model/viewer";
-import { requireOwner, requireViewer } from "./model/viewer";
-import { parseIndiaE164OrThrow } from "./model/phoneRegistration";
+import { requireAdminWithMfa, requireCustomer, requireOwner, requireOwnerWithClub, requireViewer } from "./model/viewer";
+import { parseGenericE164OrThrow } from "./model/phoneRegistration";
+import { assertTrimmedLength } from "./model/inputValidation";
 
 export type complaintType =
   | "violent_behaviour"
@@ -45,11 +46,7 @@ function typeLabel(t: complaintType): string {
 const AUTH_001 = "AUTH_001: Not authorized.";
 
 async function requireAdminViewer(ctx: QueryCtx | MutationCtx) {
-  const viewer = await requireViewer(ctx);
-  if (viewer.role !== "admin") {
-    throw new Error(AUTH_001);
-  }
-  return viewer;
+  return requireAdminWithMfa(ctx);
 }
 
 /** Owner must own `clubId`; optional staff role must belong to club and pass tab + file gate. */
@@ -60,11 +57,11 @@ async function assertOwnerClubComplaintsView(
 ): Promise<void> {
   const viewer = await requireViewer(ctx);
   const owner = requireOwner(viewer);
-  if (owner.clubId !== clubId) {
-    throw new Error(AUTH_001);
-  }
   const club = await ctx.db.get(clubId);
   if (!club || club.ownerId !== owner.userId) {
+    throw new Error(AUTH_001);
+  }
+  if (owner.clubId !== null && owner.clubId !== clubId) {
     throw new Error(AUTH_001);
   }
   if (!roleId) return;
@@ -95,7 +92,14 @@ async function assertOwnerActsForClub(
   if (!club) {
     throw new Error(AUTH_001);
   }
-  if (club.ownerId !== viewer.userId || viewer.clubId !== clubId) {
+  if (club.ownerId !== viewer.userId) {
+    throw new Error(AUTH_001);
+  }
+  if (
+    viewer.role === "owner" &&
+    viewer.clubId !== null &&
+    viewer.clubId !== clubId
+  ) {
     throw new Error(AUTH_001);
   }
   return viewer;
@@ -416,12 +420,51 @@ export const getClubComplaints = query({
 });
 
 export const getCustomerActiveComplaints = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    requireOwner(await requireViewer(ctx));
+  args: {
+    userId: v.id("users"),
+    clubId: v.id("clubs"),
+  },
+  handler: async (ctx, { userId, clubId }) => {
+    const owner = requireOwnerWithClub(await requireViewer(ctx));
+    if (owner.clubId !== clubId) {
+      throw new Error("PERM_001: Cannot access another club's data");
+    }
     const rows = await ctx.db
       .query("complaints")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .collect();
+    const active = activeComplaintsForUser(rows);
+    const complaints = await Promise.all(
+      active.map(async (c) => {
+        const club = await ctx.db.get(c.reportedByClubId);
+        const ownClub = c.reportedByClubId === clubId;
+        return {
+          _id: c._id,
+          type: c.type as complaintType,
+          typeLabel: typeLabel(c.type),
+          // IDOR: only this club's filed complaints include full description.
+          description: ownClub ? c.description : "",
+          clubName: club?.name ?? "[Deleted Club]",
+          createdAt: c.createdAt,
+          reportedByOwnClub: ownClub,
+        };
+      }),
+    );
+    return {
+      hasComplaints: complaints.length > 0,
+      complaints,
+    };
+  },
+});
+
+/** Active complaints for the signed-in customer (reason + filing club). */
+export const getMyActiveComplaints = query({
+  args: {},
+  handler: async (ctx) => {
+    const customer = requireCustomer(await requireViewer(ctx));
+    const rows = await ctx.db
+      .query("complaints")
+      .withIndex("by_userId", (q) => q.eq("userId", customer.userId))
       .collect();
     const active = activeComplaintsForUser(rows);
     const complaints = await Promise.all(
@@ -431,11 +474,13 @@ export const getCustomerActiveComplaints = query({
           _id: c._id,
           type: c.type as complaintType,
           typeLabel: typeLabel(c.type),
-          clubName: club?.name ?? "[Deleted Club]",
+          description: c.description,
+          clubName: club?.name ?? "Unknown club",
           createdAt: c.createdAt,
         };
       }),
     );
+    complaints.sort((a, b) => b.createdAt - a.createdAt);
     return {
       hasComplaints: complaints.length > 0,
       complaints,
@@ -451,13 +496,13 @@ export const searchCustomerByPhone = query({
     requireOwner(viewer);
     let normalized: string;
     try {
-      normalized = parseIndiaE164OrThrow(phone);
+      normalized = parseGenericE164OrThrow(phone);
     } catch {
       return {
         ok: false as const,
         code: "invalid_phone" as const,
         message:
-          "Enter a valid phone in E.164 format (e.g. +91 followed by 10 digits).",
+          "Enter a valid phone in E.164 format (country code + number, e.g. +919876543210).",
       };
     }
     const user = await ctx.db
@@ -563,13 +608,7 @@ export const fileComplaint = mutation({
       throw new Error("Complaints can only be filed against customer accounts.");
     }
 
-    const desc = args.description.trim();
-    if (desc.length === 0) {
-      throw new Error("Description is required.");
-    }
-    if (desc.length > 4000) {
-      throw new Error("Description must be at most 4000 characters.");
-    }
+    const desc = assertTrimmedLength("Description", args.description, 1, 4000);
 
     if (args.sessionId !== undefined) {
       const session = await ctx.db.get(args.sessionId);

@@ -13,7 +13,16 @@
     "./timezone": "./timezone.ts",
     "./geo": "./geo.ts",
     "./analytics": "./analytics.ts",
-    "./bookingRate": "./bookingRate.ts"
+    "./bookingRate": "./bookingRate.ts",
+    "./gstReport": "./gstReport.ts",
+    "./phone": "./phone.ts",
+    "./passwordPolicy": "./passwordPolicy.ts",
+    "./tableTypes": "./tableTypes.ts",
+    "./clubDisplay": "./clubDisplay.ts",
+    "./bookingDisplay": "./bookingDisplay.ts",
+    "./supportContact": "./supportContact.ts",
+    "./csv": "./csv.ts",
+    "./subscriptionInvoiceGst": "./subscriptionInvoiceGst.ts"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

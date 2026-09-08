@@ -11,6 +11,8 @@ import {
   signInViaProvider,
 } from "@convex-dev/auth/server";
 import { Scrypt } from "lucia";
+import { internal } from "./_generated/api";
+import { assertStrongPasswordOrThrow } from "./model/passwordPolicy";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PasswordConfig = Record<string, any>;
@@ -22,7 +24,7 @@ export function A3Password(config: PasswordConfig = {}) {
     authorize: async (params, ctx) => {
       const profile =
         config.profile?.(params, ctx) ?? defaultProfile(params);
-      const email = String(profile.email ?? "").trim();
+      const email = String(profile.email ?? "").trim().toLowerCase();
       if (!email) {
         throw new Error("Missing email");
       }
@@ -43,23 +45,88 @@ export function A3Password(config: PasswordConfig = {}) {
           shouldLinkViaPhone: false,
         });
         ({ account, user } = created);
+        // Guard: if user is null the previous signup attempt left an orphaned
+        // authAccounts row (actions are non-transactional). Clean it up so the
+        // user can immediately retry with the same email.
+        if (!user) {
+          await ctx.runMutation(internal.users.deleteOrphanedAuthAccount, {
+            accountId: account._id,
+          });
+          throw new Error(
+            "SIGNUP_RETRY: A previous incomplete registration was cleaned up. Please tap Create Account again.",
+          );
+        }
       } else if (flow === "signIn") {
         if (secret === undefined) {
           throw new Error("Missing `password` param for `signIn` flow");
         }
-        const retrieved = await retrieveAccount(ctx, {
-          provider,
-          account: { id: email, secret: String(secret) },
+
+        await ctx.runQuery(internal.authAttemptLimit.assertPasswordLoginNotLocked, {
+          email,
         });
+
+        let retrieved;
+        try {
+          retrieved = await retrieveAccount(ctx, {
+            provider,
+            account: { id: email, secret: String(secret) },
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes("InvalidAccountId")) {
+            const diag = await ctx.runQuery(
+              internal.adminAuth.diagnoseAdminPasswordLogin,
+              { email },
+            );
+            if (diag.ok === false && diag.reason === "no_password_account") {
+              throw new Error(
+                "AUTH_010: No password login for this admin account. Set a password via seed or password reset.",
+              );
+            }
+            if (diag.ok === false && diag.reason === "wrong_user_link") {
+              throw new Error(
+                "DATA_002: Password login for this email is linked to a different user",
+              );
+            }
+            await ctx.runMutation(internal.authAttemptLimit.recordPasswordLoginFailed, {
+              email,
+            });
+            throw new Error("AUTH_001: Invalid credentials");
+          }
+          if (msg.includes("InvalidSecret")) {
+            await ctx.runMutation(internal.authAttemptLimit.recordPasswordLoginFailed, {
+              email,
+            });
+            throw new Error("AUTH_001: Invalid credentials");
+          }
+          throw e;
+        }
+
         if (retrieved === null) {
-          throw new Error("Invalid credentials");
+          await ctx.runMutation(internal.authAttemptLimit.recordPasswordLoginFailed, {
+            email,
+          });
+          throw new Error("AUTH_001: Invalid credentials");
         }
         ({ account, user } = retrieved);
+        await ctx.runMutation(internal.authAttemptLimit.clearPasswordLoginAttempts, {
+          email,
+        });
         if (user.isFrozen) {
           throw new Error("AUTH_002: Account is frozen");
         }
         if (user.deletionRequestedAt !== undefined) {
           throw new Error("AUTH_006: Account pending deletion");
+        }
+        if (user.role === "owner" && !account.emailVerified) {
+          throw new Error(
+            "AUTH_009: Email not verified — enter the code we sent to your inbox",
+          );
+        }
+        if (user.role === "admin") {
+          await ctx.runMutation(internal.mfa.internalClearAdminMfaOnPasswordSignIn, {
+            userId: user._id,
+          });
         }
       } else if (flow === "reset") {
         if (!config.reset) {
@@ -119,6 +186,7 @@ export function A3Password(config: PasswordConfig = {}) {
           params,
         });
       }
+      if (!user) throw new Error("AUTH_001: User record not found");
       return { userId: user._id };
     },
     crypto: {
@@ -139,11 +207,33 @@ function defaultProfile(params: Record<string, unknown>) {
   if (flow === "signUp" || flow === "reset-verification") {
     const password =
       flow === "signUp" ? params.password : params.newPassword;
-    if (!password || String(password).length < 8) {
+    if (!password || typeof password !== "string") {
       throw new Error("Invalid password");
     }
+    assertStrongPasswordOrThrow(String(password));
+  }
+  // Include ALL non-optional users-table fields. On signUp the client passes
+  // name / age / consentGiven / phone as extra params so the user row is fully
+  // populated in the same atomic createAccount call — no separate createUser
+  // mutation needed, which avoids the "not authenticated" race condition.
+  const now = Date.now();
+  const rawName = typeof params.name === "string" ? params.name.trim() : "";
+  if (rawName.length > 100) {
+    throw new Error("DATA_002: Name must be 100 characters or less");
   }
   return {
     email: params.email as string,
+    name: rawName,
+    age: typeof params.age === "number" ? params.age : 0,
+    phone: typeof params.phone === "string" ? params.phone : undefined,
+    phoneVerified: false,
+    fcmTokens: [] as string[],
+    settingsPasscodeSet: false,
+    complaints: [] as string[],
+    isFrozen: false,
+    role: "customer" as const,
+    consentGiven: params.consentGiven === true,
+    consentGivenAt: params.consentGiven === true ? now : undefined,
+    createdAt: now,
   };
 }

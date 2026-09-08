@@ -1,26 +1,36 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Stack, Redirect, useRouter, useSegments } from "expo-router";
-import { ConvexReactClient } from "convex/react";
+import {
+  ConvexReactClient,
+  useConvexAuth,
+  useQuery,
+} from "convex/react";
 import { ConvexAuthProvider, useAuthActions, type TokenStorage } from "@convex-dev/auth/react";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import * as Sentry from "@sentry/react-native";
 import { StatusBar } from "expo-status-bar";
-import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, layout, radius } from "@a3/ui/theme";
+import { colors, typography, spacing, layout, radius, glass } from "@a3/ui/theme";
+import { ensureI18nInitialized, useTranslation } from "@a3/i18n";
+import { I18nConvexBridge } from "../lib/I18nConvexBridge";
+
+ensureI18nInitialized();
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AdminAuthProvider, useAdminAuth } from "../lib/adminAuth";
 
 try {
   void SplashScreen.preventAutoHideAsync();
 } catch {}
 
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
-if (
+const SENTRY_ENABLED =
   SENTRY_DSN &&
   !SENTRY_DSN.includes("xxxx") &&
-  SENTRY_DSN.startsWith("https://")
-) {
+  SENTRY_DSN.startsWith("https://");
+
+if (SENTRY_ENABLED) {
   Sentry.init({
     dsn: SENTRY_DSN,
     enableAutoSessionTracking: true,
@@ -38,28 +48,30 @@ const secureStorage: TokenStorage = {
 };
 
 function MissingConfigScreen() {
+  const { t } = useTranslation();
   useEffect(() => {
     void SplashScreen.hideAsync().catch(() => {});
   }, []);
   return (
     <View style={styles.boot}>
       <Text style={configErrorStyles.icon}>⚠️</Text>
-      <Text style={configErrorStyles.heading}>Configuration Error</Text>
-      <Text style={configErrorStyles.body}>
-        EXPO_PUBLIC_CONVEX_URL is missing from this build. The app cannot
-        connect to the backend. Please reinstall the latest build or contact
-        support at support@a3billiards.com.
-      </Text>
+      <Text style={configErrorStyles.heading}>{t("auth.admin.shell.configErrorTitle")}</Text>
+      <Text style={configErrorStyles.body}>{t("auth.admin.shell.configErrorBody")}</Text>
     </View>
   );
 }
 
-function AdminAuthShell(): React.JSX.Element {
+function AdminAuthShellInner(): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const segments = useSegments();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signOut } = useAuthActions();
-  const user = useQuery(api.users.getCurrentUser, isAuthenticated ? {} : "skip");
+  const { isSigningOut, signOutAdmin } = useAdminAuth();
+  const user = useQuery(
+    api.users.getCurrentUser,
+    isAuthenticated && !isSigningOut ? {} : "skip",
+  );
   const clearedNonAdmin = useRef(false);
 
   const firstSegment = segments[0] ?? "";
@@ -86,7 +98,7 @@ function AdminAuthShell(): React.JSX.Element {
   }, [isAuthenticated, user, signOut]);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || isSigningOut) return;
     if (!isAuthenticated) {
       if (!onPublicAuthRoute) {
         router.replace("/login");
@@ -98,7 +110,7 @@ function AdminAuthShell(): React.JSX.Element {
       return;
     }
     if (!user.adminMfaVerifiedAt) {
-      if (!onPublicAuthRoute) {
+      if (firstSegment !== "mfa") {
         router.replace("/mfa");
       }
       return;
@@ -113,9 +125,10 @@ function AdminAuthShell(): React.JSX.Element {
     onPublicAuthRoute,
     router,
     firstSegment,
+    isSigningOut,
   ]);
 
-  if (isLoading || (isAuthenticated && user === undefined)) {
+  if (isSigningOut || isLoading || (isAuthenticated && user === undefined)) {
     return (
       <View style={styles.boot}>
         <ActivityIndicator size="large" color={colors.accent.green} />
@@ -133,7 +146,7 @@ function AdminAuthShell(): React.JSX.Element {
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: colors.bg.primary },
+            contentStyle: { backgroundColor: glass.pageBgBottom },
             animation: "fade",
           }}
         />
@@ -152,25 +165,22 @@ function AdminAuthShell(): React.JSX.Element {
   if (user === null || user.role !== "admin") {
     return (
       <View style={styles.denied}>
-        <Text style={styles.deniedTitle}>Access Denied</Text>
-        <Text style={styles.deniedBody}>
-          This application is only available to A3 Billiards OS administrators.
-        </Text>
+        <Text style={styles.deniedTitle}>{t("auth.admin.shell.accessDeniedTitle")}</Text>
+        <Text style={styles.deniedBody}>{t("auth.admin.shell.accessDeniedBody")}</Text>
         <Pressable
           style={styles.deniedBtn}
-          onPress={async () => {
-            await signOut();
-            router.replace("/login");
+          onPress={() => {
+            void signOutAdmin();
           }}
         >
-          <Text style={styles.deniedBtnText}>Sign out</Text>
+          <Text style={styles.deniedBtnText}>{t("auth.admin.shell.signOut")}</Text>
         </Pressable>
       </View>
     );
   }
 
   if (!user.adminMfaVerifiedAt) {
-    if (!onPublicAuthRoute) {
+    if (firstSegment !== "mfa") {
       return <Redirect href="/mfa" />;
     }
     return (
@@ -179,7 +189,7 @@ function AdminAuthShell(): React.JSX.Element {
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: colors.bg.primary },
+            contentStyle: { backgroundColor: glass.pageBgBottom },
             animation: "fade",
           }}
         />
@@ -193,26 +203,49 @@ function AdminAuthShell(): React.JSX.Element {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: colors.bg.primary },
+          contentStyle: { backgroundColor: glass.pageBgBottom },
           animation: "fade",
         }}
-      />
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="revenue" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen name="live" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen name="user/[userId]" />
+        <Stack.Screen name="login" options={{ animation: "fade" }} />
+        <Stack.Screen name="mfa" options={{ animation: "fade" }} />
+      </Stack>
     </>
+  );
+}
+
+function AdminAuthShell(): React.JSX.Element {
+  return (
+    <AdminAuthProvider>
+      <AdminAuthShellInner />
+    </AdminAuthProvider>
   );
 }
 
 function RootLayout() {
   if (!convex) {
-    return <MissingConfigScreen />;
+    return (
+      <SafeAreaProvider>
+        <MissingConfigScreen />
+      </SafeAreaProvider>
+    );
   }
   return (
-    <ConvexAuthProvider client={convex} storage={secureStorage}>
-      <AdminAuthShell />
-    </ConvexAuthProvider>
+    <SafeAreaProvider>
+      <ConvexAuthProvider client={convex} storage={secureStorage}>
+        <I18nConvexBridge>
+          <AdminAuthShell />
+        </I18nConvexBridge>
+      </ConvexAuthProvider>
+    </SafeAreaProvider>
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default SENTRY_ENABLED ? Sentry.wrap(RootLayout) : RootLayout;
 
 const configErrorStyles = StyleSheet.create({
   icon: { fontSize: 48, marginBottom: 16 },
@@ -235,13 +268,13 @@ const configErrorStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   boot: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: glass.pageBgBottom,
     alignItems: "center",
     justifyContent: "center",
   },
   denied: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: glass.pageBgBottom,
     padding: layout.screenPadding,
     justifyContent: "center",
   },

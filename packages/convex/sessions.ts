@@ -5,7 +5,11 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { requireCustomer, requireViewer } from "./model/viewer";
+import {
+  requireAdminWithMfa,
+  requireCustomer,
+  requireViewer,
+} from "./model/viewer";
 
 export const forceEndSession = mutation({
   args: {
@@ -13,11 +17,7 @@ export const forceEndSession = mutation({
     reason: v.string(),
   },
   handler: async (ctx, { sessionId, reason }) => {
-    const viewer = await requireViewer(ctx);
-    const actor = await ctx.db.get(viewer.userId);
-    if (!actor || actor.role !== "admin") {
-      throw new Error("AUTH_001: Admin authentication required");
-    }
+    const viewer = await requireAdminWithMfa(ctx);
 
     const trimmed = reason.trim();
     if (trimmed.length === 0 || trimmed.length > 300) {
@@ -111,24 +111,28 @@ export const getCustomerSessionHistory = query({
 
     rows.sort((a, b) => b.startTime - a.startTime);
 
-    return rows.map((r) => ({
-      _id: r._id,
-      sessionId: r.sessionId,
-      clubId: r.clubId,
-      clubName: r.clubName,
-      tableLabel: r.tableLabel,
-      startTime: r.startTime,
-      endTime: r.endTime ?? null,
-      billTotal: r.billTotal ?? null,
-      currency: r.currency ?? null,
-      paymentStatus: r.paymentStatus,
-      paymentMethod: r.paymentMethod ?? null,
-      status: r.status,
-      creditResolvedAt: r.creditResolvedAt ?? null,
-      creditResolvedMethod: r.creditResolvedMethod ?? null,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    }));
+    const enriched = [];
+    for (const r of rows) {
+      enriched.push({
+        _id: r._id,
+        sessionId: r.sessionId,
+        clubId: r.clubId,
+        clubName: r.clubName,
+        tableLabel: r.tableLabel,
+        startTime: r.startTime,
+        endTime: r.endTime ?? null,
+        billTotal: r.billTotal ?? null,
+        currency: r.currency ?? null,
+        paymentStatus: r.paymentStatus,
+        paymentMethod: r.paymentMethod ?? null,
+        status: r.status,
+        creditResolvedAt: r.creditResolvedAt ?? null,
+        creditResolvedMethod: r.creditResolvedMethod ?? null,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      });
+    }
+    return enriched;
   },
 });
 

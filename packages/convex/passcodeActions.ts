@@ -61,10 +61,20 @@ export const verifyPasscode = action({
     }
 
     const digits = assertSixDigitPin(passcode);
+    const attemptKey = `passcode:${ctxRow.userId}`;
+    await ctx.runQuery(internal.authAttemptLimit.assertNotLocked, {
+      key: attemptKey,
+    });
+
     const ok = await bcrypt.compare(digits, ctxRow.settingsPasscodeHash);
     if (!ok) {
+      await ctx.runMutation(internal.authAttemptLimit.recordFailed, {
+        key: attemptKey,
+      });
       throw new Error("PASSCODE_001: Invalid passcode");
     }
+
+    await ctx.runMutation(internal.authAttemptLimit.clear, { key: attemptKey });
 
     if (staffRoleId === undefined) {
       return {
@@ -88,6 +98,57 @@ export const verifyPasscode = action({
       staffRoleName: role.name,
     };
     return out;
+  },
+});
+
+/**
+ * Change settings passcode while signed in (verify current PIN, then set new PIN).
+ */
+export const changePasscode = action({
+  args: {
+    currentPasscode: v.string(),
+    newPasscode: v.string(),
+  },
+  handler: async (ctx, { currentPasscode, newPasscode }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("AUTH_001: Not authenticated");
+
+    const ctxRow = await ctx.runQuery(internal.passcode.getOwnerVerifyContext, {});
+    if (ctxRow === null) {
+      throw new Error("PERM_001: Owner only");
+    }
+    if (!ctxRow.settingsPasscodeSet || !ctxRow.settingsPasscodeHash) {
+      throw new Error("PASSCODE_002: Passcode not configured");
+    }
+
+    const currentDigits = assertSixDigitPin(currentPasscode);
+    const newDigits = assertSixDigitPin(newPasscode);
+    if (currentDigits === newDigits) {
+      throw new Error("DATA_001: New passcode must be different");
+    }
+
+    const attemptKey = `passcode:${userId}`;
+    await ctx.runQuery(internal.authAttemptLimit.assertNotLocked, {
+      key: attemptKey,
+    });
+
+    const ok = await bcrypt.compare(currentDigits, ctxRow.settingsPasscodeHash);
+    if (!ok) {
+      await ctx.runMutation(internal.authAttemptLimit.recordFailed, {
+        key: attemptKey,
+      });
+      throw new Error("PASSCODE_001: Invalid passcode");
+    }
+
+    await ctx.runMutation(internal.authAttemptLimit.clear, { key: attemptKey });
+
+    const passcodeHash = await bcrypt.hash(newDigits, BCRYPT_ROUNDS);
+    await ctx.runMutation(internal.passcode.applyChangePasscode, {
+      userId,
+      passcodeHash,
+    });
+
+    return { success: true as const };
   },
 });
 

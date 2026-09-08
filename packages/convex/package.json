@@ -13,23 +13,28 @@
     "./*": "./*"
   },
   "scripts": {
-    "dev": "convex dev",
-    "deploy": "convex deploy",
-    "typecheck": "tsc --noEmit"
+    "dev": "pnpm exec convex dev",
+    "deploy": "pnpm exec convex deploy",
+    "typecheck": "tsc --noEmit",
+    "seed:test-owner": "node ../../scripts/convex-seed/run-seed-test-owner.cjs",
+    "seed:test-admin": "node ../../scripts/convex-seed/run-seed-test-admin.cjs",
+    "seed:clear-admin-mfa": "node ../../scripts/convex-seed/run-clear-admin-mfa-rate-limit.cjs",
+    "seed:test-club": "node ../../scripts/convex-seed/run-seed-test-club-for-user.cjs"
   },
   "dependencies": {
     "@a3/utils": "workspace:*",
-    "@auth/core": "0.18.6",
+    "@aws-sdk/client-ivs": "^3.758.0",
     "@convex-dev/auth": "0.0.68",
-    "@react-email/components": "^1.0.12",
-    "@react-email/render": "^2.0.7",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
     "bcryptjs": "^3.0.3",
-    "convex": "^1.13.0",
+    "convex": "1.34.1",
     "convex-helpers": "^0.1.60",
     "firebase-admin": "^12.0.0",
     "google-auth-library": "^9.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "lucia": "^3.2.2",
     "resend": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.9"
   }
 }

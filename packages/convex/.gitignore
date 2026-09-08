@@ -1,2 +1,5 @@
 
 .env.local
+.jwt-pk.tmp
+.jwt-jwks.tmp
+node_modules/@auth/core_tmp_*

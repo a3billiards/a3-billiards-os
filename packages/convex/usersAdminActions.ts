@@ -5,6 +5,7 @@ import { createHash, randomBytes } from "crypto";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
+import { convexSiteOrigin } from "./model/convexSiteOrigin";
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -27,6 +28,9 @@ export const adminResetUserPassword = action({
     if (!adminRow || adminRow.role !== "admin") {
       throw new Error("AUTH_001: Admin authentication required");
     }
+    if (!adminRow.adminMfaVerifiedAt) {
+      throw new Error("AUTH_003: Admin MFA verification required");
+    }
 
     const rawToken = randomBytes(32).toString("hex");
     const tokenHash = sha256Hex(rawToken);
@@ -40,10 +44,10 @@ export const adminResetUserPassword = action({
       },
     );
 
-    const baseUrl =
-      process.env.PASSWORD_RESET_URL ??
-      "https://a3billiards.com/reset-password";
-    const resetLink = `${baseUrl.replace(/\/$/, "")}?token=${encodeURIComponent(rawToken)}`;
+    const baseUrl = process.env.PASSWORD_RESET_URL
+      ? process.env.PASSWORD_RESET_URL.replace(/\/$/, "")
+      : `${convexSiteOrigin()}/reset-password`;
+    const resetLink = `${baseUrl}?token=${encodeURIComponent(rawToken)}`;
 
     await ctx.runAction(internal.notificationsFcm.sendPasswordResetEmail, {
       email: toEmail,

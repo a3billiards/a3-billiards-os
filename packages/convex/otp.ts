@@ -2,6 +2,8 @@
  * WhatsApp OTP: sliding-window dispatch limits, bcrypt codes, verify + optional phoneVerified.
  */
 
+import { getAuthUserId } from "@convex-dev/auth/server";
+import bcrypt from "bcryptjs";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import {
@@ -9,9 +11,16 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
+import { dispatchWhatsAppOtp } from "./model/otp";
 import { throwIfPhoneUnavailableForNewAccount } from "./model/phoneRegistration";
 
 const E164_REGEX = /^\+[1-9]\d{6,14}$/;
+const OTP_RATE_LIMIT_WINDOW_MS = Number(
+  process.env.OTP_RATE_LIMIT_WINDOW_MS ?? 60 * 60 * 1000,
+);
+const OTP_RATE_LIMIT_MAX_PER_WINDOW = Number(
+  process.env.OTP_RATE_LIMIT_MAX_PER_WINDOW ?? 5,
+);
 
 function randomSixDigitString(): string {
   const c = globalThis.crypto;
@@ -31,6 +40,13 @@ export const findUserByPhone = internalQuery({
       .query("users")
       .withIndex("by_phone", (q) => q.eq("phone", phone))
       .first();
+  },
+});
+
+export const getUserById = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    return await ctx.db.get(userId);
   },
 });
 
@@ -77,6 +93,11 @@ export const deleteOtpRecord = internalMutation({
   },
 });
 
+/**
+ * Verify OTP and persist attempt counters.
+ * Must NOT throw after writing — Convex rolls back mutation writes on throw,
+ * which previously left attempts stuck at 0 (always "2 remaining").
+ */
 export const attemptVerify = internalMutation({
   args: {
     phone: v.string(),
@@ -97,21 +118,22 @@ export const attemptVerify = internalMutation({
       .sort((a, b) => b.createdAt - a.createdAt)[0];
 
     if (!active) {
-      throw new Error(
-        "OTP_002: OTP expired or not found. Please request a new code.",
-      );
+      return {
+        ok: false as const,
+        error: "OTP_002: OTP expired or not found. Please request a new code.",
+      };
     }
 
     if (active.cooldownUntil !== undefined && now < active.cooldownUntil) {
       const waitMs = active.cooldownUntil - now;
       const waitMins = Math.ceil(waitMs / 60_000);
-      throw new Error(
-        `OTP_001: Too many failed attempts. Please wait ${waitMins} minute(s) before trying again.`,
-      );
+      return {
+        ok: false as const,
+        error: `OTP_001: Too many failed attempts. Please wait ${waitMins} minute(s) before trying again.`,
+      };
     }
 
-    const bcrypt = await import("bcryptjs");
-    const isValid = await bcrypt.compare(code, active.otpHash);
+    const isValid = bcrypt.compareSync(code, active.otpHash);
 
     if (!isValid) {
       const newAttempts = active.attempts + 1;
@@ -121,16 +143,19 @@ export const attemptVerify = internalMutation({
           attempts: newAttempts,
           cooldownUntil: now + 5 * 60 * 1000,
         });
-        throw new Error(
-          "OTP_001: Too many failed attempts. Please wait 5 minutes before trying again.",
-        );
+        return {
+          ok: false as const,
+          error:
+            "OTP_001: Too many failed attempts. Please wait 5 minutes before trying again.",
+        };
       }
 
       await ctx.db.patch(active._id, { attempts: newAttempts });
       const remaining = 3 - newAttempts;
-      throw new Error(
-        `Incorrect code. ${remaining} attempt(s) remaining.`,
-      );
+      return {
+        ok: false as const,
+        error: `OTP_002: Wrong OTP. ${remaining} attempt(s) remaining.`,
+      };
     }
 
     await ctx.db.patch(active._id, { used: true });
@@ -138,23 +163,36 @@ export const attemptVerify = internalMutation({
     if (userId !== undefined) {
       const user = await ctx.db.get(userId);
       if (!user) {
-        throw new Error("DATA_003: User not found");
+        return { ok: false as const, error: "DATA_003: User not found" };
       }
       if (user.phone !== undefined && user.phone !== phone) {
-        throw new Error(
-          "PERM_001: Phone does not match this account for verification",
-        );
+        return {
+          ok: false as const,
+          error: "PERM_001: Phone does not match this account for verification",
+        };
       }
-      await ctx.db.patch(userId, { phoneVerified: true });
+      if (user.phone === undefined) {
+        await ctx.db.patch(userId, { phone, phoneVerified: true });
+      } else {
+        await ctx.db.patch(userId, { phoneVerified: true });
+      }
     }
 
-    return { verified: true as const, phone };
+    return { ok: true as const, verified: true as const, phone };
   },
 });
 
+
 export const sendOtp = action({
-  args: { phone: v.string() },
-  handler: async (ctx, { phone }) => {
+  args: {
+    phone: v.string(),
+    /**
+     * Signed-in user verifying the phone already on their profile (post-registration).
+     * Without this, `throwIfPhoneUnavailableForNewAccount` rejects the row we just created (OTP_007).
+     */
+    verificationUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { phone, verificationUserId }) => {
     if (!E164_REGEX.test(phone)) {
       throw new Error("OTP_005: Invalid E.164 phone number format");
     }
@@ -162,21 +200,48 @@ export const sendOtp = action({
     const existing = await ctx.runQuery(internal.otp.findUserByPhone, {
       phone,
     });
-    throwIfPhoneUnavailableForNewAccount(existing);
+
+    if (verificationUserId !== undefined) {
+      const authId = await getAuthUserId(ctx);
+      if (authId === null) {
+        throw new Error("AUTH_001: Not authenticated");
+      }
+      if (authId !== verificationUserId) {
+        throw new Error("PERM_001: Cannot send verification OTP for another account");
+      }
+      const self = await ctx.runQuery(internal.otp.getUserById, {
+        userId: verificationUserId,
+      });
+      if (!self) {
+        throw new Error("DATA_003: User not found");
+      }
+      if (self.phoneVerified === true && self.phone === phone) {
+        throw new Error("DATA_002: Phone already verified");
+      }
+      if (self.phone !== undefined && self.phone !== phone) {
+        throw new Error(
+          "PERM_001: Phone number does not match the phone on this account",
+        );
+      }
+      if (existing !== null && existing._id !== verificationUserId) {
+        throw new Error("OTP_007: Phone already registered");
+      }
+    } else {
+      throwIfPhoneUnavailableForNewAccount(existing);
+    }
 
     const count = await ctx.runMutation(internal.otp.countRecentDispatches, {
       phone,
-      windowMs: 60 * 60 * 1000,
+      windowMs: OTP_RATE_LIMIT_WINDOW_MS,
     });
-    if (count >= 5) {
+    if (count >= OTP_RATE_LIMIT_MAX_PER_WINDOW) {
       throw new Error(
         "OTP_003: Too many OTP requests. Please wait before requesting another code.",
       );
     }
 
-    const bcrypt = await import("bcryptjs");
     const rawCode = randomSixDigitString();
-    const otpHash = await bcrypt.hash(rawCode, 10);
+    const otpHash = bcrypt.hashSync(rawCode, 10);
     const now = Date.now();
 
     const { recordId } = await ctx.runMutation(internal.otp.storeOtpRecord, {
@@ -186,7 +251,6 @@ export const sendOtp = action({
     });
 
     try {
-      const { dispatchWhatsAppOtp } = await import("./model/otp");
       await dispatchWhatsAppOtp(phone, rawCode);
     } catch (e) {
       await ctx.runMutation(internal.otp.deleteOtpRecord, { recordId });
@@ -217,10 +281,22 @@ export const verifyOtp = action({
       );
     }
 
-    return await ctx.runMutation(internal.otp.attemptVerify, {
+    const authUserId = await getAuthUserId(ctx);
+    if (userId !== undefined) {
+      if (authUserId === null || authUserId !== userId) {
+        throw new Error("PERM_001: Cannot verify OTP for another account");
+      }
+    }
+    const effectiveUserId = userId ?? (authUserId ?? undefined);
+
+    const result = await ctx.runMutation(internal.otp.attemptVerify, {
       phone,
       code: normalized,
-      userId,
+      userId: effectiveUserId,
     });
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+    return { verified: true as const, phone: result.phone };
   },
 });

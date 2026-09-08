@@ -6,36 +6,82 @@ import {
   Pressable,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useAction } from "convex/react";
+import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { api } from "@a3/convex/_generated/api";
-import { colors, typography, spacing, radius, layout } from "@a3/ui/theme";
+import { colors, typography, spacing, radius, layout, glass, iosKeyboardAvoidingProps } from "@a3/ui/theme";
 import { parseConvexError } from "@a3/ui/errors";
+import { LoginLanguagePicker, useTranslation } from "@a3/i18n";
 
 const CODE_LENGTH = 6;
 
 export default function MfaScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const verifyMfa = useAction(api.mfaActions.verifyMfaCode);
   const generateMfa = useAction(api.mfaActions.generateMfaCode);
+  const user = useQuery(api.users.getCurrentUser, isAuthenticated ? {} : "skip");
 
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(""));
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
+  const [sendingInitial, setSendingInitial] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [frozen, setFrozen] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [verifiedWaiting, setVerifiedWaiting] = useState(false);
 
   const inputs = useRef<(TextInput | null)[]>([]);
+  const initialSentRef = useRef(false);
+  const verifyInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      initialSentRef.current = false;
+      verifyInFlightRef.current = false;
+      setVerifiedWaiting(false);
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [resendCooldown]);
+
+  /**
+   * Auto-dispatch the first MFA code as soon as the Convex Auth JWT is in place.
+   * Login screen no longer triggers this (race-prone); we own it here so
+   * `getAuthUserId(ctx)` resolves the admin id reliably.
+   */
+  useEffect(() => {
+    if (authLoading || !isAuthenticated || initialSentRef.current) return;
+    initialSentRef.current = true;
+    setSendingInitial(true);
+    setError(null);
+    generateMfa({})
+      .then(() => {
+        setResendCooldown(60);
+      })
+      .catch((e: unknown) => {
+        initialSentRef.current = false;
+        const appError = parseConvexError(e as Error);
+        if (appError.code === "RATE_001") {
+          setError(t("auth.admin.mfa.rateLimitGenerate"));
+        } else if (appError.code === "AUTH_002") {
+          setFrozen(true);
+          setError(t("auth.admin.mfa.frozen"));
+        } else {
+          setError(appError.message);
+        }
+      })
+      .finally(() => {
+        setSendingInitial(false);
+      });
+  }, [authLoading, isAuthenticated, generateMfa, t]);
 
   const handleChange = useCallback(
     (text: string, index: number) => {
@@ -87,22 +133,23 @@ export default function MfaScreen() {
   const isComplete = code.length === CODE_LENGTH && /^\d{6}$/.test(code);
 
   const handleVerify = useCallback(async () => {
-    if (!isComplete || loading || frozen) return;
+    if (!isComplete || loading || frozen || verifyInFlightRef.current) return;
+    verifyInFlightRef.current = true;
     setError(null);
     setLoading(true);
 
     try {
       await verifyMfa({ code });
-      router.replace("/(tabs)");
+      setVerifiedWaiting(true);
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "AUTH_002") {
         setFrozen(true);
-        setError("This account is frozen. Contact support.");
+        setError(t("auth.admin.mfa.frozen"));
       } else if (appError.code === "AUTH_003") {
-        setError("Invalid or expired code. Please try again.");
+        setError(t("auth.admin.mfa.invalidCode"));
       } else if (appError.code === "RATE_001") {
-        setError("Too many attempts. Please wait before trying again.");
+        setError(t("auth.admin.mfa.tooManyAttempts"));
       } else {
         setError(appError.message);
       }
@@ -110,8 +157,9 @@ export default function MfaScreen() {
       inputs.current[0]?.focus();
     } finally {
       setLoading(false);
+      verifyInFlightRef.current = false;
     }
-  }, [isComplete, loading, frozen, code, verifyMfa, router]);
+  }, [isComplete, loading, frozen, code, verifyMfa, t]);
 
   useEffect(() => {
     if (isComplete && !loading && !frozen) {
@@ -119,38 +167,46 @@ export default function MfaScreen() {
     }
   }, [isComplete, loading, frozen, handleVerify]);
 
+  useEffect(() => {
+    if (user?.adminMfaVerifiedAt) {
+      router.replace("/(tabs)");
+    }
+  }, [user?.adminMfaVerifiedAt, router]);
+
   const handleResend = useCallback(async () => {
     if (resending || resendCooldown > 0 || frozen) return;
     setResending(true);
     setError(null);
 
     try {
-      await generateMfa();
+      await generateMfa({ forceResend: true });
       setResendCooldown(60);
       setDigits(Array(CODE_LENGTH).fill(""));
       inputs.current[0]?.focus();
     } catch (e) {
       const appError = parseConvexError(e as Error);
       if (appError.code === "RATE_001") {
-        setError("Code send rate limit reached. Please wait.");
+        setError(t("auth.admin.mfa.sendLimitReached"));
       } else {
         setError(appError.message);
       }
     } finally {
       setResending(false);
     }
-  }, [resending, resendCooldown, frozen, generateMfa]);
+  }, [resending, resendCooldown, frozen, generateMfa, t]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAvoidingView style={styles.flex} {...iosKeyboardAvoidingProps}>
       <View style={styles.container}>
+        <View style={styles.langRow}>
+          <LoginLanguagePicker />
+        </View>
         <Text style={styles.logo}>A3</Text>
-        <Text style={styles.title}>Verification Code</Text>
+        <Text style={styles.title}>{t("auth.admin.mfa.title")}</Text>
         <Text style={styles.subtitle}>
-          Enter the 6-digit code sent to your admin email
+          {sendingInitial
+            ? t("auth.admin.mfa.subtitleSending")
+            : t("auth.admin.mfa.subtitleEnter")}
         </Text>
 
         <View style={styles.codeRow}>
@@ -175,13 +231,16 @@ export default function MfaScreen() {
               textContentType="oneTimeCode"
               autoFocus={i === 0}
               editable={!loading && !frozen}
-              accessibilityLabel={`Digit ${i + 1} of ${CODE_LENGTH}`}
+              accessibilityLabel={t("auth.admin.mfa.digitAccessibility", {
+                index: i + 1,
+                total: CODE_LENGTH,
+              })}
               selectTextOnFocus
             />
           ))}
         </View>
 
-        {loading && (
+        {(loading || sendingInitial || verifiedWaiting) && (
           <ActivityIndicator
             color={colors.accent.green}
             style={{ marginTop: spacing[4] }}
@@ -194,7 +253,7 @@ export default function MfaScreen() {
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
-            <Text style={styles.errorDot}>Error</Text>
+            <Text style={styles.errorDot}>{t("auth.admin.mfa.errorLabel")}</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -211,8 +270,8 @@ export default function MfaScreen() {
             accessibilityRole="button"
             accessibilityLabel={
               resendCooldown > 0
-                ? `Re-send code available in ${resendCooldown} seconds`
-                : "Re-send code"
+                ? t("auth.admin.mfa.resendAvailableIn", { seconds: resendCooldown })
+                : t("auth.admin.mfa.resendCode")
             }
           >
             <Text
@@ -222,10 +281,10 @@ export default function MfaScreen() {
               ]}
             >
               {resending
-                ? "Sending..."
+                ? t("auth.admin.mfa.resendSending")
                 : resendCooldown > 0
-                  ? `Re-send code (${resendCooldown}s)`
-                  : "Re-send code"}
+                  ? t("auth.admin.mfa.resendCooldown", { seconds: resendCooldown })
+                  : t("auth.admin.mfa.resendCode")}
             </Text>
           </Pressable>
         )}
@@ -247,6 +306,10 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: "center",
     width: "100%",
+  },
+  langRow: {
+    alignSelf: "stretch",
+    marginBottom: spacing[4],
   },
   logo: {
     ...typography.heading1,
