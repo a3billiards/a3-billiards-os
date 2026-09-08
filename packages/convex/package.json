@@ -32,6 +32,7 @@
     "google-auth-library": "^9.0.0",
     "jsonwebtoken": "^9.0.2",
     "lucia": "^3.2.2",
+    "oslo": "^1.2.1",
     "resend": "^4.0.0"
   },
   "devDependencies": {
