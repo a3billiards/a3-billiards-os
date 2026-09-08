@@ -4,6 +4,9 @@
 # Usage (from repo root):
 #   pnpm deploy:onboarding-web
 #   pnpm deploy:onboarding-web -Production
+#
+# Builds locally (bakes VITE_* from .env.local), then uploads dist/ as a static
+# production/preview deployment — avoids monorepo lockfile failures in `vercel build`.
 
 param(
   [switch]$Production
@@ -40,19 +43,25 @@ try {
     npx vercel link --yes --scope $VercelScope --project onboarding-web
   }
   pnpm build
-  npx vercel build --yes --scope $VercelScope
+  if (-not (Test-Path "dist\index.html")) {
+    throw "Build did not produce dist/index.html"
+  }
 } finally {
   Pop-Location
 }
 
-Write-Host "Deploying to Vercel (scope: $VercelScope)..." -ForegroundColor Cyan
+Write-Host "Deploying dist/ to Vercel (scope: $VercelScope)..." -ForegroundColor Cyan
 Push-Location $AppDir
 try {
-  $deployArgs = @("deploy", "--prebuilt", "--yes", "--scope", $VercelScope)
+  # Static upload of the already-built SPA (VITE_* baked in).
+  $deployArgs = @("deploy", "dist", "--yes", "--scope", $VercelScope)
   if ($Production) {
     $deployArgs += "--prod"
   }
   npx vercel @deployArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw "vercel deploy failed with exit code $LASTEXITCODE"
+  }
 } finally {
   Pop-Location
 }
@@ -60,5 +69,5 @@ try {
 if ($Production) {
   Write-Host ""
   Write-Host "Convex ONBOARDING_WEB_URL should be https://register.a3billiards.com" -ForegroundColor Yellow
-  Write-Host "Add custom domain register.a3billiards.com in Vercel onboarding-web project settings." -ForegroundColor Yellow
+  Write-Host "In Vercel project settings, Root Directory must be: apps/onboarding-web" -ForegroundColor Yellow
 }
